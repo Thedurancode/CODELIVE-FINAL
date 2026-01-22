@@ -1,0 +1,1350 @@
+/**
+ * Project Controller
+ *
+ * API endpoints for project management:
+ * - CRUD operations for projects
+ * - Contact management
+ * - Notes management
+ * - Task integration
+ */
+
+import { Request, Response } from 'express';
+import { projectService } from '../services/ProjectService';
+import { projectContactService } from '../services/ProjectContactService';
+import { projectNoteService } from '../services/ProjectNoteService';
+import { taskService } from '../services/TaskService';
+import type { ProjectStatus } from '../models/Project';
+import ProjectMember from '../models/ProjectMember';
+import { MarketplaceUser } from '../models';
+
+// ============================================================================
+// PROJECTS CRUD
+// ============================================================================
+
+export const getProjects = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const {
+      page,
+      limit,
+      search,
+      status,
+      tags,
+      createdById,
+      sortBy,
+      sortOrder,
+    } = req.query;
+
+    const result = await projectService.getProjects(organizationId, {
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+      search: search as string,
+      status: status ? ((status as string).split(',') as ProjectStatus[]) : undefined,
+      tags: tags ? (tags as string).split(',') : undefined,
+      createdById: createdById as string,
+      sortBy: sortBy as string,
+      sortOrder: sortOrder as 'ASC' | 'DESC',
+    });
+
+    res.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const getProject = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const project = await projectService.getProjectForOrganization(id, organizationId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: project,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const createProject = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const project = await projectService.createProject({
+      ...req.body,
+      organizationId,
+      createdById: userId,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: project,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const updateProject = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const project = await projectService.updateProject(id, organizationId, req.body);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: project,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const deleteProject = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const deleted = await projectService.deleteProject(id, organizationId);
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project deleted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const getProjectStats = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+
+    const stats = await projectService.getProjectStats(organizationId);
+
+    res.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const searchProjects = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    const { q, limit } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const projects = await projectService.searchProjects(
+      organizationId,
+      q as string,
+      limit ? parseInt(limit as string, 10) : 10
+    );
+
+    res.json({
+      success: true,
+      data: projects,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const getProjectTags = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+
+    const tags = await projectService.getAllTags(organizationId);
+
+    res.json({
+      success: true,
+      data: tags,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
+
+export const bulkAddTags = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    const { projectIds, tags } = req.body;
+
+    if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project IDs are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!tags || !Array.isArray(tags) || tags.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tags are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const updated = await projectService.bulkAddTags(organizationId, projectIds, tags);
+
+    res.json({
+      success: true,
+      data: { updatedCount: updated },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const bulkRemoveTags = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    const { projectIds, tags } = req.body;
+
+    const updated = await projectService.bulkRemoveTags(organizationId, projectIds, tags);
+
+    res.json({
+      success: true,
+      data: { updatedCount: updated },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const bulkDelete = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    const { projectIds } = req.body;
+
+    if (!projectIds || !Array.isArray(projectIds) || projectIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project IDs are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const deleted = await projectService.bulkDelete(organizationId, projectIds);
+
+    res.json({
+      success: true,
+      data: { deletedCount: deleted },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT CONTACTS
+// ============================================================================
+
+export const getProjectContacts = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const contacts = await projectContactService.getProjectContacts(id);
+
+    res.json({
+      success: true,
+      data: contacts,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const addProjectContact = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const { contactId, role, isPrimary, notes } = req.body;
+
+    if (!contactId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Contact ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const projectContact = await projectContactService.addContact({
+      projectId: id,
+      contactId,
+      role,
+      isPrimary,
+      addedById: userId,
+      notes,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: projectContact,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const updateProjectContact = async (req: Request, res: Response) => {
+  try {
+    const { id, contactId } = req.params;
+    const { role, isPrimary, notes } = req.body;
+
+    const projectContact = await projectContactService.updateContact(id, contactId, {
+      role,
+      isPrimary,
+      notes,
+    });
+
+    if (!projectContact) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contact not found on this project',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: projectContact,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const removeProjectContact = async (req: Request, res: Response) => {
+  try {
+    const { id, contactId } = req.params;
+
+    const removed = await projectContactService.removeContact(id, contactId);
+    if (!removed) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contact not found on this project',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Contact removed from project',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const inviteContactToGitHub = async (req: Request, res: Response) => {
+  try {
+    const { id: projectId, contactId } = req.params;
+    const { permission } = req.body;
+
+    const result = await projectContactService.inviteToGitHub(projectId, contactId, permission);
+
+    if (!result.success) {
+      // Determine appropriate status code
+      const statusCode = result.message.includes('not found') ? 404 : 400;
+      return res.status(statusCode).json({
+        success: false,
+        error: result.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: result.message,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT NOTES
+// ============================================================================
+
+export const getProjectNotes = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const notes = await projectNoteService.getNotesForProject(id, organizationId);
+
+    res.json({
+      success: true,
+      data: notes,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const createProjectNote = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const { content, subject } = req.body;
+
+    console.log('[createProjectNote] Request:', { projectId: id, userId, organizationId, contentLength: content?.length });
+
+    if (!content) {
+      return res.status(400).json({
+        success: false,
+        error: 'Content is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!userId) {
+      console.error('[createProjectNote] Missing userId');
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // If user has no organization, we need to get the organization from the project
+    let noteOrganizationId = organizationId;
+    if (!noteOrganizationId) {
+      console.log('[createProjectNote] User has no organization, getting from project');
+      const project = await projectService.getProject(id);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      noteOrganizationId = project.organizationId;
+    }
+
+    if (!noteOrganizationId) {
+      console.error('[createProjectNote] Could not determine organization');
+      return res.status(400).json({
+        success: false,
+        error: 'Could not determine organization for note',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const note = await projectNoteService.createNote({
+      projectId: id,
+      userId,
+      organizationId: noteOrganizationId,
+      content,
+      subject,
+    });
+
+    console.log('[createProjectNote] Note created:', note?.id);
+
+    res.status(201).json({
+      success: true,
+      data: note,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[createProjectNote] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const updateProjectNote = async (req: Request, res: Response) => {
+  try {
+    const { id, noteId } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const { content, subject } = req.body;
+
+    const note = await projectNoteService.updateNote(
+      parseInt(noteId, 10),
+      userId,
+      organizationId,
+      { content, subject }
+    );
+
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        error: 'Note not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: note,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if ((error as Error).message.includes('Only the author')) {
+      return res.status(403).json({
+        success: false,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const deleteProjectNote = async (req: Request, res: Response) => {
+  try {
+    const { id, noteId } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+
+    const deleted = await projectNoteService.deleteNote(
+      parseInt(noteId, 10),
+      userId,
+      organizationId
+    );
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Note not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Note deleted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if ((error as Error).message.includes('Only the author')) {
+      return res.status(403).json({
+        success: false,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT TASKS
+// ============================================================================
+
+export const getProjectTasks = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.query;
+
+    const tasks = await taskService.getTasksByProject(
+      id,
+      status ? (status as string).split(',') as any : undefined
+    );
+
+    res.json({
+      success: true,
+      data: tasks,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const createProjectTask = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+
+    const task = await taskService.createTask({
+      ...req.body,
+      projectId: id,
+      linkType: 'project',
+      createdBy: userId,
+      organizationId: req.body.organizationId || organizationId,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: task,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT LOGO
+// ============================================================================
+
+export const uploadProjectLogo = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    let organizationId = (req as any).user?.organizationId;
+    const file = req.file;
+
+    console.log('[uploadProjectLogo] Request received:', { id, organizationId, hasFile: !!file, fileName: file?.originalname });
+
+    if (!file) {
+      console.log('[uploadProjectLogo] No file in request');
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // If user has no organization, get it from the project
+    if (!organizationId) {
+      console.log('[uploadProjectLogo] User has no organization, fetching from project');
+      const existingProject = await projectService.getProject(id);
+      if (existingProject) {
+        organizationId = existingProject.organizationId;
+      }
+    }
+
+    // Import storage service dynamically to avoid circular dependencies
+    const { storageService } = await import('../services/StorageService');
+
+    // Upload to storage with project-specific path
+    const logoUrl = await storageService.uploadFile(file.path, `projects/${id}/logo`, file.originalname);
+
+    // Update project with logo URL
+    const project = await projectService.updateProject(id, organizationId, { logoUrl });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Clean up temp file
+    const fs = await import('fs');
+    fs.unlink(file.path, () => {});
+
+    res.json({
+      success: true,
+      data: { logoUrl },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const deleteProjectLogo = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const project = await projectService.updateProject(id, organizationId, { logoUrl: null });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Logo removed successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PUBLIC PROJECT ACCESS (No auth required)
+// ============================================================================
+
+export const getPublicProject = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const project = await projectService.getProject(id);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Return only public-safe fields
+    res.json({
+      success: true,
+      data: {
+        id: project.id,
+        title: project.title,
+        description: project.description,
+        logoUrl: project.logoUrl,
+        status: project.status,
+        githubUrl: project.githubUrl ? true : false, // Just indicate if GitHub is linked, don't expose URL
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const submitPublicTicket = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, description, email, name } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Title, description, and email are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid email address',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const project = await projectService.getProject(id);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!project.githubUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'This project does not accept public tickets',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Parse GitHub URL to get owner/repo
+    const githubUrlMatch = project.githubUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+    if (!githubUrlMatch) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid project configuration',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const [, owner, repo] = githubUrlMatch;
+    const repoName = repo.replace(/\.git$/, '');
+
+    // Import GitHubService
+    const { gitHubService } = await import('../services/GitHubService');
+
+    // Build issue body with submitter info
+    const issueBody = `${description}
+
+---
+**Submitted via Public Form**
+- **Name:** ${name || 'Not provided'}
+- **Email:** ${email}
+
+*This ticket was submitted through the public project page.*`;
+
+    // Create the GitHub issue
+    const issue = await gitHubService.createIssue(owner, repoName, {
+      title,
+      body: issueBody,
+      labels: ['public-submission'],
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        ticketNumber: issue.number,
+        message: 'Your ticket has been submitted successfully. We will contact you via email.',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[submitPublicTicket] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to submit ticket. Please try again later.',
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// NOTE TO GITHUB ISSUE
+// ============================================================================
+
+export const createGitHubIssueFromNote = async (req: Request, res: Response) => {
+  try {
+    const { id: projectId, noteId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { labels } = req.body;
+
+    // Get the project to check GitHub URL
+    const project = await projectService.getProjectForOrganization(projectId, organizationId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!project.githubUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project has no GitHub repository linked',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Get the note
+    const note = await projectNoteService.getNoteById(parseInt(noteId, 10), organizationId);
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        error: 'Note not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Parse GitHub URL to get owner/repo
+    const githubUrlMatch = project.githubUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+    if (!githubUrlMatch) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid GitHub repository URL',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const [, owner, repo] = githubUrlMatch;
+    const repoName = repo.replace(/\.git$/, '');
+
+    // Import GitHubService
+    const { gitHubService } = await import('../services/GitHubService');
+
+    // Create the issue
+    const issueTitle = note.subject || `Note from ${project.title}`;
+    const issueBody = `${note.content}\n\n---\n*Created from project note in Dispotree*`;
+
+    const issue = await gitHubService.createIssue(owner, repoName, {
+      title: issueTitle,
+      body: issueBody,
+      labels: labels || [],
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        issueNumber: issue.number,
+        issueUrl: issue.html_url,
+        title: issue.title,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[createGitHubIssueFromNote] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT MEMBERS (Team Members)
+// ============================================================================
+
+/**
+ * Get all team members for the organization (for team selector)
+ */
+export const getOrganizationTeamMembers = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const members = await MarketplaceUser.findAll({
+      where: { organizationId },
+      attributes: ['id', 'name', 'email', 'avatar', 'title', 'role', 'isOnline', 'onlineStatus'],
+      order: [['name', 'ASC']],
+    });
+
+    res.json({
+      success: true,
+      data: members,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get members assigned to a project
+ */
+export const getProjectMembers = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    // Verify project belongs to organization
+    const project = await projectService.getProjectForOrganization(id, organizationId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const members = await ProjectMember.findAll({
+      where: { projectId: id, isActive: true },
+      include: [
+        {
+          model: MarketplaceUser,
+          as: 'user',
+          attributes: ['id', 'name', 'email', 'avatar', 'title', 'role', 'isOnline', 'onlineStatus'],
+        },
+      ],
+      order: [['projectRole', 'ASC'], ['assignedAt', 'ASC']],
+    });
+
+    res.json({
+      success: true,
+      data: members,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Add a member to a project
+ */
+export const addProjectMember = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const { memberId, projectRole, githubUsername } = req.body;
+
+    if (!memberId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Member ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Verify project belongs to organization
+    const project = await projectService.getProjectForOrganization(id, organizationId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const member = await ProjectMember.assignToProject({
+      projectId: id,
+      userId: memberId,
+      organizationId,
+      projectRole: projectRole || 'contributor',
+      assignedBy: userId,
+      githubUsername,
+    });
+
+    // Fetch with user details
+    const memberWithUser = await ProjectMember.findByPk(member.id, {
+      include: [
+        {
+          model: MarketplaceUser,
+          as: 'user',
+          attributes: ['id', 'name', 'email', 'avatar', 'title', 'role'],
+        },
+      ],
+    });
+
+    res.status(201).json({
+      success: true,
+      data: memberWithUser,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Bulk add members to a project
+ */
+export const bulkAddProjectMembers = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const { memberIds, projectRole } = req.body;
+
+    if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Member IDs array is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Verify project belongs to organization
+    const project = await projectService.getProjectForOrganization(id, organizationId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const members = await ProjectMember.bulkAssignToProject(
+      id,
+      organizationId,
+      memberIds,
+      userId,
+      projectRole || 'contributor'
+    );
+
+    res.status(201).json({
+      success: true,
+      data: { addedCount: members.length },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Update a project member's role
+ */
+export const updateProjectMember = async (req: Request, res: Response) => {
+  try {
+    const { id, memberId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { projectRole, githubUsername, notes } = req.body;
+
+    // Verify project belongs to organization
+    const project = await projectService.getProjectForOrganization(id, organizationId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const member = await ProjectMember.findOne({
+      where: { projectId: id, userId: memberId, isActive: true },
+    });
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Member not found on project',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await member.update({
+      ...(projectRole && { projectRole }),
+      ...(githubUsername !== undefined && { githubUsername }),
+      ...(notes !== undefined && { notes }),
+    });
+
+    const updatedMember = await ProjectMember.findByPk(member.id, {
+      include: [
+        {
+          model: MarketplaceUser,
+          as: 'user',
+          attributes: ['id', 'name', 'email', 'avatar', 'title', 'role'],
+        },
+      ],
+    });
+
+    res.json({
+      success: true,
+      data: updatedMember,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Remove a member from a project
+ */
+export const removeProjectMember = async (req: Request, res: Response) => {
+  try {
+    const { id, memberId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    // Verify project belongs to organization
+    const project = await projectService.getProjectForOrganization(id, organizationId);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const removed = await ProjectMember.removeFromProject(id, memberId);
+
+    if (!removed) {
+      return res.status(404).json({
+        success: false,
+        error: 'Member not found on project',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Member removed from project',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};

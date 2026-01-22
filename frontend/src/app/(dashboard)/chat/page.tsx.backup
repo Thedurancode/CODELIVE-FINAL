@@ -1,0 +1,625 @@
+"use client";
+
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  MessageSquare,
+  Phone,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  TrendingUp,
+  BarChart3,
+  MapPin,
+  Mic,
+  MicOff,
+  Volume2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { streamChat, api } from "@/lib/api";
+import { useAppStore } from "@/stores/app-store";
+import ReactMarkdown from "react-markdown";
+import { VoiceChatButton } from "@/components/chat/VoiceChat";
+import { RealtimeVoice } from "@/components/chat/RealtimeVoice";
+import { ChatPropertyCard } from "@/components/chat/ChatPropertyCard";
+import { parseMessageContent, type PropertyCardData } from "@/lib/chat-parser";
+import {
+  useConversations,
+  useConversation,
+  useUpdateConversationTitle,
+  useDeleteConversation,
+  useGenerateConversationTitle,
+  type Conversation,
+  type ConversationMessage,
+} from "@/hooks/use-conversations";
+
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  toolCalls?: { name: string; status: "running" | "done" }[];
+}
+
+const quickPrompts = [
+  "Find deals in Texas under $300K",
+  "Score my latest deals",
+  "What funds buy in Florida?",
+  "Show pipeline summary",
+];
+
+export default function ChatPage() {
+  const { currentConversationId, setCurrentConversation } = useAppStore();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [isVoiceConnected, setIsVoiceConnected] = useState(false);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Fetch conversations from server
+  const { data: conversations = [], refetch: refetchConversations } =
+    useConversations();
+  const { data: currentConversationData } = useConversation(
+    currentConversationId,
+  );
+  const updateTitleMutation = useUpdateConversationTitle();
+  const deleteMutation = useDeleteConversation();
+  const generateTitleMutation = useGenerateConversationTitle();
+
+  // Load messages when conversation changes
+  useEffect(() => {
+    if (currentConversationData?.messages) {
+      const loadedMessages: Message[] = currentConversationData.messages.map(
+        (m: ConversationMessage) => ({
+          id: String(m.id),
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          toolCalls: m.toolCalls,
+        }),
+      );
+      setMessages(loadedMessages);
+    }
+  }, [currentConversationData]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Persist conversation ID to localStorage
+  useEffect(() => {
+    if (currentConversationId) {
+      localStorage.setItem("lastConversationId", currentConversationId);
+    }
+  }, [currentConversationId]);
+
+  // Restore conversation ID from localStorage on mount
+  useEffect(() => {
+    const lastId = localStorage.getItem("lastConversationId");
+    if (lastId && !currentConversationId) {
+      setCurrentConversation(lastId);
+    }
+  }, []);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input.trim(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+
+    // Create a placeholder for the assistant message
+    const assistantMessageId = (Date.now() + 1).toString();
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
+
+    const isNewConversation = !currentConversationId;
+    const sessionId = currentConversationId || Date.now().toString();
+
+    // If new conversation, set it now
+    if (isNewConversation) {
+      setCurrentConversation(sessionId);
+    }
+
+    try {
+      let fullContent = "";
+      await streamChat(userMessage.content, sessionId, (chunk) => {
+        fullContent += chunk;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId ? { ...m, content: fullContent } : m,
+          ),
+        );
+      });
+
+      // Refresh conversations list (new one may have been created)
+      await refetchConversations();
+
+      // Generate title for new conversation after first response
+      if (isNewConversation && sessionId) {
+        // Trigger async title generation
+        generateTitleMutation.mutate(sessionId);
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? {
+                ...m,
+                content: "Sorry, I encountered an error. Please try again.",
+              }
+            : m,
+        ),
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleQuickPrompt = (prompt: string) => {
+    setInput(prompt);
+  };
+
+  const startNewChat = () => {
+    setMessages([]);
+    setCurrentConversation(null);
+    localStorage.removeItem("lastConversationId");
+  };
+
+  const deleteConversation = async (id: string) => {
+    try {
+      await deleteMutation.mutateAsync(id);
+      if (currentConversationId === id) {
+        startNewChat();
+      }
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+    }
+  };
+
+  const startEditingTitle = (conv: Conversation) => {
+    setEditingTitleId(conv.id);
+    setEditingTitle(conv.title);
+  };
+
+  const cancelEditingTitle = () => {
+    setEditingTitleId(null);
+    setEditingTitle("");
+  };
+
+  const saveTitle = async () => {
+    if (!editingTitleId || !editingTitle.trim()) return;
+
+    try {
+      await updateTitleMutation.mutateAsync({
+        id: editingTitleId,
+        title: editingTitle.trim(),
+      });
+      cancelEditingTitle();
+    } catch (error) {
+      console.error("Failed to update title:", error);
+    }
+  };
+
+  // Render message content with property cards
+  const renderMessageContent = (message: Message) => {
+    if (message.role === "user") {
+      return <span className="whitespace-pre-wrap">{message.content}</span>;
+    }
+
+    if (!message.content) {
+      return <span className="text-muted-foreground italic">Thinking...</span>;
+    }
+
+    const segments = parseMessageContent(message.content);
+
+    return (
+      <div className="space-y-2">
+        {segments.map((segment, index) => {
+          if (segment.type === "property_card" && segment.property) {
+            return (
+              <ChatPropertyCard
+                key={`property-${segment.property.id || index}`}
+                property={segment.property}
+              />
+            );
+          }
+          if (segment.type === "text" && segment.content) {
+            return (
+              <ReactMarkdown key={`text-${index}`}>
+                {segment.content}
+              </ReactMarkdown>
+            );
+          }
+          return null;
+        })}
+      </div>
+    );
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  return (
+    <div className="h-[calc(100vh-8rem)] flex gap-6">
+      {/* Sidebar */}
+      <Card className="w-64 bg-card border flex-shrink-0 hidden lg:flex flex-col">
+        <CardContent className="p-3 flex-1 flex flex-col">
+          <Button
+            onClick={startNewChat}
+            className="w-full bg-accent-600 hover:bg-accent-700 text-white mb-2"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Chat
+          </Button>
+
+          {/* Mode Toggle */}
+          <div className="flex gap-1 mb-4">
+            <Button
+              variant={!isVoiceMode ? "default" : "ghost"}
+              size="sm"
+              className="flex-1"
+              onClick={() => setIsVoiceMode(false)}
+            >
+              <MessageSquare className="h-4 w-4 mr-1" />
+              Text
+            </Button>
+            <Button
+              variant={isVoiceMode ? "default" : "ghost"}
+              size="sm"
+              className={cn(
+                "flex-1",
+                isVoiceConnected && "bg-green-600 hover:bg-green-700",
+              )}
+              onClick={() => setIsVoiceMode(true)}
+            >
+              <Phone className="h-4 w-4 mr-1" />
+              Voice
+            </Button>
+          </div>
+
+          <ScrollArea className="flex-1">
+            <div className="space-y-1">
+              {conversations.map((conv) => (
+                <div
+                  key={conv.id}
+                  className={cn(
+                    "flex items-center justify-between p-2 rounded-lg cursor-pointer group",
+                    currentConversationId === conv.id
+                      ? "bg-secondary"
+                      : "hover:bg-secondary/50",
+                  )}
+                  onClick={() => setCurrentConversation(conv.id)}
+                >
+                  {editingTitleId === conv.id ? (
+                    <div
+                      className="flex items-center gap-1 flex-1 min-w-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Input
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        className="h-6 text-xs px-1"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveTitle();
+                          if (e.key === "Escape") cancelEditingTitle();
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        onClick={saveTitle}
+                      >
+                        <Check className="h-3 w-3 text-green-500" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        onClick={cancelEditingTitle}
+                      >
+                        <X className="h-3 w-3 text-red-500" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-foreground truncate">
+                          {conv.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(conv.lastMessageAt || conv.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditingTitle(conv);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteConversation(conv.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {conversations.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  No conversations yet
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Chat Area */}
+      <Card className="flex-1 bg-card border flex flex-col">
+        <CardContent className="flex-1 flex flex-col p-0">
+          {/* Voice Mode */}
+          {isVoiceMode ? (
+            <div className="flex-1 flex flex-col">
+              {/* Voice Conversation UI */}
+              <div className="flex-1 flex flex-col items-center justify-center p-4">
+                <div className="w-20 h-20 rounded-full bg-accent-600/20 flex items-center justify-center mb-4">
+                  <Phone className="h-10 w-10 text-accent-500" />
+                </div>
+                <h2 className="text-xl font-bold text-foreground mb-2">
+                  Voice Conversation
+                </h2>
+                <p className="text-muted-foreground max-w-md mb-6 text-center">
+                  Have a real-time voice conversation with DispoBot. Click the
+                  phone button to connect.
+                </p>
+                <RealtimeVoice
+                  onTranscription={(text, role) => {
+                    const message: Message = {
+                      id: Date.now().toString(),
+                      role,
+                      content: text,
+                    };
+                    setMessages((prev) => [...prev, message]);
+                  }}
+                  onError={(error) => {
+                    console.error("Voice error:", error);
+                  }}
+                  onConnectionChange={(connected) => {
+                    setIsVoiceConnected(connected);
+                  }}
+                  className="w-full max-w-md"
+                />
+              </div>
+
+              {/* Voice transcript */}
+              {messages.length > 0 && (
+                <ScrollArea className="h-48 border-t p-4" ref={scrollRef}>
+                  <div className="space-y-2">
+                    {messages.slice(-10).map((message) => (
+                      <div
+                        key={message.id}
+                        className={cn(
+                          "text-sm p-2 rounded",
+                          message.role === "user"
+                            ? "bg-accent-600/20 text-right"
+                            : "bg-secondary",
+                        )}
+                      >
+                        <span className="text-xs text-muted-foreground">
+                          {message.role === "user" ? "You" : "DispoBot"}:
+                        </span>
+                        <p>{message.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Messages */}
+              <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 rounded-full bg-accent-600/20 flex items-center justify-center mb-4">
+                      <Sparkles className="h-8 w-8 text-accent-500" />
+                    </div>
+                    <h2 className="text-xl font-bold text-foreground mb-2">
+                      DispoBot
+                    </h2>
+                    <p className="text-muted-foreground max-w-md mb-6">
+                      Your AI assistant for real estate deal management. Ask me
+                      about deals, scoring, pipeline, or market analysis.
+                    </p>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {quickPrompts.map((prompt) => (
+                        <Button
+                          key={prompt}
+                          variant="outline"
+                          size="sm"
+                          className="border text-foreground hover:bg-secondary"
+                          onClick={() => handleQuickPrompt(prompt)}
+                        >
+                          {prompt}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {messages.map((message) => (
+                      <div
+                        key={message.id}
+                        className={cn(
+                          "flex gap-3",
+                          message.role === "user" ? "flex-row-reverse" : "",
+                        )}
+                      >
+                        <Avatar className="h-8 w-8 flex-shrink-0">
+                          <AvatarFallback
+                            className={
+                              message.role === "user"
+                                ? "bg-accent-600 text-white"
+                                : "bg-zinc-700 text-foreground"
+                            }
+                          >
+                            {message.role === "user" ? (
+                              <User className="h-4 w-4" />
+                            ) : (
+                              <Bot className="h-4 w-4" />
+                            )}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div
+                          className={cn(
+                            "max-w-[80%] rounded-lg p-3",
+                            message.role === "user"
+                              ? "bg-accent-600 text-white"
+                              : "bg-secondary text-foreground",
+                          )}
+                        >
+                          {message.toolCalls &&
+                            message.toolCalls.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                {message.toolCalls.map((tool, i) => (
+                                  <Badge
+                                    key={i}
+                                    variant="outline"
+                                    className="text-xs border text-muted-foreground"
+                                  >
+                                    <Wrench className="h-3 w-3 mr-1" />
+                                    {tool.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          <div className="text-sm prose prose-invert prose-sm max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>h3]:text-base [&>h3]:font-semibold [&>h3]:mt-3 [&>h3]:mb-1">
+                            {renderMessageContent(message)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {isLoading &&
+                      messages[messages.length - 1]?.role === "user" && (
+                        <div className="flex gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-zinc-700 text-foreground">
+                              <Bot className="h-4 w-4" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="bg-secondary rounded-lg p-3 flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              Thinking...
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                )}
+              </ScrollArea>
+
+              {/* Input */}
+              <div className="p-4 border-t border">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSend();
+                  }}
+                  className="flex gap-2"
+                >
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Ask about deals, scoring, pipeline..."
+                    className="flex-1 bg-secondary border text-foreground"
+                    disabled={isLoading}
+                  />
+                  <VoiceChatButton
+                    sessionId={currentConversationId || `voice-${Date.now()}`}
+                    onTranscription={(text) => {
+                      // Add the user's transcribed message to chat
+                      const userMessage: Message = {
+                        id: Date.now().toString(),
+                        role: "user",
+                        content: text,
+                      };
+                      setMessages((prev) => [...prev, userMessage]);
+                    }}
+                    onResponse={(text) => {
+                      // Add the assistant's response to chat
+                      const assistantMessage: Message = {
+                        id: (Date.now() + 1).toString(),
+                        role: "assistant",
+                        content: text,
+                      };
+                      setMessages((prev) => [...prev, assistantMessage]);
+                    }}
+                    onError={(error) => {
+                      console.error("Voice chat error:", error);
+                    }}
+                    disabled={isLoading}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={!input.trim() || isLoading}
+                    className="bg-accent-600 hover:bg-accent-700 text-white"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </form>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

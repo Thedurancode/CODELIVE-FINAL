@@ -1,0 +1,145 @@
+# ==============================================================================
+# Dispotree Backend - Docker Compose
+# ==============================================================================
+# Quick start:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f api    # View API logs
+#   docker-compose down           # Stop all services
+#   docker-compose down -v        # Stop and remove volumes (reset database)
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ----------------------------------------------------------------------------
+  db:
+    image: postgres:15-alpine
+    container_name: dispotree-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-dispotree}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dispotree_secret}
+      POSTGRES_DB: ${DB_NAME:-dispotree}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-dispotree}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Redis Cache
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: dispotree-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Dispotree Backend API
+  # ----------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dispotree-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      # Server
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+
+      # Database (connects to the db service)
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-dispotree}
+      DB_USER: ${DB_USER:-dispotree}
+      DB_PASSWORD: ${DB_PASSWORD:-dispotree_secret}
+
+      # Redis Cache
+      REDIS_URL: redis://redis:6379
+
+      # API Keys (set these in .env or environment)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+
+      # Knowledge Base
+      KNOWLEDGE_FOLDER: /app/knowledge
+    volumes:
+      # Persist uploaded files and knowledge base
+      - ./uploads:/app/uploads
+      - ./knowledge:/app/knowledge
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  # ----------------------------------------------------------------------------
+  # Development Mode (optional - run with: docker-compose --profile dev up)
+  # ----------------------------------------------------------------------------
+  api-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dispotree-api-dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-dispotree}
+      DB_USER: ${DB_USER:-dispotree}
+      DB_PASSWORD: ${DB_PASSWORD:-dispotree_secret}
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      PINECONE_API_KEY: ${PINECONE_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      KNOWLEDGE_FOLDER: /app/knowledge
+    volumes:
+      - ./src:/app/src:ro
+      - ./uploads:/app/uploads
+      - ./knowledge:/app/knowledge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

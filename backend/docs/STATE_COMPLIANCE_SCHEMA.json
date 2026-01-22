@@ -1,0 +1,484 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "State Compliance Specification",
+  "description": "Machine-readable compliance rules for a US state/county. Upload this file to automatically create all compliance rules, extraction profiles, and validation logic.",
+  "type": "object",
+  "required": ["state", "county", "version", "contacts", "documents", "rules", "extractionProfiles"],
+  "properties": {
+    "state": {
+      "type": "string",
+      "description": "Two-letter state code (e.g., TX, FL, CA)",
+      "pattern": "^[A-Z]{2}$",
+      "example": "TX"
+    },
+    "county": {
+      "type": "string",
+      "description": "County name (optional, use 'ALL' for statewide)",
+      "example": "Harris"
+    },
+    "version": {
+      "type": "string",
+      "description": "Spec version for tracking updates",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "example": "1.0.0"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "generatedBy": {
+          "type": "string",
+          "example": "GPT-4"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "example": "2026-01-09T10:00:00Z"
+        },
+        "legalReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "example": ["Texas Property Code §5.069", "TREC Rules Chapter 537"]
+        },
+        "notes": {
+          "type": "string",
+          "example": "Harris County pilot implementation"
+        }
+      }
+    },
+    "contacts": {
+      "type": "array",
+      "description": "Required contacts per property",
+      "items": {
+        "type": "object",
+        "required": ["category", "role", "requiredFields", "phase", "blocking"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["wholesaler", "llc", "seller", "buyer", "broker", "attorney", "title_company", "other"],
+            "example": "llc"
+          },
+          "role": {
+            "type": "string",
+            "example": "LLC Entity"
+          },
+          "requiredFields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fieldName": { "type": "string", "example": "legal_name" },
+                "displayName": { "type": "string", "example": "LLC Legal Name" },
+                "dataType": { "type": "string", "enum": ["string", "email", "phone", "date", "number", "boolean"], "example": "string" },
+                "required": { "type": "boolean", "example": true },
+                "validation": { "type": "string", "example": "Must match Articles of Organization" }
+              }
+            }
+          },
+          "phase": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 11,
+            "example": 0
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "If true, deal cannot proceed without this contact",
+            "example": true
+          },
+          "storageTable": {
+            "type": "string",
+            "example": "llc_profiles"
+          }
+        }
+      }
+    },
+    "documents": {
+      "type": "array",
+      "description": "Required documents per deal",
+      "items": {
+        "type": "object",
+        "required": ["documentType", "category", "required", "phase"],
+        "properties": {
+          "documentType": {
+            "type": "string",
+            "example": "purchase_contract"
+          },
+          "officialName": {
+            "type": "string",
+            "example": "TREC 1-4 Family Residential Contract"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["formation", "contract", "disclosure", "agreement", "cancellation", "assignment", "other"],
+            "example": "contract"
+          },
+          "required": {
+            "type": "boolean",
+            "example": true
+          },
+          "phase": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 11,
+            "example": 2
+          },
+          "extractionFields": {
+            "type": "array",
+            "description": "Fields to extract via OCR",
+            "items": {
+              "type": "string"
+            },
+            "example": ["sellerName", "buyerName", "propertyAddress", "purchasePrice"]
+          },
+          "retentionPeriod": {
+            "type": "string",
+            "example": "7 years"
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Compliance validation rules",
+      "items": {
+        "type": "object",
+        "required": ["ruleId", "phase", "description", "validationType", "blocking"],
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}-P\\d+-R\\d+$",
+            "example": "TX-P3-R1"
+          },
+          "phase": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 11,
+            "example": 3
+          },
+          "description": {
+            "type": "string",
+            "example": "Buyer name must match selected LLC"
+          },
+          "validationType": {
+            "type": "string",
+            "enum": ["field_match", "field_present", "field_format", "date_comparison", "boolean_check", "custom"],
+            "example": "field_match"
+          },
+          "validation": {
+            "type": "object",
+            "description": "Validation logic",
+            "properties": {
+              "field1": { "type": "string", "example": "buyerName" },
+              "field2": { "type": "string", "example": "selectedLLC.legalName" },
+              "operator": { "type": "string", "enum": ["equals", "contains", "matches", "greater_than", "less_than", "between"], "example": "contains" },
+              "customLogic": { "type": "string", "description": "TypeScript validation function", "example": "return normalizedBuyer.includes(normalizedLLC)" }
+            }
+          },
+          "blocking": {
+            "type": "boolean",
+            "example": true
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "warning", "info"],
+            "example": "critical"
+          },
+          "errorMessage": {
+            "type": "string",
+            "example": "Buyer name does not match selected LLC"
+          },
+          "remediation": {
+            "type": "string",
+            "example": "Verify buyer name on contract matches LLC legal name exactly"
+          }
+        }
+      }
+    },
+    "disclosures": {
+      "type": "array",
+      "description": "State-specific disclosure requirements",
+      "items": {
+        "type": "object",
+        "required": ["disclosureId", "name", "required"],
+        "properties": {
+          "disclosureId": {
+            "type": "string",
+            "example": "TX-D1"
+          },
+          "name": {
+            "type": "string",
+            "example": "Assignment Rights Disclosure"
+          },
+          "description": {
+            "type": "string",
+            "example": "Buyer must disclose intent to assign contract"
+          },
+          "legalCitation": {
+            "type": "string",
+            "example": "Texas Property Code §5.069(b)"
+          },
+          "required": {
+            "type": "boolean",
+            "example": true
+          },
+          "substanceRequired": {
+            "type": "boolean",
+            "description": "If true, exact wording not required, just substance",
+            "example": true
+          },
+          "keywords": {
+            "type": "array",
+            "description": "Keywords to detect via OCR",
+            "items": {
+              "type": "string"
+            },
+            "example": ["assign", "assignment", "equitable interest"]
+          },
+          "regexPattern": {
+            "type": "string",
+            "example": "/(?:assign|assignment|equitable\\s+interest)/i"
+          }
+        }
+      }
+    },
+    "timingRules": {
+      "type": "array",
+      "description": "Time-sensitive requirements",
+      "items": {
+        "type": "object",
+        "required": ["ruleId", "description", "eventA", "eventB", "relationship"],
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "example": "TX-T1"
+          },
+          "description": {
+            "type": "string",
+            "example": "Cancellation disclosure must be delivered after contract acceptance"
+          },
+          "eventA": {
+            "type": "string",
+            "example": "contractAcceptanceDate"
+          },
+          "eventB": {
+            "type": "string",
+            "example": "cancellationDeliveryDate"
+          },
+          "relationship": {
+            "type": "string",
+            "enum": ["before", "after", "same_day", "within_days"],
+            "example": "after"
+          },
+          "dayBuffer": {
+            "type": "integer",
+            "description": "Number of days if relationship is 'within_days'",
+            "example": 3
+          },
+          "blocking": {
+            "type": "boolean",
+            "example": true
+          },
+          "blocksPhase": {
+            "type": "integer",
+            "example": 11
+          }
+        }
+      }
+    },
+    "extractionProfiles": {
+      "type": "array",
+      "description": "OCR extraction profiles",
+      "items": {
+        "type": "object",
+        "required": ["state", "category", "name", "fieldLabels"],
+        "properties": {
+          "state": {
+            "type": "string",
+            "example": "TX"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["purchase_contract", "assignment_addendum", "disclosure_addendum", "cancellation_disclosure", "other"],
+            "example": "purchase_contract"
+          },
+          "name": {
+            "type": "string",
+            "example": "Texas Purchase Contract (TREC 1-4)"
+          },
+          "description": {
+            "type": "string",
+            "example": "TREC standard form with Grantor/Grantee terminology"
+          },
+          "fieldLabels": {
+            "type": "object",
+            "description": "Field synonyms for OCR",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "example": {
+              "sellerName": ["Seller", "Grantor", "Owner"],
+              "buyerName": ["Buyer", "Grantee", "Purchaser"]
+            }
+          },
+          "regexHints": {
+            "type": "object",
+            "description": "Regex patterns for field extraction",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "example": {
+              "purchasePrice": "/(?:purchase\\s+price|sales\\s+price)[:\\s]*\\$?\\s*([\\d,]+(?:\\.\\d{2})?)/i"
+            }
+          },
+          "promptOverrides": {
+            "type": "string",
+            "description": "Custom prompt for this profile",
+            "example": "Extract fields from Texas TREC contract. Note: Grantor = Seller, Grantee = Buyer."
+          },
+          "requiredFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["sellerName", "buyerName", "propertyAddress", "purchasePrice"]
+          },
+          "minConfidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.75
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "example": 100
+          }
+        }
+      }
+    },
+    "scoringRules": {
+      "type": "object",
+      "description": "GREEN/YELLOW/RED scoring logic",
+      "required": ["green", "yellow", "red"],
+      "properties": {
+        "green": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string", "example": "All critical rules pass, all disclosures present" },
+            "conditions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "example": ["All Phase 3 critical rules pass", "All state disclosures present", "No blocking issues"]
+            },
+            "permissions": {
+              "type": "object",
+              "properties": {
+                "canDistribute": { "type": "boolean", "example": true },
+                "canExecuteAssignment": { "type": "boolean", "example": false }
+              }
+            }
+          }
+        },
+        "yellow": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string", "example": "Minor issues present, manual review required" },
+            "conditions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "example": ["1-2 non-critical disclosures missing", "Seller name doesn't match public records (warning only)"]
+            },
+            "permissions": {
+              "type": "object",
+              "properties": {
+                "canDistribute": { "type": "boolean", "example": false },
+                "canExecuteAssignment": { "type": "boolean", "example": false }
+              }
+            },
+            "remediationAllowed": { "type": "boolean", "example": true },
+            "maxRemediationAttempts": { "type": "integer", "example": 2 }
+          }
+        },
+        "red": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string", "example": "Critical compliance failure, deal rejected" },
+            "conditions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "example": ["Buyer doesn't match LLC", "Contract not assignable", "Contract expired", "3+ critical disclosures missing"]
+            },
+            "permissions": {
+              "type": "object",
+              "properties": {
+                "canDistribute": { "type": "boolean", "example": false },
+                "canExecuteAssignment": { "type": "boolean", "example": false }
+              }
+            },
+            "autoReject": { "type": "boolean", "example": true }
+          }
+        }
+      }
+    },
+    "blockingGates": {
+      "type": "array",
+      "description": "Hard gates where deal cannot proceed",
+      "items": {
+        "type": "object",
+        "required": ["gateId", "name", "phase", "condition"],
+        "properties": {
+          "gateId": {
+            "type": "string",
+            "example": "TX-GATE-1"
+          },
+          "name": {
+            "type": "string",
+            "example": "LLC Hard Gate"
+          },
+          "phase": {
+            "type": "integer",
+            "example": 0
+          },
+          "blocksPhase": {
+            "type": "integer",
+            "description": "Which phase is blocked",
+            "example": 2
+          },
+          "condition": {
+            "type": "string",
+            "example": "LLC profile complete AND CSA executed"
+          },
+          "errorMessage": {
+            "type": "string",
+            "example": "Cannot submit deal without complete LLC profile and executed CSA"
+          }
+        }
+      }
+    },
+    "databaseSchema": {
+      "type": "object",
+      "description": "State-specific database fields",
+      "properties": {
+        "complianceTableFields": {
+          "type": "array",
+          "description": "Additional fields for {state}_deal_compliance table",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fieldName": { "type": "string", "example": "grantor_name" },
+              "dataType": { "type": "string", "example": "VARCHAR(255)" },
+              "nullable": { "type": "boolean", "example": true },
+              "comment": { "type": "string", "example": "Texas uses Grantor instead of Seller" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

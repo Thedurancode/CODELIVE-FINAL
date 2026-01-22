@@ -1,0 +1,51 @@
+# ==============================================================================
+# Dispotree Backend API - Fly.io Configuration
+# ==============================================================================
+# Deploy with: fly deploy --config backend/fly.toml
+# ==============================================================================
+
+app = 'dispotree-api'
+primary_region = 'dfw'
+
+[build]
+  dockerfile = "Dockerfile"
+  [build.settings]
+    builder = "depot"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3001"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[checks]
+  [checks.health]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    path = "/api/health"
+    port = 3001
+    timeout = "10s"
+    type = "http"
+
+# Mounts for persistent data (uploads, knowledge base docs)
+[mounts]
+  source = "dispotree_data"
+  destination = "/app/uploads"
+  initial_size = "1gb"

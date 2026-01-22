@@ -1,0 +1,1274 @@
+{
+  "state": "TX",
+  "county": "ALL",
+  "version": "1.0.0",
+  "metadata": {
+    "generatedBy": "Claude Sonnet 4.5",
+    "generatedAt": "2026-01-06T19:30:00Z",
+    "legalReferences": [
+      "Texas Property Code §5.069 (Wholesaling Disclosure Requirements)",
+      "Texas Property Code Chapter 5 Subchapter E",
+      "TREC Rules Chapter 537",
+      "Texas Business and Commerce Code"
+    ],
+    "notes": "Texas statewide wholesale compliance - uses TREC standard forms, Grantor/Grantee terminology, 3 critical disclosures required by §5.069"
+  },
+  "contacts": [
+    {
+      "category": "wholesaler",
+      "role": "Wholesaler/Submitter",
+      "requiredFields": [
+        {
+          "fieldName": "first_name",
+          "displayName": "First Name",
+          "dataType": "string",
+          "required": true,
+          "validation": "Non-empty string"
+        },
+        {
+          "fieldName": "last_name",
+          "displayName": "Last Name",
+          "dataType": "string",
+          "required": true,
+          "validation": "Non-empty string"
+        },
+        {
+          "fieldName": "email",
+          "displayName": "Email Address",
+          "dataType": "email",
+          "required": true,
+          "validation": "Valid email format"
+        },
+        {
+          "fieldName": "phone",
+          "displayName": "Phone Number",
+          "dataType": "phone",
+          "required": true,
+          "validation": "Valid US phone number"
+        }
+      ],
+      "phase": 0,
+      "blocking": true,
+      "storageTable": "marketplace_users"
+    },
+    {
+      "category": "llc",
+      "role": "LLC Entity",
+      "requiredFields": [
+        {
+          "fieldName": "legal_name",
+          "displayName": "LLC Legal Name",
+          "dataType": "string",
+          "required": true,
+          "validation": "Must match Texas Certificate of Formation exactly"
+        },
+        {
+          "fieldName": "ein",
+          "displayName": "EIN",
+          "dataType": "string",
+          "required": true,
+          "validation": "9-digit number (XX-XXXXXXX)"
+        },
+        {
+          "fieldName": "state_of_formation",
+          "displayName": "State of Formation",
+          "dataType": "string",
+          "required": true,
+          "validation": "2-letter state code (TX recommended)"
+        },
+        {
+          "fieldName": "formation_date",
+          "displayName": "Formation Date",
+          "dataType": "date",
+          "required": true,
+          "validation": "Date in past"
+        },
+        {
+          "fieldName": "business_address",
+          "displayName": "Registered Agent Address",
+          "dataType": "string",
+          "required": true,
+          "validation": "Texas registered agent address"
+        },
+        {
+          "fieldName": "texas_file_number",
+          "displayName": "Texas File Number",
+          "dataType": "string",
+          "required": false,
+          "validation": "Texas SOS file number (recommended)"
+        }
+      ],
+      "phase": 0,
+      "blocking": true,
+      "storageTable": "llc_profiles"
+    },
+    {
+      "category": "other",
+      "role": "Authorized Signer (Company Agreement)",
+      "requiredFields": [
+        {
+          "fieldName": "full_name",
+          "displayName": "Full Legal Name",
+          "dataType": "string",
+          "required": true,
+          "validation": "Must match Company Agreement (Texas uses 'Company Agreement' not 'Operating Agreement')"
+        },
+        {
+          "fieldName": "title",
+          "displayName": "Title",
+          "dataType": "string",
+          "required": true,
+          "validation": "Manager, Member, President, Governing Person"
+        },
+        {
+          "fieldName": "ssn_or_ein",
+          "displayName": "SSN or EIN",
+          "dataType": "string",
+          "required": true,
+          "validation": "9 digits (encrypted storage)"
+        }
+      ],
+      "phase": 0,
+      "blocking": true,
+      "storageTable": "llc_authorized_signers"
+    },
+    {
+      "category": "seller",
+      "role": "Property Seller (Grantor)",
+      "requiredFields": [
+        {
+          "fieldName": "grantor_name",
+          "displayName": "Grantor Name (Seller)",
+          "dataType": "string",
+          "required": true,
+          "validation": "Texas uses 'Grantor' terminology - must match deed"
+        },
+        {
+          "fieldName": "entity_type",
+          "displayName": "Entity Type",
+          "dataType": "string",
+          "required": true,
+          "validation": "Individual, LLC, Trust, Estate, Corporation"
+        },
+        {
+          "fieldName": "signature_verified",
+          "displayName": "Grantor Signature Verified",
+          "dataType": "boolean",
+          "required": true,
+          "validation": "Must be present on TREC contract"
+        },
+        {
+          "fieldName": "phone",
+          "displayName": "Phone Number",
+          "dataType": "phone",
+          "required": false,
+          "validation": "Valid US phone number (recommended)"
+        },
+        {
+          "fieldName": "email",
+          "displayName": "Email Address",
+          "dataType": "email",
+          "required": false,
+          "validation": "Valid email (recommended)"
+        }
+      ],
+      "phase": 2,
+      "blocking": true,
+      "storageTable": "property_contacts"
+    },
+    {
+      "category": "buyer",
+      "role": "End Buyer (Assignee/Grantee)",
+      "requiredFields": [
+        {
+          "fieldName": "assignee_name",
+          "displayName": "Assignee Name (End Buyer/Grantee)",
+          "dataType": "string",
+          "required": true,
+          "validation": "Individual or entity name"
+        },
+        {
+          "fieldName": "entity_type",
+          "displayName": "Entity Type",
+          "dataType": "string",
+          "required": true,
+          "validation": "Individual, LLC, Fund, Corporation"
+        },
+        {
+          "fieldName": "contact_person",
+          "displayName": "Primary Contact",
+          "dataType": "string",
+          "required": true,
+          "validation": "Name of decision maker"
+        },
+        {
+          "fieldName": "email",
+          "displayName": "Email Address",
+          "dataType": "email",
+          "required": true,
+          "validation": "Valid email format"
+        },
+        {
+          "fieldName": "phone",
+          "displayName": "Phone Number",
+          "dataType": "phone",
+          "required": true,
+          "validation": "Valid US phone number"
+        }
+      ],
+      "phase": 11,
+      "blocking": true,
+      "storageTable": "texas_deal_compliance"
+    },
+    {
+      "category": "broker",
+      "role": "Internal Broker/Reviewer",
+      "requiredFields": [
+        {
+          "fieldName": "reviewer_name",
+          "displayName": "Reviewer Name",
+          "dataType": "string",
+          "required": true,
+          "validation": "Internal staff name"
+        },
+        {
+          "fieldName": "review_date",
+          "displayName": "Review Date",
+          "dataType": "date",
+          "required": true,
+          "validation": "Timestamp of review"
+        },
+        {
+          "fieldName": "decision",
+          "displayName": "Review Decision",
+          "dataType": "string",
+          "required": true,
+          "validation": "approved, rejected, needs_info"
+        }
+      ],
+      "phase": 8,
+      "blocking": true,
+      "storageTable": "compliance_audit_log"
+    },
+    {
+      "category": "title_company",
+      "role": "Title Company (Common in Texas)",
+      "requiredFields": [
+        {
+          "fieldName": "company_name",
+          "displayName": "Title Company Name",
+          "dataType": "string",
+          "required": false,
+          "validation": "Required for closing (Texas commonly uses title companies)"
+        },
+        {
+          "fieldName": "contact_person",
+          "displayName": "Escrow Officer",
+          "dataType": "string",
+          "required": false,
+          "validation": "Title officer or escrow officer"
+        },
+        {
+          "fieldName": "email",
+          "displayName": "Email",
+          "dataType": "email",
+          "required": false,
+          "validation": "Valid email"
+        },
+        {
+          "fieldName": "phone",
+          "displayName": "Phone",
+          "dataType": "phone",
+          "required": false,
+          "validation": "Valid phone"
+        }
+      ],
+      "phase": 9,
+      "blocking": false,
+      "storageTable": "property_contacts"
+    },
+    {
+      "category": "attorney",
+      "role": "Real Estate Attorney",
+      "requiredFields": [
+        {
+          "fieldName": "attorney_name",
+          "displayName": "Attorney Name",
+          "dataType": "string",
+          "required": false,
+          "validation": "Texas does not require attorney involvement (title companies handle closings)"
+        },
+        {
+          "fieldName": "bar_number",
+          "displayName": "Texas Bar Number",
+          "dataType": "string",
+          "required": false,
+          "validation": "State Bar of Texas number"
+        },
+        {
+          "fieldName": "law_firm",
+          "displayName": "Law Firm",
+          "dataType": "string",
+          "required": false,
+          "validation": "Firm name"
+        }
+      ],
+      "phase": 9,
+      "blocking": false,
+      "storageTable": "attorneys"
+    }
+  ],
+  "documents": [
+    {
+      "documentType": "llc_certificate",
+      "officialName": "Certificate of Formation (Texas)",
+      "category": "formation",
+      "required": true,
+      "phase": 0,
+      "extractionFields": [
+        "llcLegalName",
+        "stateOfFormation",
+        "filingDate",
+        "texasFileNumber"
+      ],
+      "retentionPeriod": "Permanent"
+    },
+    {
+      "documentType": "llc_company_agreement",
+      "officialName": "Company Agreement (Texas)",
+      "category": "formation",
+      "required": true,
+      "phase": 0,
+      "extractionFields": [
+        "authorizedSignerName",
+        "authorizedSignerTitle",
+        "governingPersons",
+        "signingAuthorityClause"
+      ],
+      "retentionPeriod": "Permanent"
+    },
+    {
+      "documentType": "csa",
+      "officialName": "Client Services Agreement",
+      "category": "agreement",
+      "required": true,
+      "phase": 0,
+      "extractionFields": [
+        "llcName",
+        "signerName",
+        "executionDate"
+      ],
+      "retentionPeriod": "Permanent"
+    },
+    {
+      "documentType": "trec_purchase_contract",
+      "officialName": "TREC 1-4 Family Residential Contract (Resale)",
+      "category": "contract",
+      "required": true,
+      "phase": 2,
+      "extractionFields": [
+        "grantorName",
+        "granteeName",
+        "propertyAddress",
+        "salesPrice",
+        "earnestMoney",
+        "closingDate",
+        "contractExpirationDate",
+        "assignable",
+        "optionPeriod",
+        "optionFee",
+        "titlePolicy"
+      ],
+      "retentionPeriod": "7 years"
+    },
+    {
+      "documentType": "trec_wholesale_disclosure",
+      "officialName": "Texas Property Code §5.069 Disclosure Addendum",
+      "category": "disclosure",
+      "required": true,
+      "phase": 4,
+      "extractionFields": [
+        "disclosureAssignmentRights",
+        "disclosureAssignmentFee",
+        "disclosureNotLicensedBroker"
+      ],
+      "retentionPeriod": "7 years"
+    },
+    {
+      "documentType": "msa",
+      "officialName": "Marketing Services Agreement",
+      "category": "agreement",
+      "required": true,
+      "phase": 7,
+      "extractionFields": [
+        "wholesalerName",
+        "dealId",
+        "distributionChannels",
+        "executionDate"
+      ],
+      "retentionPeriod": "Permanent"
+    },
+    {
+      "documentType": "asa",
+      "officialName": "Auction Services Agreement",
+      "category": "agreement",
+      "required": false,
+      "phase": 7,
+      "extractionFields": [
+        "wholesalerName",
+        "dealId",
+        "auctionPlatform",
+        "executionDate"
+      ],
+      "retentionPeriod": "Permanent"
+    },
+    {
+      "documentType": "option_period_notice",
+      "officialName": "TREC Option Period Notice",
+      "category": "disclosure",
+      "required": false,
+      "phase": 3,
+      "extractionFields": [
+        "optionPeriodDays",
+        "optionFee",
+        "deliveryDate"
+      ],
+      "retentionPeriod": "7 years"
+    },
+    {
+      "documentType": "trec_assignment_addendum",
+      "officialName": "TREC Assignment of Contract and Earnest Money",
+      "category": "assignment",
+      "required": true,
+      "phase": 11,
+      "extractionFields": [
+        "assignorName",
+        "assigneeName",
+        "propertyAddress",
+        "assignmentFee",
+        "originalContractDate",
+        "assignmentDate",
+        "earnestMoneyAssignment"
+      ],
+      "retentionPeriod": "7 years"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "TX-P0-R1",
+      "phase": 0,
+      "description": "LLC must be selected before deal submission",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "selectedLlcId",
+        "operator": "present",
+        "customLogic": "return deal.selectedLlcId !== null && deal.selectedLlcId !== undefined"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "No LLC selected - please select or create an LLC before submitting",
+      "remediation": "Select an existing LLC or create a new LLC profile"
+    },
+    {
+      "ruleId": "TX-P0-R2",
+      "phase": 0,
+      "description": "Texas Certificate of Formation must be uploaded",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "certificateDocumentId",
+        "operator": "present",
+        "customLogic": "return llc.documents.some(d => d.documentType === 'certificate' && d.status === 'verified')"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Certificate of Formation not uploaded",
+      "remediation": "Upload Texas Secretary of State Certificate of Formation"
+    },
+    {
+      "ruleId": "TX-P0-R3",
+      "phase": 0,
+      "description": "Company Agreement must be uploaded",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "companyAgreementId",
+        "operator": "present",
+        "customLogic": "return llc.documents.some(d => d.documentType === 'company_agreement' && d.status === 'verified')"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Company Agreement not uploaded (Texas uses 'Company Agreement' not 'Operating Agreement')",
+      "remediation": "Upload LLC Company Agreement showing governing persons"
+    },
+    {
+      "ruleId": "TX-P0-R4",
+      "phase": 0,
+      "description": "Authorized signer/governing person must be identified",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "authorizedSignerId",
+        "operator": "present",
+        "customLogic": "return llc.authorizedSigners.length > 0"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "No authorized signer identified",
+      "remediation": "Identify governing person with signing authority from Company Agreement"
+    },
+    {
+      "ruleId": "TX-P0-R5",
+      "phase": 0,
+      "description": "CSA must be executed",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "csaId",
+        "operator": "present",
+        "customLogic": "return llc.agreements.some(a => a.agreementType === 'CSA' && a.status === 'executed')"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Client Services Agreement not executed",
+      "remediation": "Execute CSA via DocuSeal with authorized signer"
+    },
+    {
+      "ruleId": "TX-P2-R1",
+      "phase": 2,
+      "description": "TREC contract must be uploaded",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "trecContractId",
+        "operator": "present",
+        "customLogic": "return property.documents.some(d => d.category === 'purchase_contract' && d.documentType.includes('trec'))"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "TREC 1-4 Family Residential Contract not uploaded",
+      "remediation": "Upload signed TREC contract"
+    },
+    {
+      "ruleId": "TX-P2-R2",
+      "phase": 2,
+      "description": "TREC contract OCR must succeed",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "ocrComplete",
+        "operator": "equals",
+        "expectedValue": true,
+        "customLogic": "return ocrResult && ocrResult.extractionStatus === 'complete'"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "OCR extraction failed - cannot validate TREC contract",
+      "remediation": "Re-upload clearer scan or manually verify fields"
+    },
+    {
+      "ruleId": "TX-P3-R1",
+      "phase": 3,
+      "description": "Grantee name must match selected LLC",
+      "validationType": "field_match",
+      "validation": {
+        "field1": "granteeName",
+        "field2": "selectedLLC.legalName",
+        "operator": "contains",
+        "customLogic": "const normalized = (ocrResult.granteeName || ocrResult.buyerName || '').toUpperCase().replace(/\\s+/g, ' ').trim(); const llcNorm = selectedLLC.legalName.toUpperCase().replace(/\\s+/g, ' ').trim(); return normalized.includes(llcNorm) || normalized.includes(llcNorm.replace(/,?\\s*LLC$/, ''))"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Grantee name does not match selected LLC (Texas uses 'Grantee' for buyer)",
+      "remediation": "Verify contract grantee matches LLC legal name exactly"
+    },
+    {
+      "ruleId": "TX-P3-R2",
+      "phase": 3,
+      "description": "Grantor name must match public records",
+      "validationType": "field_match",
+      "validation": {
+        "field1": "grantorName",
+        "field2": "publicRecords.ownerName",
+        "operator": "contains",
+        "customLogic": "const normalized = (ocrResult.grantorName || ocrResult.sellerName || '').toUpperCase(); const publicNorm = (publicRecords.ownerName || '').toUpperCase(); return normalized.includes(publicNorm) || publicNorm.includes(normalized)"
+      },
+      "blocking": false,
+      "severity": "warning",
+      "errorMessage": "Grantor name may not match public records - manual review needed (Texas uses 'Grantor' for seller)",
+      "remediation": "Verify grantor is current owner via deed search"
+    },
+    {
+      "ruleId": "TX-P3-R3",
+      "phase": 3,
+      "description": "Contract must be assignable",
+      "validationType": "boolean_check",
+      "validation": {
+        "field1": "assignable",
+        "operator": "equals",
+        "expectedValue": true,
+        "customLogic": "return ocrResult.assignable === true || (ocrResult.granteeName || ocrResult.buyerName || '').toLowerCase().includes('and/or assigns')"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Contract is not assignable - wholesale deals require assignment rights",
+      "remediation": "TREC contract must include 'and/or assigns' in grantee name or explicit assignment clause"
+    },
+    {
+      "ruleId": "TX-P3-R4",
+      "phase": 3,
+      "description": "Contract must not be expired",
+      "validationType": "date_comparison",
+      "validation": {
+        "field1": "contractExpirationDate",
+        "operator": "greater_than",
+        "field2": "currentDate",
+        "customLogic": "return new Date(ocrResult.contractExpirationDate) > new Date()"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "TREC contract has expired",
+      "remediation": "Contract expiration date must be in the future"
+    },
+    {
+      "ruleId": "TX-P3-R5",
+      "phase": 3,
+      "description": "Grantor signature must be present",
+      "validationType": "boolean_check",
+      "validation": {
+        "field1": "grantorSignature",
+        "operator": "equals",
+        "expectedValue": true,
+        "customLogic": "return ocrResult.grantorSignature === true || ocrResult.sellerSignature === true"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Grantor signature not detected on TREC contract",
+      "remediation": "Contract must be signed by grantor (seller)"
+    },
+    {
+      "ruleId": "TX-P3-R6",
+      "phase": 3,
+      "description": "Option period recommended for wholesale deals",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "optionPeriod",
+        "operator": "present",
+        "customLogic": "return ocrResult.optionPeriod && parseInt(ocrResult.optionPeriod) > 0"
+      },
+      "blocking": false,
+      "severity": "warning",
+      "errorMessage": "No option period specified - recommended for wholesale (allows time to find buyer)",
+      "remediation": "TREC contracts typically include 7-10 day option period for due diligence"
+    },
+    {
+      "ruleId": "TX-P4-R1",
+      "phase": 4,
+      "description": "Assignment rights must be disclosed (TX Property Code §5.069)",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "disclosure_assignment_rights",
+        "operator": "equals",
+        "expectedValue": true
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Missing Texas-required assignment disclosure (Property Code §5.069(b)(1))",
+      "remediation": "Texas Property Code §5.069 requires disclosure of intent to assign"
+    },
+    {
+      "ruleId": "TX-P4-R2",
+      "phase": 4,
+      "description": "Assignment fee must be disclosed to seller (TX Property Code §5.069)",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "disclosure_assignment_fee",
+        "operator": "equals",
+        "expectedValue": true
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Missing assignment fee disclosure - HIGH RISK (Property Code §5.069(b)(2))",
+      "remediation": "Texas requires disclosure of assignment compensation to seller (prevents lawsuits)"
+    },
+    {
+      "ruleId": "TX-P4-R3",
+      "phase": 4,
+      "description": "Must disclose not a licensed broker (TREC Rules §537.11)",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "disclosure_not_licensed_broker",
+        "operator": "equals",
+        "expectedValue": true
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Missing 'not a licensed broker' disclosure (TREC Rules §537.11)",
+      "remediation": "Texas requires disclosure if buyer is not a licensed real estate broker"
+    },
+    {
+      "ruleId": "TX-P5-R1",
+      "phase": 5,
+      "description": "Calculate overall compliance score",
+      "validationType": "custom",
+      "validation": {
+        "customLogic": "const phase3Pass = compliance.phase3Status === 'GREEN'; const phase4Score = [compliance.disclosureAssignmentRights, compliance.disclosureAssignmentFee, compliance.disclosureNotLicensedBroker].filter(d => d === true).length; return phase3Pass && phase4Score === 3 ? 'GREEN' : (phase4Score >= 2 ? 'YELLOW' : 'RED')"
+      },
+      "blocking": false,
+      "severity": "info",
+      "errorMessage": "Compliance score calculated",
+      "remediation": "Review compliance dashboard for details"
+    },
+    {
+      "ruleId": "TX-P6-R1",
+      "phase": 6,
+      "description": "Distribution requires GREEN status",
+      "validationType": "field_match",
+      "validation": {
+        "field1": "overallStatus",
+        "operator": "equals",
+        "expectedValue": "GREEN",
+        "customLogic": "return compliance.overallStatus === 'GREEN'"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Cannot distribute with YELLOW or RED compliance status",
+      "remediation": "Fix compliance issues to achieve GREEN status before distribution"
+    },
+    {
+      "ruleId": "TX-P7-R1",
+      "phase": 7,
+      "description": "MSA must be executed if distributing",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "msaId",
+        "operator": "present",
+        "customLogic": "return property.agreements.some(a => a.agreementType === 'MSA' && a.status === 'executed')"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Cannot distribute without executed MSA",
+      "remediation": "Execute Marketing Services Agreement via DocuSeal"
+    },
+    {
+      "ruleId": "TX-P7-R2",
+      "phase": 7,
+      "description": "ASA required for auction channel",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "asaId",
+        "operator": "present",
+        "customLogic": "if (!distributionChannels.includes('auction')) return true; return property.agreements.some(a => a.agreementType === 'ASA' && a.status === 'executed')"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Cannot use auction channel without executed ASA",
+      "remediation": "Execute Auction Services Agreement"
+    },
+    {
+      "ruleId": "TX-P8-R1",
+      "phase": 8,
+      "description": "Broker review required before distribution",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "brokerReviewId",
+        "operator": "present",
+        "customLogic": "return property.reviews.some(r => r.reviewType === 'broker' && r.decision !== null)"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Deal pending broker review",
+      "remediation": "Wait for broker approval"
+    },
+    {
+      "ruleId": "TX-P8-R2",
+      "phase": 8,
+      "description": "Broker must approve for distribution",
+      "validationType": "field_match",
+      "validation": {
+        "field1": "brokerDecision",
+        "operator": "equals",
+        "expectedValue": "approved",
+        "customLogic": "const review = property.reviews.find(r => r.reviewType === 'broker'); return review && review.decision === 'approved'"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Broker has not approved distribution",
+      "remediation": "Address broker's concerns and request re-review"
+    },
+    {
+      "ruleId": "TX-P11-R1",
+      "phase": 11,
+      "description": "End buyer details must be provided",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "assigneeName",
+        "operator": "present",
+        "customLogic": "return compliance.assigneeName && compliance.assigneeName.trim().length > 0"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "End buyer information missing",
+      "remediation": "Provide end buyer/assignee contact details"
+    },
+    {
+      "ruleId": "TX-P11-R2",
+      "phase": 11,
+      "description": "TREC assignment addendum must be uploaded",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "assignmentAgreementId",
+        "operator": "present",
+        "customLogic": "return property.documents.some(d => d.category === 'assignment_agreement' || d.documentType.includes('assignment'))"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "TREC Assignment of Contract addendum not uploaded",
+      "remediation": "Upload executed TREC Assignment of Contract and Earnest Money form"
+    },
+    {
+      "ruleId": "TX-P11-R3",
+      "phase": 11,
+      "description": "Assignor name must match wholesaler LLC",
+      "validationType": "field_match",
+      "validation": {
+        "field1": "assignorName",
+        "field2": "selectedLLC.legalName",
+        "operator": "contains",
+        "customLogic": "const normalized = (ocrResult.assignorName || '').toUpperCase(); const llcNorm = selectedLLC.legalName.toUpperCase(); return normalized.includes(llcNorm)"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Assignor does not match wholesaler LLC",
+      "remediation": "TREC assignment must be from the LLC that holds the original contract"
+    },
+    {
+      "ruleId": "TX-P11-R4",
+      "phase": 11,
+      "description": "Assignment property must match original TREC contract",
+      "validationType": "field_match",
+      "validation": {
+        "field1": "assignmentPropertyAddress",
+        "field2": "originalPropertyAddress",
+        "operator": "contains",
+        "customLogic": "const assignAddr = (ocrResult.propertyAddress || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); const origAddr = (property.address || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return assignAddr === origAddr"
+      },
+      "blocking": true,
+      "severity": "critical",
+      "errorMessage": "Assignment property address does not match original TREC contract",
+      "remediation": "Property address on assignment must match purchase contract exactly"
+    },
+    {
+      "ruleId": "TX-P11-R5",
+      "phase": 11,
+      "description": "Assignment fee must be specified",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "assignmentFee",
+        "operator": "present",
+        "customLogic": "return ocrResult.assignmentFee && parseFloat(ocrResult.assignmentFee) > 0"
+      },
+      "blocking": false,
+      "severity": "warning",
+      "errorMessage": "Assignment fee not extracted - verify disclosure compliance",
+      "remediation": "Ensure assignment fee is clearly stated on TREC assignment form"
+    },
+    {
+      "ruleId": "TX-P11-R6",
+      "phase": 11,
+      "description": "Earnest money assignment must be addressed",
+      "validationType": "field_present",
+      "validation": {
+        "field1": "earnestMoneyAssignment",
+        "operator": "present",
+        "customLogic": "return ocrResult.earnestMoneyAssignment !== undefined"
+      },
+      "blocking": false,
+      "severity": "warning",
+      "errorMessage": "Earnest money assignment not specified",
+      "remediation": "TREC assignment form should specify earnest money handling"
+    }
+  ],
+  "disclosures": [
+    {
+      "disclosureId": "TX-D1",
+      "name": "Assignment Rights Disclosure",
+      "description": "Buyer must disclose intent to assign contract to another party",
+      "legalCitation": "Texas Property Code §5.069(b)(1)",
+      "required": true,
+      "substanceRequired": true,
+      "keywords": [
+        "assign",
+        "assignment",
+        "transfer",
+        "equitable interest",
+        "subsequent purchaser",
+        "and/or assigns"
+      ],
+      "regexPattern": "/(?:assign|assignment|transfer.{0,30}contract|equitable\\s+interest|subsequent\\s+purchaser)/i"
+    },
+    {
+      "disclosureId": "TX-D2",
+      "name": "Assignment Compensation Disclosure",
+      "description": "Assignment fee must be disclosed to seller",
+      "legalCitation": "Texas Property Code §5.069(b)(2)",
+      "required": true,
+      "substanceRequired": true,
+      "keywords": [
+        "assignment fee",
+        "assignment compensation",
+        "wholesale fee",
+        "consideration",
+        "profit"
+      ],
+      "regexPattern": "/(?:assignment\\s+(?:fee|compensation|profit)|wholesale\\s+fee|consideration).{0,40}(?:\\$[\\d,]+|\\d+%)/i"
+    },
+    {
+      "disclosureId": "TX-D3",
+      "name": "Not Licensed Broker Disclosure",
+      "description": "Buyer must disclose if not a licensed real estate broker",
+      "legalCitation": "TREC Rules §537.11",
+      "required": true,
+      "substanceRequired": true,
+      "keywords": [
+        "not a licensed broker",
+        "not licensed",
+        "not a real estate agent",
+        "not acting as broker"
+      ],
+      "regexPattern": "/(?:not\\s+(?:a\\s+)?licensed|not\\s+acting\\s+as).{0,30}(?:broker|agent|licensee)/i"
+    }
+  ],
+  "timingRules": [
+    {
+      "ruleId": "TX-T1",
+      "description": "Option period should allow time for assignment",
+      "eventA": "optionPeriodStart",
+      "eventB": "optionPeriodEnd",
+      "relationship": "within_days",
+      "dayBuffer": 7,
+      "blocking": false,
+      "blocksPhase": null
+    },
+    {
+      "ruleId": "TX-T2",
+      "description": "Contract should not be near expiration when submitted",
+      "eventA": "submissionDate",
+      "eventB": "contractExpirationDate",
+      "relationship": "within_days",
+      "dayBuffer": 14,
+      "blocking": false,
+      "blocksPhase": null
+    }
+  ],
+  "extractionProfiles": [
+    {
+      "state": "TX",
+      "category": "purchase_contract",
+      "name": "Texas Purchase Contract (TREC 1-4)",
+      "description": "Texas Real Estate Commission standard form with Grantor/Grantee terminology",
+      "fieldLabels": {
+        "grantorName": [
+          "Seller",
+          "Grantor",
+          "Owner"
+        ],
+        "granteeName": [
+          "Buyer",
+          "Grantee",
+          "Purchaser"
+        ],
+        "propertyAddress": [
+          "Property",
+          "Subject Property",
+          "Property Address",
+          "Premises"
+        ],
+        "salesPrice": [
+          "Sales Price",
+          "Purchase Price",
+          "Contract Price"
+        ],
+        "earnestMoney": [
+          "Earnest Money",
+          "EMD",
+          "Deposit"
+        ],
+        "closingDate": [
+          "Closing Date",
+          "Settlement Date"
+        ],
+        "contractExpirationDate": [
+          "Time for Acceptance",
+          "Expiration",
+          "Contract Expiration"
+        ],
+        "assignable": [
+          "and/or assigns",
+          "Assignable",
+          "Assignment Rights"
+        ],
+        "optionPeriod": [
+          "Option Period",
+          "Unrestricted Right to Terminate"
+        ],
+        "optionFee": [
+          "Option Fee",
+          "Option Money"
+        ],
+        "titlePolicy": [
+          "Title Policy",
+          "Owner's Policy"
+        ]
+      },
+      "regexHints": {
+        "grantorName": "/(?:seller|grantor|owner)[:\\s]+([A-Z][a-zA-Z\\s]+(?:LLC|Inc|Corp|Trust)?)/i",
+        "granteeName": "/(?:buyer|grantee|purchaser)[:\\s]+([A-Z][a-zA-Z\\s]+(?:LLC|Inc|Corp)?|.+and\\/or\\s+assigns)/i",
+        "salesPrice": "/(?:sales\\s+price|purchase\\s+price)[:\\s]*\\$?\\s*([\\d,]+(?:\\.\\d{2})?)/i",
+        "closingDate": "/(?:closing\\s+date|settlement\\s+date)[:\\s]*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})/i",
+        "optionPeriod": "/(?:option\\s+period|unrestricted\\s+right)[:\\s]*(\\d+)\\s*days?/i"
+      },
+      "promptOverrides": "Extract fields from Texas TREC purchase contract.\n\nTexas-specific notes:\n- 'Grantor' = Seller\n- 'Grantee' = Buyer\n- Look for both standard and Texas-specific terminology\n- TREC forms have specific sections: property, sales price, financing, title policy, etc.\n- Option period is critical for wholesale deals\n\nReturn JSON with extracted fields.",
+      "requiredFields": [
+        "grantorName",
+        "granteeName",
+        "propertyAddress",
+        "salesPrice",
+        "closingDate",
+        "assignable"
+      ],
+      "minConfidence": 0.75,
+      "priority": 100
+    },
+    {
+      "state": "TX",
+      "category": "disclosure_addendum",
+      "name": "Texas §5.069 Wholesale Disclosure",
+      "description": "Texas Property Code §5.069 required disclosures (3 critical)",
+      "fieldLabels": {
+        "disclosureAssignmentRights": [
+          "assign",
+          "assignment",
+          "transfer contract",
+          "equitable interest"
+        ],
+        "disclosureAssignmentFee": [
+          "assignment fee",
+          "assignment compensation",
+          "wholesale fee"
+        ],
+        "disclosureNotLicensedBroker": [
+          "not a licensed broker",
+          "not licensed",
+          "not acting as broker"
+        ]
+      },
+      "regexHints": {
+        "disclosureAssignmentRights": "/(?:assign|assignment|transfer.{0,30}contract|equitable\\s+interest)/i",
+        "disclosureAssignmentFee": "/(?:assignment\\s+(?:fee|compensation)|wholesale\\s+fee)/i",
+        "disclosureNotLicensedBroker": "/(?:not\\s+(?:a\\s+)?licensed|not\\s+acting\\s+as).{0,30}(?:broker|agent)/i"
+      },
+      "promptOverrides": "Extract disclosure checkboxes from Texas Property Code §5.069 wholesale disclosure.\n\nLook for 3 CRITICAL Texas disclosures:\n1. Assignment rights disclosure (§5.069(b)(1))\n2. Assignment fee disclosure (§5.069(b)(2))\n3. Not a licensed broker (TREC §537.11)\n\nFor each disclosure, return:\n- Boolean: true if found, false if not\n- Evidence: exact text snippet\n\nReturn JSON format.",
+      "requiredFields": [
+        "disclosureAssignmentRights",
+        "disclosureAssignmentFee",
+        "disclosureNotLicensedBroker"
+      ],
+      "minConfidence": 0.75,
+      "priority": 100
+    },
+    {
+      "state": "TX",
+      "category": "assignment_addendum",
+      "name": "TREC Assignment of Contract",
+      "description": "TREC Assignment of Contract and Earnest Money form",
+      "fieldLabels": {
+        "assignorName": [
+          "Assignor",
+          "Original Buyer",
+          "Original Grantee"
+        ],
+        "assigneeName": [
+          "Assignee",
+          "New Buyer",
+          "New Grantee"
+        ],
+        "propertyAddress": [
+          "Property",
+          "Property Address",
+          "Subject Property"
+        ],
+        "assignmentFee": [
+          "Assignment Fee",
+          "Fee",
+          "Consideration"
+        ],
+        "originalContractDate": [
+          "original contract",
+          "contract dated",
+          "TREC contract"
+        ],
+        "assignmentDate": [
+          "effective date",
+          "assignment date",
+          "date of assignment"
+        ],
+        "earnestMoneyAssignment": [
+          "earnest money",
+          "deposit assignment",
+          "EMD"
+        ]
+      },
+      "regexHints": {
+        "assignorName": "/(?:assignor|original\\s+(?:buyer|grantee))[:\\s]+([A-Z][a-zA-Z\\s]+(?:LLC|Inc)?)/i",
+        "assigneeName": "/(?:assignee|new\\s+(?:buyer|grantee))[:\\s]+([A-Z][a-zA-Z\\s]+(?:LLC|Inc|Fund)?)/i",
+        "assignmentFee": "/(?:assignment\\s+fee|fee|consideration)[:\\s]*\\$?\\s*([\\d,]+(?:\\.\\d{2})?)/i",
+        "assignmentDate": "/(?:effective\\s+date|assignment\\s+date)[:\\s]*(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})/i"
+      },
+      "promptOverrides": "Extract fields from TREC Assignment of Contract and Earnest Money.\n\nKey fields:\n- Assignor (must match original TREC contract grantee)\n- Assignee (new buyer)\n- Property address (must match exactly)\n- Assignment fee\n- Earnest money handling\n\nReturn JSON.",
+      "requiredFields": [
+        "assignorName",
+        "assigneeName",
+        "propertyAddress",
+        "assignmentFee",
+        "assignmentDate"
+      ],
+      "minConfidence": 0.75,
+      "priority": 90
+    }
+  ],
+  "scoringRules": {
+    "green": {
+      "description": "All critical Texas rules pass, all 3 required disclosures present",
+      "conditions": [
+        "Grantee matches LLC (TX-P3-R1)",
+        "Contract assignable (TX-P3-R3)",
+        "Contract not expired (TX-P3-R4)",
+        "Grantor signature present (TX-P3-R5)",
+        "All 3 Texas disclosures present (TX-D1, TX-D2, TX-D3)",
+        "Assignment rights disclosed (§5.069(b)(1))",
+        "Assignment fee disclosed (§5.069(b)(2))",
+        "Not licensed broker disclosed (TREC §537.11)"
+      ],
+      "permissions": {
+        "canDistribute": true,
+        "canExecuteAssignment": true
+      }
+    },
+    "yellow": {
+      "description": "Minor issues - manual review required",
+      "conditions": [
+        "2 of 3 disclosures present (missing 1 non-critical)",
+        "Grantor name doesn't match public records (warning only)",
+        "No option period specified (recommended but not blocking)",
+        "Contract near expiration (< 14 days)"
+      ],
+      "permissions": {
+        "canDistribute": false,
+        "canExecuteAssignment": false
+      },
+      "remediationAllowed": true,
+      "maxRemediationAttempts": 2
+    },
+    "red": {
+      "description": "Critical failure - deal rejected",
+      "conditions": [
+        "Grantee doesn't match LLC (TX-P3-R1)",
+        "Contract not assignable (TX-P3-R3)",
+        "Contract expired (TX-P3-R4)",
+        "Grantor signature missing (TX-P3-R5)",
+        "Missing assignment fee disclosure (TX-D2) - HIGH RISK per §5.069",
+        "1 or fewer disclosures present (< 50% compliance)"
+      ],
+      "permissions": {
+        "canDistribute": false,
+        "canExecuteAssignment": false
+      },
+      "autoReject": true
+    }
+  },
+  "blockingGates": [
+    {
+      "gateId": "TX-GATE-1",
+      "name": "LLC Hard Gate",
+      "phase": 0,
+      "blocksPhase": 2,
+      "condition": "LLC profile complete AND Certificate of Formation uploaded AND Company Agreement uploaded AND Governing person identified AND CSA executed",
+      "errorMessage": "Cannot submit deal without complete LLC setup. Texas requires: Certificate of Formation, Company Agreement, Governing Person, and executed CSA."
+    },
+    {
+      "gateId": "TX-GATE-2",
+      "name": "TREC Contract Validation Gate",
+      "phase": 3,
+      "blocksPhase": 4,
+      "condition": "All Phase 3 TREC contract rules pass (grantee matches LLC, assignable, not expired, grantor signature)",
+      "errorMessage": "TREC contract validation failed. Fix critical issues before proceeding to disclosure validation."
+    },
+    {
+      "gateId": "TX-GATE-3",
+      "name": "Compliance Status Gate",
+      "phase": 5,
+      "blocksPhase": 6,
+      "condition": "Overall compliance status = GREEN",
+      "errorMessage": "Cannot distribute deal with YELLOW or RED compliance status. All 3 Texas disclosures required per Property Code §5.069."
+    },
+    {
+      "gateId": "TX-GATE-4",
+      "name": "Assignment Fee Disclosure Gate",
+      "phase": 4,
+      "blocksPhase": 11,
+      "condition": "Assignment compensation disclosed (TX-D2)",
+      "errorMessage": "CRITICAL: Cannot execute assignment without fee disclosure - LAWSUIT RISK per Texas Property Code §5.069(b)(2)"
+    },
+    {
+      "gateId": "TX-GATE-5",
+      "name": "Distribution Agreements Gate",
+      "phase": 7,
+      "blocksPhase": 8,
+      "condition": "MSA executed (if distributing) AND ASA executed (if using auction)",
+      "errorMessage": "Cannot proceed without executed distribution agreements (MSA and/or ASA as applicable)."
+    },
+    {
+      "gateId": "TX-GATE-6",
+      "name": "Broker Review Gate",
+      "phase": 8,
+      "blocksPhase": 9,
+      "condition": "Broker has reviewed AND broker decision = 'approved'",
+      "errorMessage": "Deal pending broker approval before distribution can begin."
+    }
+  ],
+  "databaseSchema": {
+    "complianceTableFields": [
+      {
+        "fieldName": "grantor_name",
+        "dataType": "VARCHAR(255)",
+        "nullable": true,
+        "comment": "Texas uses 'Grantor' instead of 'Seller'"
+      },
+      {
+        "fieldName": "grantee_name",
+        "dataType": "VARCHAR(255)",
+        "nullable": true,
+        "comment": "Texas uses 'Grantee' instead of 'Buyer'"
+      },
+      {
+        "fieldName": "trec_form_version",
+        "dataType": "VARCHAR(50)",
+        "nullable": true,
+        "comment": "Which TREC form version (e.g., TREC 1-4, TREC 20-14)"
+      },
+      {
+        "fieldName": "option_period_days",
+        "dataType": "INTEGER",
+        "nullable": true,
+        "comment": "TREC option period in days (e.g., 7, 10)"
+      },
+      {
+        "fieldName": "option_fee",
+        "dataType": "DECIMAL(10,2)",
+        "nullable": true,
+        "comment": "TREC option fee amount"
+      },
+      {
+        "fieldName": "disclosure_score",
+        "dataType": "INTEGER",
+        "nullable": true,
+        "comment": "Number of Texas disclosures found (0-3)"
+      }
+    ]
+  }
+}

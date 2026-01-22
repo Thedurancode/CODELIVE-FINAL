@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dispotree - Week 1 Progress Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px;
+      background: #fff;
+    }
+
+    h1 {
+      color: #1a365d;
+      font-size: 28px;
+      margin-bottom: 5px;
+      border-bottom: 3px solid #3182ce;
+      padding-bottom: 10px;
+    }
+
+    h2 {
+      color: #2c5282;
+      font-size: 18px;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      border-left: 4px solid #3182ce;
+      padding-left: 12px;
+    }
+
+    h3 {
+      color: #2d3748;
+      font-size: 15px;
+      margin-top: 15px;
+      margin-bottom: 8px;
+    }
+
+    h4 {
+      color: #4a5568;
+      font-size: 13px;
+      margin-top: 10px;
+      margin-bottom: 5px;
+    }
+
+    p {
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #718096;
+      font-size: 14px;
+      margin-bottom: 15px;
+    }
+
+    .intro {
+      background: #ebf8ff;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      border-left: 4px solid #3182ce;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+
+    th {
+      background: #2c5282;
+      color: white;
+      padding: 8px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    tr:nth-child(even) {
+      background: #f7fafc;
+    }
+
+    .code-block {
+      background: #1a202c;
+      color: #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 11px;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 15px 0;
+    }
+
+    .diagram {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 10px;
+      overflow-x: auto;
+      white-space: pre;
+      margin: 15px 0;
+    }
+
+    /* Visual Architecture Diagram Styles */
+    .arch-container {
+      background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 15px 0;
+    }
+
+    .arch-layer {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .arch-layer:last-child {
+      margin-bottom: 0;
+    }
+
+    .arch-layer-title {
+      color: #90cdf4;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .arch-boxes {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .arch-box {
+      background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      text-align: center;
+      min-width: 80px;
+    }
+
+    .arch-box.green {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    }
+
+    .arch-box.purple {
+      background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+    }
+
+    .arch-box.orange {
+      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+    }
+
+    .arch-box.pink {
+      background: linear-gradient(135deg, #ed64a6 0%, #d53f8c 100%);
+    }
+
+    .arch-box.teal {
+      background: linear-gradient(135deg, #38b2ac 0%, #319795 100%);
+    }
+
+    .arch-arrow {
+      text-align: center;
+      color: #a0aec0;
+      font-size: 18px;
+      margin: 5px 0;
+    }
+
+    /* Flow Diagram Styles */
+    .flow-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 15px 0;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .flow-box {
+      background: #ebf8ff;
+      border: 2px solid #3182ce;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 500;
+      text-align: center;
+      color: #2c5282;
+    }
+
+    .flow-box.highlight {
+      background: #3182ce;
+      color: white;
+    }
+
+    .flow-box.success {
+      background: #c6f6d5;
+      border-color: #38a169;
+      color: #276749;
+    }
+
+    .flow-arrow {
+      color: #3182ce;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .flow-arrow-down {
+      text-align: center;
+      color: #3182ce;
+      font-size: 16px;
+    }
+
+    /* Service Card Styles */
+    .service-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin: 15px 0;
+    }
+
+    .service-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      border-left: 4px solid #3182ce;
+    }
+
+    .service-card.ai {
+      border-left-color: #9f7aea;
+    }
+
+    .service-card.db {
+      border-left-color: #38a169;
+    }
+
+    .service-card.infra {
+      border-left-color: #ed8936;
+    }
+
+    .service-card.doc {
+      border-left-color: #e53e3e;
+    }
+
+    .service-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+
+    .service-type {
+      font-size: 10px;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .service-desc {
+      font-size: 11px;
+      color: #4a5568;
+      line-height: 1.4;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 10px 0;
+    }
+
+    .metric-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      opacity: 0.9;
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 5px 0;
+    }
+
+    .feature-list li {
+      padding: 3px 0;
+      padding-left: 20px;
+      position: relative;
+      font-size: 12px;
+    }
+
+    .feature-list li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #38a169;
+      font-weight: bold;
+    }
+
+    .numbered-list {
+      padding-left: 20px;
+      margin: 5px 0;
+      font-size: 12px;
+    }
+
+    .numbered-list li {
+      padding: 2px 0;
+    }
+
+    .section {
+      margin-bottom: 20px;
+    }
+
+    .highlight-box {
+      background: #f0fff4;
+      border: 1px solid #9ae6b4;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+
+    .info-box {
+      background: #ebf8ff;
+      border: 1px solid #90cdf4;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+
+    .warning-box {
+      background: #fffaf0;
+      border: 1px solid #fbd38d;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+
+    .process-step {
+      background: #f7fafc;
+      border-left: 4px solid #3182ce;
+      padding: 10px 15px;
+      margin: 10px 0;
+    }
+
+    .process-step h4 {
+      margin-top: 0;
+      color: #2c5282;
+    }
+
+    .signature {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    code {
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 12px;
+    }
+
+    @media print {
+      body {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div style="text-align: center; margin-bottom: 20px;">
+    <img src="https://i.ibb.co/PkmGCZ6/Dispo-Tree-Logo-1.png" alt="DispoTree Logo" style="width: 180px; height: auto;">
+  </div>
+
+  <h1>Dispotree Development</h1>
+  <p class="subtitle">Week 1 Progress Report | December 13-19, 2025</p>
+
+  <div class="intro">
+    <p>This week we built the complete Dispotree backend system from the ground up, establishing a production-ready foundation with an extensible architecture designed for rapid feature development.</p>
+  </div>
+
+  <div class="section">
+    <h2>Technical Metrics</h2>
+    <div class="metric-grid">
+      <div class="metric-card">
+        <div class="metric-value">706</div>
+        <div class="metric-label">Tests Passing</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">55+</div>
+        <div class="metric-label">API Endpoints</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">15</div>
+        <div class="metric-label">Database Models</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">4</div>
+        <div class="metric-label">Plugin Types</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">20</div>
+        <div class="metric-label">AI Agent Tools</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">17K+</div>
+        <div class="metric-label">Lines of Code</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Complete System Overview - How Everything Works</h2>
+
+    <p>Dispotree is a real estate deal management platform that automates the entire lifecycle of property deals from ingestion through offer acceptance. The system is built on a modular plugin architecture that allows each component to work independently while communicating through a central event system.</p>
+
+    <h3>The Big Picture</h3>
+    <p>At its core, Dispotree solves a specific problem: <strong>How do you efficiently match incoming property deals with hedge fund investors who have specific buying criteria?</strong></p>
+
+    <p>The answer involves several interconnected systems:</p>
+    <ol class="numbered-list">
+      <li><strong>Deal Ingestion</strong> - Getting property data into the system from multiple sources</li>
+      <li><strong>Intelligent Scoring</strong> - Automatically evaluating each property against fund requirements</li>
+      <li><strong>Automation Engine</strong> - Taking action based on scores and events</li>
+      <li><strong>Marketplace</strong> - Presenting matched deals to the right buyers</li>
+      <li><strong>Transaction Management</strong> - Handling offers and contract signing</li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h2>1. Deal Ingestion System - How Properties Enter the Platform</h2>
+
+    <p>The first challenge is getting property data into the system. Different sources provide data in different formats, so we built a plugin-based ingestion system that normalizes everything into a standard format.</p>
+
+    <h3>How Each Source Works:</h3>
+
+    <div class="process-step">
+      <h4>CSV Upload Plugin</h4>
+      <p><strong>What it does:</strong> Accepts bulk property uploads via CSV files.</p>
+      <p><strong>How it works:</strong></p>
+      <ol class="numbered-list">
+        <li>User uploads a CSV file through the <code>POST /api/plugins/sources/csv</code> endpoint</li>
+        <li>System validates the file format and required columns (address, city, state, zip, asking price)</li>
+        <li>Each row is parsed and mapped to the standard Property schema</li>
+        <li>Properties are created in the database with <code>source: 'csv'</code> tag</li>
+        <li>For each property, a <code>deal.created</code> event is emitted to trigger automations</li>
+      </ol>
+      <p><strong>Use case:</strong> Wholesalers who have spreadsheets of properties from their marketing campaigns.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>API Push Plugin</h4>
+      <p><strong>What it does:</strong> Accepts real-time property submissions via REST API.</p>
+      <p><strong>How it works:</strong></p>
+      <ol class="numbered-list">
+        <li>External system calls <code>POST /api/plugins/sources/api</code> with property JSON</li>
+        <li>Request is validated against the Property schema using Joi validation</li>
+        <li>Property is created with <code>source: 'api'</code> tag</li>
+        <li><code>deal.created</code> event fires, triggering scoring and automations</li>
+      </ol>
+      <p><strong>Use case:</strong> Integration with CRMs, lead generation tools, or partner systems.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>Email Parser Plugin</h4>
+      <p><strong>What it does:</strong> Monitors an email inbox and extracts property data from incoming emails.</p>
+      <p><strong>How it works:</strong></p>
+      <ol class="numbered-list">
+        <li>Connects to configured IMAP server (Gmail, Outlook, etc.)</li>
+        <li>Polls for new emails matching configured criteria (sender, subject patterns)</li>
+        <li>Parses email body and attachments using AI to extract property details</li>
+        <li>Creates property records with <code>source: 'email'</code></li>
+        <li>Marks email as processed to avoid duplicates</li>
+      </ol>
+      <p><strong>Use case:</strong> Receiving deals from bird dogs or scouts who send leads via email.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>Webhook Receiver Plugin</h4>
+      <p><strong>What it does:</strong> Accepts incoming webhooks from external platforms.</p>
+      <p><strong>How it works:</strong></p>
+      <ol class="numbered-list">
+        <li>Exposes endpoint <code>POST /api/plugins/sources/webhook/:sourceId</code></li>
+        <li>Validates webhook signature (if configured) for security</li>
+        <li>Maps incoming payload to Property schema using configurable field mappings</li>
+        <li>Creates property with <code>source: 'webhook'</code></li>
+      </ol>
+      <p><strong>Use case:</strong> Zapier integrations, PropStream exports, or custom integrations.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>Firecrawl Web Scraper Plugin</h4>
+      <p><strong>What it does:</strong> Scrapes property listings from auction sites and listing platforms.</p>
+      <p><strong>How it works:</strong></p>
+      <ol class="numbered-list">
+        <li>Uses Firecrawl API to navigate to configured URLs</li>
+        <li>Extracts property data using CSS selectors or AI extraction</li>
+        <li>Handles pagination to scrape multiple listings</li>
+        <li>Deduplicates against existing properties by address</li>
+        <li>Creates new properties with <code>source: 'firecrawl'</code></li>
+      </ol>
+      <p><strong>Use case:</strong> Monitoring auction.com, Hubzu, or county tax sale sites.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>2. Property Enrichment Pipeline - Automatic Data Enhancement</h2>
+
+    <p>When a deal enters the system from any source, it goes through an automatic enrichment pipeline that enhances the raw property data with market intelligence, valuations, and scoring.</p>
+
+    <h3>Enrichment Flow</h3>
+    <div class="flow-container">
+      <div class="flow-row">
+        <div class="flow-box">Raw Property Data</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box highlight">Enrichment Pipeline</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box success">Enriched Deal</div>
+      </div>
+    </div>
+
+    <h3>What Gets Enriched Automatically:</h3>
+
+    <div class="process-step">
+      <h4>1. Address Standardization & Validation</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>Address parsed into components (street, city, state, zip)</li>
+        <li>USPS standardization applied for consistent formatting</li>
+        <li>Geocoding to get latitude/longitude coordinates</li>
+        <li>County and school district identification</li>
+        <li>Duplicate detection against existing properties</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>2. Property Characteristics Lookup</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>Bedrooms, bathrooms, square footage fetched from public records</li>
+        <li>Year built and lot size retrieved</li>
+        <li>Property type confirmed (SFR, Duplex, Condo, etc.)</li>
+        <li>Construction type and foundation details</li>
+        <li>Garage, pool, and other amenities identified</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>3. Market Data & Valuation</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>Current market value estimate (Zestimate-style)</li>
+        <li>Tax assessed value from county records</li>
+        <li>Last sale price and date</li>
+        <li>Price per square foot for the area</li>
+        <li>Days on market for comparable listings</li>
+        <li>Neighborhood price trends (appreciation/depreciation)</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>4. ARV & Equity Calculations</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>After Repair Value (ARV) estimated from comps</li>
+        <li>Equity percentage calculated: (ARV - Asking Price) / ARV</li>
+        <li>Potential profit margin estimated</li>
+        <li>Repair cost estimates based on property condition</li>
+        <li>Maximum Allowable Offer (MAO) calculated using 70% rule</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>5. Comparable Sales Analysis</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>3-5 comparable properties identified within 1 mile</li>
+        <li>Recent sales (last 6 months) prioritized</li>
+        <li>Adjustments made for bedrooms, bathrooms, square footage</li>
+        <li>Comp confidence score calculated</li>
+        <li>Comp data stored for due diligence review</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>6. Ownership & Title Information</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>Current owner name and mailing address</li>
+        <li>Ownership duration (how long they've owned)</li>
+        <li>Mortgage information if available</li>
+        <li>Lien and encumbrance flags</li>
+        <li>Foreclosure or pre-foreclosure status</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>7. ML Quality Scoring</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>TensorFlow.js model analyzes all property features</li>
+        <li>Predicts likelihood of deal acceptance (0-100%)</li>
+        <li>Compares to historical successful deals</li>
+        <li>Assigns deal quality tier (A, B, C, D)</li>
+        <li>Prediction logged for model improvement</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>8. Buy Box Matching & Scoring</h4>
+      <p><strong>What happens:</strong></p>
+      <ul class="feature-list">
+        <li>Property scored against ALL active fund buy boxes</li>
+        <li>Weighted criteria matching (location, price, equity, etc.)</li>
+        <li>Top-scoring funds identified</li>
+        <li>Match explanations generated (why it matched/didn't)</li>
+        <li>Auto-assignment to matching funds triggered</li>
+      </ul>
+    </div>
+
+    <h3>Zillow/RapidAPI Enrichment (via <code>lookup_market_data</code>)</h3>
+
+    <table>
+      <tr>
+        <th>Data Type</th>
+        <th>What's Included</th>
+      </tr>
+      <tr>
+        <td><strong>Zestimate</strong></td>
+        <td>Property valuation, range (low/high), rent Zestimate</td>
+      </tr>
+      <tr>
+        <td><strong>Skip Trace</strong></td>
+        <td>Owner name, phone numbers, emails, mailing address, occupancy</td>
+      </tr>
+      <tr>
+        <td><strong>Property Details</strong></td>
+        <td>Beds, baths, sqft, lot size, year built, property type</td>
+      </tr>
+      <tr>
+        <td><strong>Price History</strong></td>
+        <td>All listing/sale events, dates, prices, agents</td>
+      </tr>
+      <tr>
+        <td><strong>Tax History</strong></td>
+        <td>Annual tax assessments, amounts paid</td>
+      </tr>
+      <tr>
+        <td><strong>Tax Charts</strong></td>
+        <td>Visual assessment & payment trends over time</td>
+      </tr>
+      <tr>
+        <td><strong>Comparables</strong></td>
+        <td>Similar nearby properties with prices, details, distance</td>
+      </tr>
+      <tr>
+        <td><strong>Rental Trends</strong></td>
+        <td>Market-level median rent, listings, trends</td>
+      </tr>
+    </table>
+
+    <div class="highlight-box">
+      <strong>Enrichment Speed:</strong> Most enrichment completes within 2-5 seconds of deal ingestion. Complex lookups (comps, owner info) may take up to 30 seconds but run asynchronously without blocking the pipeline.
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>3. Buy Box Scoring Engine</h2>
+
+    <p>Once a property enters the system, it needs to be evaluated against each hedge fund's investment criteria. This is where the Buy Box Scoring Engine comes in.</p>
+
+    <h3>What is a Buy Box?</h3>
+    <p>A "Buy Box" defines a hedge fund's ideal investment property. It includes criteria like:</p>
+    <ul class="feature-list">
+      <li>Geographic focus (specific states, cities, or zip codes)</li>
+      <li>Property type (Single Family, Duplex, Multifamily)</li>
+      <li>Price range (min/max asking price)</li>
+      <li>Equity requirements (minimum equity percentage)</li>
+      <li>Property condition (year built, square footage)</li>
+      <li>ARV thresholds (After Repair Value requirements)</li>
+    </ul>
+
+    <h3>How Scoring Works:</h3>
+
+    <div class="process-step">
+      <h4>Step 1: Criteria Definition</h4>
+      <p>Each fund defines their buy box with weighted criteria. For example:</p>
+      <ul class="feature-list">
+        <li>State must be TX, FL, AZ, or GA (weight: 20 points)</li>
+        <li>Property type must be Single Family (weight: 15 points)</li>
+        <li>Asking price between $100K-$350K (weight: 25 points)</li>
+        <li>Equity percentage >= 20% (weight: 25 points)</li>
+        <li>Year built >= 1980 (weight: 15 points)</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>Step 2: Automatic Scoring</h4>
+      <p>When a property is created, the system automatically:</p>
+      <ol class="numbered-list">
+        <li>Loads all active buy boxes from the database</li>
+        <li>Evaluates the property against each buy box's criteria</li>
+        <li>For each matching criterion, adds its weight to the score</li>
+        <li>Calculates final score as percentage (0-100)</li>
+        <li>Stores all scores in the property record</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Step 3: Score Storage and Events</h4>
+      <p>After scoring completes:</p>
+      <ul class="feature-list">
+        <li>All fund scores are stored in the <code>buyBoxScores</code> JSON field</li>
+        <li>The highest score is stored in <code>topScore</code> for quick filtering</li>
+        <li>The best-matching fund ID is stored in <code>topFundId</code></li>
+        <li>A <code>score.calculated</code> event fires with all score data</li>
+      </ul>
+    </div>
+
+    <div class="info-box">
+      <strong>Example:</strong> A property in Texas, Single Family, asking $250K, with 25% equity, built in 1995 would score:
+      <ul>
+        <li>State match: +20 points</li>
+        <li>Property type match: +15 points</li>
+        <li>Price in range: +25 points</li>
+        <li>Equity >= 20%: +25 points</li>
+        <li>Year built >= 1980: +15 points</li>
+        <li><strong>Total: 100/100 (perfect match)</strong></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>4. Automation Engine - Event-Driven Actions</h2>
+
+    <p>The automation engine listens for events and executes configurable actions when conditions are met. This eliminates manual work and ensures consistent processing.</p>
+
+    <h3>How the Event System Works:</h3>
+
+    <div class="process-step">
+      <h4>Event Emission</h4>
+      <p>Events are emitted at key points in the system:</p>
+      <table>
+        <tr>
+          <th>Event</th>
+          <th>When It Fires</th>
+          <th>Data Included</th>
+        </tr>
+        <tr>
+          <td><code>deal.created</code></td>
+          <td>New property saved to database</td>
+          <td>Full property object, source type, timestamp</td>
+        </tr>
+        <tr>
+          <td><code>deal.updated</code></td>
+          <td>Property data modified</td>
+          <td>Property object, list of changed fields</td>
+        </tr>
+        <tr>
+          <td><code>score.calculated</code></td>
+          <td>Buy box scoring completes</td>
+          <td>Property, all scores, top score, top fund</td>
+        </tr>
+        <tr>
+          <td><code>offer.submitted</code></td>
+          <td>User submits an offer</td>
+          <td>Offer details, user info, property</td>
+        </tr>
+        <tr>
+          <td><code>offer.accepted</code></td>
+          <td>Offer marked as accepted</td>
+          <td>Offer, property, acceptance details</td>
+        </tr>
+        <tr>
+          <td><code>document.uploaded</code></td>
+          <td>File attached to property</td>
+          <td>Document metadata, property ID</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="process-step">
+      <h4>Automation Structure</h4>
+      <p>Each automation has three parts:</p>
+      <ol class="numbered-list">
+        <li><strong>Trigger:</strong> Which event to listen for</li>
+        <li><strong>Conditions:</strong> Rules that must be true for actions to execute</li>
+        <li><strong>Actions:</strong> What to do when conditions are met</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Condition Operators</h4>
+      <p>Conditions support these operators:</p>
+      <table>
+        <tr>
+          <th>Operator</th>
+          <th>Example</th>
+          <th>Description</th>
+        </tr>
+        <tr>
+          <td><code>equals</code></td>
+          <td>state equals "TX"</td>
+          <td>Exact match</td>
+        </tr>
+        <tr>
+          <td><code>not_equals</code></td>
+          <td>status not_equals "sold"</td>
+          <td>Does not match</td>
+        </tr>
+        <tr>
+          <td><code>>=</code>, <code><=</code>, <code>></code>, <code><</code></td>
+          <td>topScore >= 80</td>
+          <td>Numeric comparison</td>
+        </tr>
+        <tr>
+          <td><code>in</code></td>
+          <td>propertyType in ["SFR", "Duplex"]</td>
+          <td>Value in list</td>
+        </tr>
+        <tr>
+          <td><code>between</code></td>
+          <td>askingPrice between [100000, 350000]</td>
+          <td>Range check</td>
+        </tr>
+        <tr>
+          <td><code>contains</code></td>
+          <td>address contains "Main St"</td>
+          <td>String contains</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="process-step">
+      <h4>Available Actions</h4>
+      <p>When conditions are met, these actions can execute:</p>
+      <table>
+        <tr>
+          <th>Action</th>
+          <th>What It Does</th>
+          <th>Configuration</th>
+        </tr>
+        <tr>
+          <td><code>notify</code></td>
+          <td>Sends alert via SMS, email, or webhook</td>
+          <td>Channel, message template with {{variables}}</td>
+        </tr>
+        <tr>
+          <td><code>assign</code></td>
+          <td>Assigns deal to specific fund or user</td>
+          <td>Target fund ID or user ID</td>
+        </tr>
+        <tr>
+          <td><code>tag</code></td>
+          <td>Adds tags to the property</td>
+          <td>Array of tag strings</td>
+        </tr>
+        <tr>
+          <td><code>updateField</code></td>
+          <td>Changes a property field value</td>
+          <td>Field name, new value</td>
+        </tr>
+        <tr>
+          <td><code>startWorkflow</code></td>
+          <td>Initiates a multi-step workflow</td>
+          <td>Workflow ID to start</td>
+        </tr>
+        <tr>
+          <td><code>webhook</code></td>
+          <td>Calls external URL</td>
+          <td>URL, HTTP method, payload template</td>
+        </tr>
+        <tr>
+          <td><code>createTask</code></td>
+          <td>Creates follow-up task</td>
+          <td>Description, assignee, due date</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="highlight-box">
+      <strong>Real Example:</strong> "When a deal scores 85+ for Fund ABC, automatically tag it as 'hot-lead', assign it to that fund, and send an SMS/email notification to the acquisitions team."
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>5. Multi-Step Workflow System</h2>
+
+    <p>While automations handle simple trigger-action patterns, workflows orchestrate complex multi-step processes that may span days or weeks.</p>
+
+    <h3>How Workflows Differ from Automations:</h3>
+    <table>
+      <tr>
+        <th>Feature</th>
+        <th>Automation</th>
+        <th>Workflow</th>
+      </tr>
+      <tr>
+        <td>Steps</td>
+        <td>Single action or parallel actions</td>
+        <td>Multiple sequential/parallel steps</td>
+      </tr>
+      <tr>
+        <td>State</td>
+        <td>Stateless (fire and forget)</td>
+        <td>Stateful (persisted to database)</td>
+      </tr>
+      <tr>
+        <td>Duration</td>
+        <td>Milliseconds</td>
+        <td>Hours, days, or weeks</td>
+      </tr>
+      <tr>
+        <td>Waiting</td>
+        <td>No waiting capability</td>
+        <td>Can wait for events or timeouts</td>
+      </tr>
+      <tr>
+        <td>Branching</td>
+        <td>No conditional branching</td>
+        <td>If/else logic between steps</td>
+      </tr>
+    </table>
+
+    <h3>Workflow Execution Process:</h3>
+
+    <div class="process-step">
+      <h4>Step 1: Workflow Initiation</h4>
+      <p>A workflow starts when:</p>
+      <ul class="feature-list">
+        <li>An automation's <code>startWorkflow</code> action fires</li>
+        <li>A user manually triggers it via API</li>
+        <li>Another workflow step triggers it</li>
+      </ul>
+      <p>The system creates a <code>WorkflowExecution</code> record with status "running" and current step = 1.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>Step 2: Step Execution</h4>
+      <p>For each step, the workflow engine:</p>
+      <ol class="numbered-list">
+        <li>Loads the step configuration (action type, parameters)</li>
+        <li>Executes the step's action (notify, create task, call API, etc.)</li>
+        <li>Checks if step has a wait condition</li>
+        <li>If no wait, immediately moves to next step</li>
+        <li>If wait required, pauses and stores state to database</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Step 3: Wait Conditions</h4>
+      <p>Workflows can pause and wait for:</p>
+      <ul class="feature-list">
+        <li><strong>Event:</strong> Wait until specific event fires (e.g., document.uploaded)</li>
+        <li><strong>Timeout:</strong> Wait for specified duration (e.g., 48 hours)</li>
+        <li><strong>Approval:</strong> Wait for user to approve/reject</li>
+        <li><strong>External:</strong> Wait for webhook callback</li>
+      </ul>
+      <p>While waiting, the workflow state is persisted to PostgreSQL, so it survives server restarts.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>Step 4: Conditional Branching</h4>
+      <p>Steps can specify different next steps based on conditions:</p>
+      <ul class="feature-list">
+        <li>If ROI > 15%, go to "Generate Offer" step</li>
+        <li>Else, go to "Reject Deal" step</li>
+      </ul>
+      <p>This allows complex decision trees within a single workflow.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>Step 5: Completion</h4>
+      <p>When the final step completes:</p>
+      <ul class="feature-list">
+        <li>Workflow status set to "completed"</li>
+        <li>Completion timestamp recorded</li>
+        <li><code>workflow.completed</code> event emitted</li>
+        <li>Audit log finalized with all step results</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>6. ML Prediction System - AI-Powered Deal Scoring</h2>
+
+    <p>Beyond rule-based buy box scoring, the ML system learns from historical data to predict deal quality and fund preferences.</p>
+
+    <h3>How the ML Pipeline Works:</h3>
+
+    <div class="process-step">
+      <h4>Training Data Collection</h4>
+      <p>The system collects training data from:</p>
+      <ul class="feature-list">
+        <li><strong>Fund Feedback:</strong> When funds accept/reject deals, feedback is recorded</li>
+        <li><strong>Offer Outcomes:</strong> Which offers get accepted vs rejected</li>
+        <li><strong>User Behavior:</strong> Which deals get views, likes, and offers</li>
+        <li><strong>Deal Velocity:</strong> How quickly deals move through the pipeline</li>
+      </ul>
+      <p>Each data point is stored in the <code>FundFeedback</code> model with the property features and outcome.</p>
+    </div>
+
+    <div class="process-step">
+      <h4>Model Training</h4>
+      <p>Using TensorFlow.js, the system trains neural network models:</p>
+      <ol class="numbered-list">
+        <li>Collects all feedback data from database</li>
+        <li>Extracts features: price, equity, location, property type, etc.</li>
+        <li>Normalizes features to 0-1 scale</li>
+        <li>Trains model to predict: Will this deal be accepted?</li>
+        <li>Saves model weights to <code>ModelVersion</code> table</li>
+        <li>Records training metrics in <code>TrainingRun</code></li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Prediction Generation</h4>
+      <p>When new deals enter the system:</p>
+      <ol class="numbered-list">
+        <li>Property features are extracted</li>
+        <li>Features normalized using same scalers as training</li>
+        <li>Model generates prediction score (0-1 probability)</li>
+        <li>Score stored in <code>MLPrediction</code> table</li>
+        <li>Prediction linked to property for analytics</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Model Versioning and A/B Testing</h4>
+      <p>The system supports multiple model versions:</p>
+      <ul class="feature-list">
+        <li>Each model version tracked with accuracy metrics</li>
+        <li>Can run A/B tests between model versions</li>
+        <li>Automatic rollback if new model underperforms</li>
+        <li>Predictions logged with model version for analysis</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>7. LangChain AI Agent - Conversational Interface</h2>
+
+    <p>The AI Agent provides a natural language interface to the entire system, allowing users to query data and perform actions through conversation.</p>
+
+    <h3>Agent Architecture:</h3>
+
+    <div class="process-step">
+      <h4>Tool System</h4>
+      <p>The agent has access to 20 tools that map to system capabilities:</p>
+      <table>
+        <tr>
+          <th>Tool Category</th>
+          <th>Examples</th>
+          <th>What It Does</th>
+        </tr>
+        <tr>
+          <td>Property Search</td>
+          <td><code>searchProperties</code>, <code>getPropertyDetails</code></td>
+          <td>Find and retrieve property information</td>
+        </tr>
+        <tr>
+          <td>Analytics</td>
+          <td><code>getDashboardStats</code>, <code>getConversionRates</code></td>
+          <td>Pull analytics and metrics</td>
+        </tr>
+        <tr>
+          <td>Buy Box</td>
+          <td><code>listBuyBoxes</code>, <code>scoreProperty</code></td>
+          <td>Manage and evaluate buy boxes</td>
+        </tr>
+        <tr>
+          <td>Offers</td>
+          <td><code>createOffer</code>, <code>listOffers</code></td>
+          <td>Manage deal offers</td>
+        </tr>
+        <tr>
+          <td>Documents</td>
+          <td><code>searchDocuments</code>, <code>analyzeContract</code></td>
+          <td>Work with attached documents</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="process-step">
+      <h4>Conversation Memory</h4>
+      <p>The agent maintains conversation context:</p>
+      <ul class="feature-list">
+        <li>Stores conversation history in <code>ConversationHistory</code> model</li>
+        <li>Remembers previous questions and answers</li>
+        <li>Can reference earlier context ("What about that property in Texas?")</li>
+        <li>Supports multi-turn conversations for complex queries</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>Example Interactions</h4>
+      <table>
+        <tr>
+          <th>User Says</th>
+          <th>Agent Does</th>
+        </tr>
+        <tr>
+          <td>"Show me deals in Texas under $300K"</td>
+          <td>Calls <code>searchProperties</code> with state=TX, maxPrice=300000</td>
+        </tr>
+        <tr>
+          <td>"Which funds would be interested in this deal?"</td>
+          <td>Calls <code>scoreProperty</code> against all buy boxes, returns top matches</td>
+        </tr>
+        <tr>
+          <td>"What's our conversion rate this month?"</td>
+          <td>Calls <code>getConversionRates</code> with date range, formats response</td>
+        </tr>
+        <tr>
+          <td>"Draft an offer for $180K on property #123"</td>
+          <td>Calls <code>createOffer</code> with amount and property ID</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>8. Contract Signing System</h2>
+
+    <p>The contract system handles the complete document lifecycle from template creation through multi-party signing.</p>
+
+    <h3>How Contract Signing Works:</h3>
+
+    <div class="process-step">
+      <h4>Template Management</h4>
+      <p>Contracts start as reusable templates:</p>
+      <ul class="feature-list">
+        <li>Templates stored with placeholder variables like <code>{{buyerName}}</code>, <code>{{propertyAddress}}</code></li>
+        <li>Support for multiple template versions</li>
+        <li>Templates organized by type: Purchase Agreement, Assignment, etc.</li>
+        <li>Admin interface to create and edit templates</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>Contract Generation</h4>
+      <p>When a contract is needed:</p>
+      <ol class="numbered-list">
+        <li>System loads the appropriate template</li>
+        <li>Pulls data from Property, User, and Offer records</li>
+        <li>Replaces all placeholders with actual values</li>
+        <li>Generates PDF preview</li>
+        <li>Creates Contract record with status "pending_signatures"</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Signature Collection</h4>
+      <p>Multi-party signing process:</p>
+      <ol class="numbered-list">
+        <li>System identifies required signers (buyer, seller, agent)</li>
+        <li>Sends signing requests via email with secure links</li>
+        <li>Each signer accesses contract through unique token</li>
+        <li>Captures signature (typed name or drawn signature)</li>
+        <li>Records timestamp, IP address, and user agent</li>
+        <li>Updates contract status as signatures are collected</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Completion and Storage</h4>
+      <p>When all parties have signed:</p>
+      <ul class="feature-list">
+        <li>Final PDF generated with all signatures embedded</li>
+        <li>Contract status updated to "executed"</li>
+        <li>All parties receive copy via email</li>
+        <li>Document linked to property record</li>
+        <li>Complete audit trail available for compliance</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>9. Marketplace System</h2>
+
+    <p>The marketplace connects deal providers with fund buyers through a structured interface.</p>
+
+    <h3>User Types and Permissions:</h3>
+    <table>
+      <tr>
+        <th>Role</th>
+        <th>Can Do</th>
+        <th>Cannot Do</th>
+      </tr>
+      <tr>
+        <td>Admin</td>
+        <td>Everything: manage users, funds, settings</td>
+        <td>N/A</td>
+      </tr>
+      <tr>
+        <td>Fund User</td>
+        <td>View matched deals, submit offers, manage buy box</td>
+        <td>Modify other funds' data</td>
+      </tr>
+      <tr>
+        <td>Regular User</td>
+        <td>Browse deals, submit basic offers</td>
+        <td>Access fund-specific features</td>
+      </tr>
+    </table>
+
+    <h3>Deal Distribution:</h3>
+    <div class="process-step">
+      <h4>How Deals Reach Funds</h4>
+      <ol class="numbered-list">
+        <li>Property enters system and gets scored against all buy boxes</li>
+        <li>System identifies which funds have high match scores</li>
+        <li>Deals appear in each fund's "Matched Deals" queue</li>
+        <li>Funds see deals sorted by match score (best matches first)</li>
+        <li>Fund users can like, pass, or submit offers</li>
+        <li>Actions tracked in <code>DealAction</code> for analytics</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>10. Analytics System</h2>
+
+    <p>The analytics system provides insights into deal flow, conversion rates, and performance metrics.</p>
+
+    <h3>Available Metrics:</h3>
+
+    <div class="process-step">
+      <h4>Dashboard Overview (<code>/api/analytics/overview</code>)</h4>
+      <ul class="feature-list">
+        <li>Total properties in system</li>
+        <li>Active listings (not sold/withdrawn)</li>
+        <li>Pending offers count</li>
+        <li>Deals created today/this week/this month</li>
+        <li>Total offer value</li>
+        <li>Average days on market</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>Source Performance (<code>/api/analytics/sources</code>)</h4>
+      <p>Breaks down metrics by deal source:</p>
+      <ul class="feature-list">
+        <li>Deals per source (CSV, API, Email, Webhook, Firecrawl)</li>
+        <li>Conversion rate by source (deals that got offers)</li>
+        <li>Average deal quality score by source</li>
+        <li>Time from ingestion to first offer by source</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>Conversion Funnel (<code>/api/analytics/conversions</code>)</h4>
+      <p>Tracks the deal journey:</p>
+      <ul class="feature-list">
+        <li>View → Like rate</li>
+        <li>Like → Offer rate</li>
+        <li>Offer → Accepted rate</li>
+        <li>Average time at each funnel stage</li>
+        <li>Drop-off analysis</li>
+      </ul>
+    </div>
+
+    <div class="process-step">
+      <h4>Deal Analytics (<code>/api/analytics/deals</code>)</h4>
+      <p>Property-level insights:</p>
+      <ul class="feature-list">
+        <li>Deals by state, property type, price range</li>
+        <li>Average ARV, asking price, equity percentage</li>
+        <li>Top performing markets</li>
+        <li>Trend analysis over time</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>11. Security and Authentication</h2>
+
+    <h3>JWT Authentication Flow:</h3>
+    <div class="process-step">
+      <h4>Login Process</h4>
+      <ol class="numbered-list">
+        <li>User submits email + password to <code>POST /api/auth/login</code></li>
+        <li>System verifies password against bcrypt hash (12 rounds)</li>
+        <li>If valid, generates access token (15 min expiry) and refresh token (7 day expiry)</li>
+        <li>Tokens returned to client for storage</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Request Authentication</h4>
+      <ol class="numbered-list">
+        <li>Client includes access token in Authorization header</li>
+        <li><code>authenticate</code> middleware validates token signature</li>
+        <li>Checks token expiration</li>
+        <li>Attaches user object to request for downstream use</li>
+      </ol>
+    </div>
+
+    <div class="process-step">
+      <h4>Token Refresh</h4>
+      <ol class="numbered-list">
+        <li>When access token expires, client calls <code>POST /api/auth/refresh</code></li>
+        <li>Includes refresh token in request body</li>
+        <li>System validates refresh token and issues new access token</li>
+        <li>No password required for refresh</li>
+      </ol>
+    </div>
+
+    <h3>Rate Limiting:</h3>
+    <table>
+      <tr>
+        <th>Endpoint</th>
+        <th>Limit</th>
+        <th>Window</th>
+      </tr>
+      <tr>
+        <td>Login/Register</td>
+        <td>10 attempts</td>
+        <td>15 minutes</td>
+      </tr>
+      <tr>
+        <td>Password Change</td>
+        <td>5 attempts</td>
+        <td>1 hour</td>
+      </tr>
+      <tr>
+        <td>General API</td>
+        <td>100 requests</td>
+        <td>1 minute</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>System Architecture</h2>
+
+    <div class="arch-container">
+      <div class="arch-layer">
+        <div class="arch-layer-title">API Layer</div>
+        <div class="arch-boxes">
+          <div class="arch-box">Express.js</div>
+          <div class="arch-box green">JWT Auth</div>
+          <div class="arch-box orange">Rate Limiting</div>
+          <div class="arch-box teal">CORS</div>
+          <div class="arch-box">Helmet Security</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">▼</div>
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">Core Services</div>
+        <div class="arch-boxes">
+          <div class="arch-box">Properties CRUD</div>
+          <div class="arch-box">Marketplace</div>
+          <div class="arch-box green">Analytics</div>
+          <div class="arch-box purple">Contracts</div>
+          <div class="arch-box teal">Documents</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">▼</div>
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">Plugin System</div>
+        <div class="arch-boxes">
+          <div class="arch-box orange">CSV Source</div>
+          <div class="arch-box orange">API Source</div>
+          <div class="arch-box orange">Email Parser</div>
+          <div class="arch-box orange">Webhook</div>
+          <div class="arch-box orange">Firecrawl</div>
+        </div>
+        <div style="margin-top: 8px;"></div>
+        <div class="arch-boxes">
+          <div class="arch-box green">Buy Box Scoring</div>
+          <div class="arch-box pink">Automations</div>
+          <div class="arch-box purple">Workflows</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">▼</div>
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">AI & ML Layer</div>
+        <div class="arch-boxes">
+          <div class="arch-box purple">LangChain Agent</div>
+          <div class="arch-box purple">OpenAI GPT-4</div>
+          <div class="arch-box pink">TensorFlow.js</div>
+          <div class="arch-box teal">Pinecone Vector DB</div>
+        </div>
+      </div>
+
+      <div class="arch-arrow">▼</div>
+
+      <div class="arch-layer">
+        <div class="arch-layer-title">Data Layer</div>
+        <div class="arch-boxes">
+          <div class="arch-box green">PostgreSQL</div>
+          <div class="arch-box green">Sequelize ORM</div>
+          <div class="arch-box teal">File Storage</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Technology Stack & External Services</h2>
+    <p>A comprehensive list of all technologies and external services powering Dispotree, with explanations for why each was chosen.</p>
+
+    <h3>AI & Machine Learning Services</h3>
+    <div class="service-grid">
+      <div class="service-card ai">
+        <div class="service-name">OpenAI GPT-4</div>
+        <div class="service-type">Large Language Model</div>
+        <div class="service-desc"><strong>Why:</strong> Powers the conversational AI agent for natural language property searches, deal analysis, and automated insights. GPT-4 provides the reasoning capability to understand complex queries like "find me deals in Texas with 20% equity under $300K" and translate them into database operations.</div>
+      </div>
+      <div class="service-card ai">
+        <div class="service-name">LangChain</div>
+        <div class="service-type">AI Orchestration Framework</div>
+        <div class="service-desc"><strong>Why:</strong> Provides the agent framework that connects GPT-4 to our 20+ tools. Handles conversation memory, tool selection, and multi-step reasoning. Enables the AI to chain together multiple operations (search → score → analyze → recommend).</div>
+      </div>
+      <div class="service-card ai">
+        <div class="service-name">Pinecone</div>
+        <div class="service-type">Vector Database</div>
+        <div class="service-desc"><strong>Why:</strong> Stores document embeddings for semantic search in the knowledge base. When users ask questions, Pinecone finds the most relevant documents by meaning (not just keywords). Essential for RAG (Retrieval Augmented Generation).</div>
+      </div>
+      <div class="service-card ai">
+        <div class="service-name">TensorFlow.js</div>
+        <div class="service-type">ML Runtime</div>
+        <div class="service-desc"><strong>Why:</strong> Runs neural network models directly in Node.js for deal quality prediction. No external API calls needed for ML inference, reducing latency. Trains custom models on fund feedback data to predict which deals will get accepted.</div>
+      </div>
+    </div>
+
+    <h3>Database & Storage</h3>
+    <div class="service-grid">
+      <div class="service-card db">
+        <div class="service-name">PostgreSQL</div>
+        <div class="service-type">Relational Database</div>
+        <div class="service-desc"><strong>Why:</strong> Robust, ACID-compliant database for transactional data. Supports JSON columns for flexible schema (buy box criteria, workflow state). Excellent for complex queries needed for analytics and reporting.</div>
+      </div>
+      <div class="service-card db">
+        <div class="service-name">Sequelize</div>
+        <div class="service-type">ORM</div>
+        <div class="service-desc"><strong>Why:</strong> TypeScript-first ORM that provides type safety, migrations, and associations. Simplifies database operations while preventing SQL injection. Handles model relationships (User → BuyBox → Offers).</div>
+      </div>
+    </div>
+
+    <h3>Document Processing</h3>
+    <div class="service-grid">
+      <div class="service-card doc">
+        <div class="service-name">Tesseract.js</div>
+        <div class="service-type">OCR Engine</div>
+        <div class="service-desc"><strong>Why:</strong> Extracts text from scanned documents and images. Enables searching through uploaded property photos, inspection reports, and handwritten notes. Runs locally without external API costs.</div>
+      </div>
+      <div class="service-card doc">
+        <div class="service-name">pdf-parse</div>
+        <div class="service-type">PDF Processing</div>
+        <div class="service-desc"><strong>Why:</strong> Extracts text from PDF contracts, disclosures, and reports. Enables contract analysis and searchable document archive. Fast, lightweight, no external dependencies.</div>
+      </div>
+      <div class="service-card doc">
+        <div class="service-name">Mammoth</div>
+        <div class="service-type">Word Processing</div>
+        <div class="service-desc"><strong>Why:</strong> Converts Word documents (.docx) to HTML/text. Many contracts and templates arrive as Word files. Preserves formatting for contract template management.</div>
+      </div>
+      <div class="service-card doc">
+        <div class="service-name">xlsx</div>
+        <div class="service-type">Spreadsheet Processing</div>
+        <div class="service-desc"><strong>Why:</strong> Parses Excel files for bulk property imports. Wholesalers often send property lists as Excel files. Handles complex spreadsheets with multiple sheets and formulas.</div>
+      </div>
+    </div>
+
+    <h3>External Integrations</h3>
+    <div class="service-grid">
+      <div class="service-card infra">
+        <div class="service-name">Firecrawl</div>
+        <div class="service-type">Web Scraping API</div>
+        <div class="service-desc"><strong>Why:</strong> Intelligent web scraping for auction sites and property listings. Handles JavaScript-rendered pages, pagination, and anti-bot measures. AI-powered extraction understands property data without manual CSS selectors.</div>
+      </div>
+      <div class="service-card infra">
+        <div class="service-name">Playwright</div>
+        <div class="service-type">Browser Automation</div>
+        <div class="service-desc"><strong>Why:</strong> Automates browser actions for submitting offers to auction sites. Handles login flows, form submissions, and CAPTCHA scenarios. Used for browser-based integrations where APIs aren't available.</div>
+      </div>
+      <div class="service-card infra">
+        <div class="service-name">ImapFlow</div>
+        <div class="service-type">Email Client</div>
+        <div class="service-desc"><strong>Why:</strong> Connects to email inboxes (Gmail, Outlook) to parse incoming deal emails. Monitors designated mailboxes for new property leads. Extracts attachments and parses email content automatically.</div>
+      </div>
+      <div class="service-card infra">
+        <div class="service-name">Google APIs</div>
+        <div class="service-type">Google Services</div>
+        <div class="service-desc"><strong>Why:</strong> Integration with Google Sheets for data import/export, Google Drive for document storage, and Gmail API for email processing. Many users already work in Google ecosystem.</div>
+      </div>
+    </div>
+
+    <h3>Infrastructure & Security</h3>
+    <div class="service-grid">
+      <div class="service-card">
+        <div class="service-name">Express.js</div>
+        <div class="service-type">Web Framework</div>
+        <div class="service-desc"><strong>Why:</strong> Battle-tested Node.js framework. Minimal overhead, extensive middleware ecosystem. Easy to extend with custom middleware for auth, logging, and error handling.</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">Helmet</div>
+        <div class="service-type">Security Middleware</div>
+        <div class="service-desc"><strong>Why:</strong> Adds security headers (CSP, X-Frame-Options, etc.) with one line of code. Protects against common web vulnerabilities. Industry standard for Express security hardening.</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">bcrypt</div>
+        <div class="service-type">Password Hashing</div>
+        <div class="service-desc"><strong>Why:</strong> Industry-standard password hashing with automatic salting. 12 rounds provides strong security while maintaining acceptable performance. Protects user credentials even if database is compromised.</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">jsonwebtoken</div>
+        <div class="service-type">JWT Library</div>
+        <div class="service-desc"><strong>Why:</strong> Stateless authentication tokens for API access. Short-lived access tokens (15 min) with longer refresh tokens (7 days). Enables secure, scalable authentication without session storage.</div>
+      </div>
+    </div>
+
+    <h3>Validation & Data Quality</h3>
+    <div class="service-grid">
+      <div class="service-card">
+        <div class="service-name">Joi</div>
+        <div class="service-type">Schema Validation</div>
+        <div class="service-desc"><strong>Why:</strong> Declarative validation for API requests. Ensures data integrity before database operations. Provides clear error messages for invalid inputs.</div>
+      </div>
+      <div class="service-card">
+        <div class="service-name">Zod</div>
+        <div class="service-type">TypeScript Validation</div>
+        <div class="service-desc"><strong>Why:</strong> Type-safe validation with TypeScript inference. Used for complex nested objects and configuration validation. Generates TypeScript types from schemas.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>AI Agent - Complete Tool Reference</h2>
+    <p>The LangChain-powered AI agent provides a conversational interface to the entire system. Here's every tool available and what it can accomplish:</p>
+
+    <h3>Property Management Tools</h3>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>What It Does</th>
+        <th>Example Command</th>
+      </tr>
+      <tr>
+        <td><code>searchProperties</code></td>
+        <td>Find properties by state, city, price range, property type, equity percentage, or any combination</td>
+        <td>"Find SFRs in Texas under $250K with 20%+ equity"</td>
+      </tr>
+      <tr>
+        <td><code>getPropertyDetails</code></td>
+        <td>Get full details on a specific property including all scores, documents, and history</td>
+        <td>"Show me details on property #1234"</td>
+      </tr>
+      <tr>
+        <td><code>updateProperty</code></td>
+        <td>Modify property fields (status, notes, asking price, etc.)</td>
+        <td>"Update property #1234 status to 'under contract'"</td>
+      </tr>
+      <tr>
+        <td><code>addPropertyNote</code></td>
+        <td>Add notes or comments to a property for team visibility</td>
+        <td>"Add note to #1234: 'Seller motivated, cash only'"</td>
+      </tr>
+    </table>
+
+    <h3>Buy Box & Scoring Tools</h3>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>What It Does</th>
+        <th>Example Command</th>
+      </tr>
+      <tr>
+        <td><code>listBuyBoxes</code></td>
+        <td>Show all configured hedge fund buy boxes and their criteria</td>
+        <td>"What buy boxes do we have configured?"</td>
+      </tr>
+      <tr>
+        <td><code>scoreProperty</code></td>
+        <td>Score a property against all buy boxes or a specific fund</td>
+        <td>"How does #1234 score for Acme Capital?"</td>
+      </tr>
+      <tr>
+        <td><code>findMatchingFunds</code></td>
+        <td>Find which funds would be interested in a specific property</td>
+        <td>"Which funds would want this Texas property?"</td>
+      </tr>
+      <tr>
+        <td><code>getBuyBoxAnalysis</code></td>
+        <td>Analyze why a property matches or doesn't match a buy box</td>
+        <td>"Why did #1234 fail Fund X's buy box?"</td>
+      </tr>
+    </table>
+
+    <h3>Offer & Deal Tools</h3>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>What It Does</th>
+        <th>Example Command</th>
+      </tr>
+      <tr>
+        <td><code>createOffer</code></td>
+        <td>Draft a new offer on a property</td>
+        <td>"Create an offer for $180K on property #1234"</td>
+      </tr>
+      <tr>
+        <td><code>listOffers</code></td>
+        <td>View all offers on a property or by a user/fund</td>
+        <td>"Show all pending offers this week"</td>
+      </tr>
+      <tr>
+        <td><code>updateOfferStatus</code></td>
+        <td>Change offer status (accept, reject, counter)</td>
+        <td>"Mark offer #567 as accepted"</td>
+      </tr>
+      <tr>
+        <td><code>compareOffers</code></td>
+        <td>Compare multiple offers on the same property</td>
+        <td>"Compare the 3 offers on #1234"</td>
+      </tr>
+    </table>
+
+    <h3>Analytics & Reporting Tools</h3>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>What It Does</th>
+        <th>Example Command</th>
+      </tr>
+      <tr>
+        <td><code>getDashboardStats</code></td>
+        <td>Get overview metrics (total deals, pending offers, conversion rates)</td>
+        <td>"What's our dashboard looking like today?"</td>
+      </tr>
+      <tr>
+        <td><code>getConversionRates</code></td>
+        <td>Calculate funnel metrics (view→like→offer→accept rates)</td>
+        <td>"What's our conversion rate this month?"</td>
+      </tr>
+      <tr>
+        <td><code>getSourcePerformance</code></td>
+        <td>Analyze which deal sources perform best</td>
+        <td>"Which source gives us the best deals?"</td>
+      </tr>
+      <tr>
+        <td><code>getMarketTrends</code></td>
+        <td>Analyze trends by market, property type, or time period</td>
+        <td>"How is the Texas market trending?"</td>
+      </tr>
+    </table>
+
+    <h3>Document & Contract Tools</h3>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>What It Does</th>
+        <th>Example Command</th>
+      </tr>
+      <tr>
+        <td><code>searchDocuments</code></td>
+        <td>Semantic search through all uploaded documents</td>
+        <td>"Find documents mentioning 'roof repair'"</td>
+      </tr>
+      <tr>
+        <td><code>analyzeContract</code></td>
+        <td>AI analysis of contract terms, risks, and key dates</td>
+        <td>"Analyze the purchase agreement for #1234"</td>
+      </tr>
+      <tr>
+        <td><code>listPropertyDocuments</code></td>
+        <td>Show all documents attached to a property</td>
+        <td>"What documents do we have for #1234?"</td>
+      </tr>
+      <tr>
+        <td><code>generateContract</code></td>
+        <td>Create a contract from template with property data</td>
+        <td>"Generate a purchase agreement for offer #567"</td>
+      </tr>
+    </table>
+
+    <h3>Automation & Workflow Tools</h3>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>What It Does</th>
+        <th>Example Command</th>
+      </tr>
+      <tr>
+        <td><code>listAutomations</code></td>
+        <td>Show all configured automations and their status</td>
+        <td>"What automations are active?"</td>
+      </tr>
+      <tr>
+        <td><code>getWorkflowStatus</code></td>
+        <td>Check status of running workflows</td>
+        <td>"What's the status of due diligence for #1234?"</td>
+      </tr>
+      <tr>
+        <td><code>triggerWorkflow</code></td>
+        <td>Manually start a workflow on a property</td>
+        <td>"Start due diligence workflow for #1234"</td>
+      </tr>
+    </table>
+
+    <h3>Knowledge Base Tools</h3>
+    <table>
+      <tr>
+        <th>Tool</th>
+        <th>What It Does</th>
+        <th>Example Command</th>
+      </tr>
+      <tr>
+        <td><code>askKnowledgeBase</code></td>
+        <td>Query the RAG knowledge base for company/process info</td>
+        <td>"What's our policy on dual closings?"</td>
+      </tr>
+      <tr>
+        <td><code>searchKnowledge</code></td>
+        <td>Find relevant documents in the knowledge base</td>
+        <td>"Find training docs about Texas title process"</td>
+      </tr>
+    </table>
+
+    <h3>Example Conversations</h3>
+    <div class="info-box">
+      <strong>Multi-Step Analysis:</strong><br>
+      User: "Find me the best deal in Florida right now"<br>
+      Agent: Searches properties → Scores against all buy boxes → Analyzes top matches → Returns recommendation with reasoning
+    </div>
+    <div class="highlight-box">
+      <strong>Complex Query:</strong><br>
+      User: "Show me deals from CSV uploads this week that scored above 80 but haven't received any offers yet"<br>
+      Agent: Filters by source → Filters by score → Filters by offer status → Returns matching properties with details
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Week 2 Roadmap (Dec 20-26, 2025)</h2>
+
+    <h3>System Hardening - Making It Bulletproof</h3>
+    <table>
+      <tr>
+        <th>Focus Area</th>
+        <th>Planned Work</th>
+      </tr>
+      <tr>
+        <td>Input Validation</td>
+        <td>Comprehensive Joi/Zod schemas on all endpoints</td>
+      </tr>
+      <tr>
+        <td>Error Handling</td>
+        <td>Global error boundaries, graceful degradation</td>
+      </tr>
+      <tr>
+        <td>Database Security</td>
+        <td>Parameterized queries audit, connection pooling</td>
+      </tr>
+      <tr>
+        <td>API Protection</td>
+        <td>Request throttling, payload size limits, CORS hardening</td>
+      </tr>
+      <tr>
+        <td>Logging & Monitoring</td>
+        <td>Structured logging, error tracking, health dashboards</td>
+      </tr>
+      <tr>
+        <td>Testing Coverage</td>
+        <td>Edge cases, failure scenarios, load testing</td>
+      </tr>
+    </table>
+
+    <h3>ML Training & Prediction Models</h3>
+    <table>
+      <tr>
+        <th>ML Initiative</th>
+        <th>Description</th>
+      </tr>
+      <tr>
+        <td>Training Pipeline Enhancement</td>
+        <td>Automated retraining based on fund feedback accumulation</td>
+      </tr>
+      <tr>
+        <td>Model Accuracy Improvements</td>
+        <td>Feature engineering, hyperparameter tuning</td>
+      </tr>
+      <tr>
+        <td>Prediction Confidence Scores</td>
+        <td>Calibrated probability outputs for decision support</td>
+      </tr>
+      <tr>
+        <td>A/B Model Comparison</td>
+        <td>Side-by-side model performance evaluation</td>
+      </tr>
+      <tr>
+        <td>Real-time Predictions</td>
+        <td>Low-latency scoring for incoming deals</td>
+      </tr>
+      <tr>
+        <td>Fund-Specific Models</td>
+        <td>Custom models trained on individual fund preferences</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Team Contributions</h2>
+    <table>
+      <tr>
+        <th>Team Member</th>
+        <th>Role</th>
+        <th>Key Contributions</th>
+      </tr>
+      <tr>
+        <td><strong>Ed D.</strong></td>
+        <td>Lead Developer & Architecture Design Lead</td>
+        <td>System architecture, plugin framework design, API structure, code review</td>
+      </tr>
+      <tr>
+        <td><strong>Dejan P.</strong></td>
+        <td>Developer</td>
+        <td>Core API development, database models, route implementations</td>
+      </tr>
+      <tr>
+        <td><strong>Lennex Z.</strong></td>
+        <td>Developer</td>
+        <td>Service integrations, testing infrastructure, documentation</td>
+      </tr>
+      <tr>
+        <td><strong>Andy C.</strong></td>
+        <td>ML Engineer</td>
+        <td>TensorFlow.js model development, deal quality scoring, training pipeline</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="signature">
+    <p>Please let us know if you have any questions or would like a demo of any features.</p>
+    <br>
+    <p>Best regards,</p>
+    <br>
+    <p><strong>Ed D.</strong><br>
+    Lead Developer & Architecture Design Lead<br>
+    Dispotree Development Team</p>
+  </div>
+
+  <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+    <img src="https://i.ibb.co/PkmGCZ6/Dispo-Tree-Logo-1.png" alt="DispoTree Logo" style="width: 120px; height: auto;">
+  </div>
+
+</body>
+</html>

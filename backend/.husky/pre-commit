@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+cd backend
+
+# Run lint-staged for code quality
+npx lint-staged
+
+# Run type checking
+npm run typecheck
+
+# Run unit tests on related files
+npm run test:unit -- --bail --passWithNoTests --findRelatedTests $(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | tr '\n' ' ')
