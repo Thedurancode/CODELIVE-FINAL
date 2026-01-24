@@ -37,9 +37,14 @@ export interface Sprite {
 
   repoUrl: string;
   branch: string;
+  featureBranch: string | null;
   workingDirectory: string;
   claudeConfigured: boolean;
   anthropicApiKeyConfigured: boolean;
+  githubConfigured: boolean;
+
+  // Task automation settings
+  autoShutdownAfterTask: boolean;
 
   urlSettings: SpriteUrlSettings | null;
 
@@ -101,6 +106,12 @@ export interface SpritesConfig {
   configured: boolean;
   activeSpritesCount: number;
   serviceReady: boolean;
+}
+
+// GitHub configuration status
+export interface GitHubConfig {
+  configured: boolean;
+  tokenPrefix: string | null;
 }
 
 // Create sprite options

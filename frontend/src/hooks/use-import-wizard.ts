@@ -29,7 +29,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 // Helper function to get auth token
 const getToken = () => {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('dispotree_token');
+    return localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
   }
   return null;
 };

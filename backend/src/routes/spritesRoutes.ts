@@ -190,6 +190,90 @@ router.post('/config/token', spritesController.setSpritesToken);
 router.delete('/config/token', spritesController.removeSpritesToken);
 
 // ============================================================================
+// GITHUB TOKEN CONFIGURATION
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprites/config/github:
+ *   get:
+ *     summary: Get GitHub token configuration status
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: GitHub configuration status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     configured:
+ *                       type: boolean
+ *                       description: Whether GitHub token is set
+ *                     tokenPrefix:
+ *                       type: string
+ *                       nullable: true
+ *                       description: First 8 characters of token (for verification)
+ */
+router.get('/config/github', spritesController.getGitHubConfig);
+
+/**
+ * @swagger
+ * /api/sprites/config/github:
+ *   post:
+ *     summary: Set GitHub Personal Access Token
+ *     description: |
+ *       Configure GitHub authentication for sprites. This allows sprites to:
+ *       - Push commits to branches
+ *       - Create pull requests
+ *       - Access private repositories
+ *
+ *       Required token scopes: `repo`, `workflow`
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: GitHub Personal Access Token (classic or fine-grained)
+ *     responses:
+ *       200:
+ *         description: Token configured
+ *       400:
+ *         description: Invalid token format
+ */
+router.post('/config/github', spritesController.setGitHubToken);
+
+/**
+ * @swagger
+ * /api/sprites/config/github:
+ *   delete:
+ *     summary: Remove GitHub token
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Token removed
+ */
+router.delete('/config/github', spritesController.removeGitHubToken);
+
+// ============================================================================
 // SPRITES CRUD
 // ============================================================================
 
@@ -384,6 +468,29 @@ router.post('/:id/stop', spritesController.stopSprite);
  */
 router.post('/:id/resume', spritesController.resumeSprite);
 
+/**
+ * @swagger
+ * /api/sprites/{id}/initialize:
+ *   post:
+ *     summary: Initialize or re-initialize a sprite (clone repo, setup Claude)
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Sprite initialized
+ *       404:
+ *         description: Sprite not found
+ */
+router.post('/:id/initialize', spritesController.initializeSprite);
+
 // ============================================================================
 // CHECKPOINTS
 // ============================================================================
@@ -539,5 +646,96 @@ router.get('/:id/sessions', spritesController.listSessions);
  *         description: Sprite not found
  */
 router.get('/:id/terminal', spritesController.getTerminalInfo);
+
+/**
+ * @swagger
+ * /api/sprites/{id}/url-settings:
+ *   put:
+ *     summary: Update URL settings for a sprite (public/private)
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - auth
+ *             properties:
+ *               auth:
+ *                 type: string
+ *                 enum: [sprite, public]
+ *                 description: Authentication mode - 'sprite' for private, 'public' for public access
+ *     responses:
+ *       200:
+ *         description: URL settings updated
+ *       404:
+ *         description: Sprite not found
+ */
+router.put('/:id/url-settings', spritesController.updateUrlSettings);
+
+// ============================================================================
+// SPRITE SETTINGS
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprites/{id}/settings:
+ *   patch:
+ *     summary: Update sprite settings
+ *     description: |
+ *       Update configurable sprite settings such as auto-shutdown behavior.
+ *       Settings:
+ *       - **autoShutdownAfterTask**: When true, the sprite will automatically stop after completing a task.
+ *         This is useful for cost optimization when you only need the sprite for specific tasks.
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               autoShutdownAfterTask:
+ *                 type: boolean
+ *                 description: Whether to automatically stop the sprite after completing a task
+ *     responses:
+ *       200:
+ *         description: Settings updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Sprite'
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: No valid settings provided
+ *       404:
+ *         description: Sprite not found
+ */
+router.patch('/:id/settings', spritesController.updateSpriteSettings);
 
 export default router;

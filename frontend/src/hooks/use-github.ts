@@ -158,3 +158,40 @@ export function useGitHubIssuesBulk(
     staleTime: 60000,
   });
 }
+
+interface CollaboratorAccess {
+  isCollaborator: boolean;
+  permission: string | null;
+}
+
+/**
+ * Parse a GitHub URL to extract owner and repo
+ */
+export function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+  try {
+    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    if (match) {
+      return { owner: match[1], repo: match[2].replace('.git', '') };
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+  return null;
+}
+
+/**
+ * Check if the authenticated user is a collaborator on a repository
+ */
+export function useGitHubCollaboratorAccess(githubUrl: string | null | undefined) {
+  const parsed = githubUrl ? parseGitHubUrl(githubUrl) : null;
+
+  return useQuery({
+    queryKey: ['github-collaborator-access', parsed?.owner, parsed?.repo],
+    queryFn: () =>
+      api.get<CollaboratorAccess>(
+        `/api/github/repos/${parsed!.owner}/${parsed!.repo}/collaborator-access`
+      ),
+    enabled: !!parsed,
+    staleTime: 300000, // Cache for 5 minutes
+  });
+}

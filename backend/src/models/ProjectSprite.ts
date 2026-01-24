@@ -44,9 +44,14 @@ interface ProjectSpriteAttributes {
   // Configuration
   repoUrl: string;
   branch: string;
+  featureBranch: string | null; // Auto-created feature branch for sprite work
   workingDirectory: string;
   claudeConfigured: boolean;
   anthropicApiKeyConfigured: boolean;
+  githubConfigured: boolean;
+
+  // Task automation settings
+  autoShutdownAfterTask: boolean;
 
   // Resource info from Sprites API
   urlSettings: SpriteUrlSettings | null;
@@ -75,9 +80,12 @@ interface ProjectSpriteCreationAttributes
     | 'statusMessage'
     | 'errorMessage'
     | 'branch'
+    | 'featureBranch'
     | 'workingDirectory'
     | 'claudeConfigured'
     | 'anthropicApiKeyConfigured'
+    | 'githubConfigured'
+    | 'autoShutdownAfterTask'
     | 'urlSettings'
     | 'lastCheckpointId'
     | 'lastCheckpointAt'
@@ -106,9 +114,12 @@ class ProjectSprite
 
   declare repoUrl: string;
   declare branch: string;
+  declare featureBranch: string | null;
   declare workingDirectory: string;
   declare claudeConfigured: boolean;
   declare anthropicApiKeyConfigured: boolean;
+  declare githubConfigured: boolean;
+  declare autoShutdownAfterTask: boolean;
 
   declare urlSettings: SpriteUrlSettings | null;
 
@@ -291,7 +302,14 @@ ProjectSprite.init(
       type: DataTypes.STRING(255),
       allowNull: false,
       defaultValue: 'main',
-      comment: 'Branch to checkout',
+      comment: 'Base branch to checkout (e.g., main)',
+    },
+    featureBranch: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+      field: 'feature_branch',
+      comment: 'Auto-created feature branch for sprite work (e.g., sprite/xyz-abc-123)',
     },
     workingDirectory: {
       type: DataTypes.STRING(1024),
@@ -313,6 +331,20 @@ ProjectSprite.init(
       defaultValue: false,
       field: 'anthropic_api_key_configured',
       comment: 'Whether Anthropic API key is configured in sprite env',
+    },
+    githubConfigured: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'github_configured',
+      comment: 'Whether GitHub authentication is configured (gh CLI + git credentials)',
+    },
+    autoShutdownAfterTask: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'auto_shutdown_after_task',
+      comment: 'Whether to automatically stop the sprite after completing a task',
     },
     urlSettings: {
       type: DataTypes.JSONB,

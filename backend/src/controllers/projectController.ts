@@ -13,9 +13,83 @@ import { projectService } from '../services/ProjectService';
 import { projectContactService } from '../services/ProjectContactService';
 import { projectNoteService } from '../services/ProjectNoteService';
 import { taskService } from '../services/TaskService';
+import { gitHubService } from '../services/GitHubService';
 import type { ProjectStatus } from '../models/Project';
 import ProjectMember from '../models/ProjectMember';
 import { MarketplaceUser } from '../models';
+
+// Permission mapping for project roles to GitHub permissions
+type GitHubPermission = 'pull' | 'push' | 'admin' | 'maintain' | 'triage';
+const PROJECT_ROLE_TO_GITHUB_PERMISSION: Record<string, GitHubPermission> = {
+  owner: 'admin',
+  lead: 'maintain',
+  manager: 'maintain',
+  developer: 'push',
+  designer: 'push',
+  contributor: 'push',
+  viewer: 'pull',
+};
+
+/**
+ * Auto-invite a project member to GitHub repository
+ * This runs async and doesn't block the response
+ */
+async function autoInviteMemberToGitHub(
+  projectId: string,
+  memberId: number,
+  userId: string,
+  githubUrl: string | null | undefined,
+  projectRole: string
+): Promise<void> {
+  if (!githubUrl || !gitHubService.isConfigured()) {
+    return;
+  }
+
+  try {
+    // Parse GitHub URL
+    const parsed = gitHubService.parseGitHubUrl(githubUrl);
+    if (!parsed) {
+      console.log(`Could not parse GitHub URL: ${githubUrl}`);
+      return;
+    }
+
+    // Get user's email for the invite
+    const user = await MarketplaceUser.findByPk(userId, {
+      attributes: ['email', 'name'],
+    });
+
+    if (!user?.email) {
+      console.log(`User ${userId} has no email, cannot invite to GitHub`);
+      return;
+    }
+
+    // Map project role to GitHub permission
+    const permission = PROJECT_ROLE_TO_GITHUB_PERMISSION[projectRole] || 'pull';
+
+    // Send invite
+    const result = await gitHubService.inviteCollaboratorByEmail(
+      parsed.owner,
+      parsed.repo,
+      user.email,
+      permission
+    );
+
+    // Update project member record
+    const projectMember = await ProjectMember.findByPk(memberId);
+    if (projectMember && result.success) {
+      await projectMember.update({
+        githubInvited: true,
+        githubInvitedAt: new Date(),
+      });
+      console.log(`GitHub invite sent to ${user.email} for ${parsed.owner}/${parsed.repo} (${permission})`);
+    } else if (!result.success) {
+      console.log(`GitHub invite failed for ${user.email}: ${result.message}`);
+    }
+  } catch (error) {
+    console.error('Failed to auto-invite member to GitHub:', error);
+    // Don't throw - this is a background operation
+  }
+}
 
 // ============================================================================
 // PROJECTS CRUD
@@ -1162,14 +1236,24 @@ export const addProjectMember = async (req: Request, res: Response) => {
       });
     }
 
+    const role = projectRole || 'contributor';
     const member = await ProjectMember.assignToProject({
       projectId: id,
       userId: memberId,
       organizationId,
-      projectRole: projectRole || 'contributor',
+      projectRole: role,
       assignedBy: userId,
       githubUsername,
     });
+
+    // Auto-invite to GitHub (async, don't block response)
+    autoInviteMemberToGitHub(
+      id,
+      member.id,
+      memberId,
+      project.githubUrl,
+      role
+    ).catch((err) => console.error('GitHub auto-invite failed:', err));
 
     // Fetch with user details
     const memberWithUser = await ProjectMember.findByPk(member.id, {
@@ -1224,13 +1308,27 @@ export const bulkAddProjectMembers = async (req: Request, res: Response) => {
       });
     }
 
+    const role = projectRole || 'contributor';
     const members = await ProjectMember.bulkAssignToProject(
       id,
       organizationId,
       memberIds,
       userId,
-      projectRole || 'contributor'
+      role
     );
+
+    // Auto-invite all members to GitHub (async, don't block response)
+    if (project.githubUrl) {
+      for (let i = 0; i < members.length; i++) {
+        autoInviteMemberToGitHub(
+          id,
+          members[i].id,
+          memberIds[i],
+          project.githubUrl,
+          role
+        ).catch((err) => console.error('GitHub auto-invite failed:', err));
+      }
+    }
 
     res.status(201).json({
       success: true,

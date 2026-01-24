@@ -35,7 +35,8 @@ type MarketplaceRole =
   | 'transaction_coordinator'
   | 'team_member'
   | 'admin'
-  | 'super_admin';
+  | 'super_admin'
+  | 'client';
 
 const DEFAULT_ROLE: MarketplaceRole = 'buyer';
 const ALLOWED_ROLES = new Set<MarketplaceRole>([
@@ -49,6 +50,7 @@ const ALLOWED_ROLES = new Set<MarketplaceRole>([
   'team_member',
   'admin',
   'super_admin',
+  'client',
 ]);
 
 const resolveRoleFromAppMetadata = (user: { app_metadata?: Record<string, unknown> | null }): MarketplaceRole => {

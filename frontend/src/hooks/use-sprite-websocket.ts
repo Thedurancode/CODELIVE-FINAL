@@ -98,8 +98,8 @@ export function useSpriteWebSocket(
   const buildWsUrl = useCallback(() => {
     if (!spriteId) return null;
 
-    // Get auth token (try both possible keys)
-    const token = localStorage.getItem('dispotree_token') || localStorage.getItem('token');
+    // Get auth token (try all possible keys - dispotree_token, codelive_token, token)
+    const token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token') || localStorage.getItem('token');
     if (!token) {
       setError('Authentication token not found');
       console.error('[SpriteWebSocket] No auth token found in localStorage');
@@ -324,13 +324,17 @@ export function useSpriteWebSocket(
 
   // Send data to terminal
   const send = useCallback((data: string) => {
+    const wsState = wsRef.current?.readyState;
+    console.log('[SpriteWebSocket] send() called, WS readyState:', wsState, 'data:', JSON.stringify(data));
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: 'input',
-          data,
-        })
-      );
+      const message = JSON.stringify({
+        type: 'input',
+        data,
+      });
+      console.log('[SpriteWebSocket] Sending message:', message);
+      wsRef.current.send(message);
+    } else {
+      console.warn('[SpriteWebSocket] Cannot send - WebSocket not open. State:', wsState);
     }
   }, []);
 

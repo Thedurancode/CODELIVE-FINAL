@@ -73,6 +73,10 @@ import templateAdminRoutes from './routes/templateAdminRoutes';
 import setupRoutes from './routes/setupRoutes';
 import codingTaskRoutes from './routes/codingTaskRoutes';
 import spritesRoutes from './routes/spritesRoutes';
+import spriteTasksRoutes from './routes/spriteTasksRoutes';
+import githubWebhookRoutes from './routes/githubWebhookRoutes';
+import redditRoutes from './routes/redditRoutes';
+import clientPortalRoutes from './routes/clientPortalRoutes';
 // Voice calling module (Twilio + OpenAI Realtime)
 import { twilioRoutes as voiceTwilioRoutes, callRoutes as voiceCallRoutes, handleTwilioConnection, closeAllSessions as closeVoiceSessions } from './voice';
 import { syncDatabase, sequelize } from './models';
@@ -122,6 +126,7 @@ import { fraudNetworkGraphService } from './services/FraudNetworkGraphService';
 import { complianceWebSocketService } from './services/ComplianceWebSocketService';
 import { spritesService } from './services/SpritesService';
 import { spritesWebSocketProxy } from './services/SpritesWebSocketProxy';
+import { tvRemoteWebSocketService } from './services/TVRemoteWebSocketService';
 import { teamCommunicationService } from './services/TeamCommunicationService';
 import { complianceTriggerService } from './services/ComplianceTriggerService';
 import { calendarIntegrationService } from './services/agent/CalendarIntegrationService';
@@ -219,6 +224,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/webhooks/github', githubWebhookRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/compliance-specs', complianceSpecRoutes);
 app.use('/api/state-compliance', stateComplianceRoutes);
@@ -258,6 +264,9 @@ app.use('/api/team', teamMemberRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/coding-tasks', codingTaskRoutes);
 app.use('/api/sprites', spritesRoutes);
+app.use('/api/sprite-tasks', spriteTasksRoutes);
+app.use('/api/reddit', redditRoutes);
+app.use('/api/client', clientPortalRoutes);
 app.use('/api', documentRoutes);
 
 // OpenAI-compatible endpoints (for OpenWebUI, LangChain, etc.)
@@ -879,6 +888,14 @@ const startServer = async () => {
       logger.warn('Sprites Service initialization failed', {}, spritesError);
     }
 
+    // Initialize TV Remote WebSocket Service (iPad ↔ TV communication)
+    try {
+      tvRemoteWebSocketService.initialize(server);
+      logger.info('TV Remote WebSocket Service initialized', { path: '/ws/tv-remote' });
+    } catch (tvRemoteError) {
+      logger.warn('TV Remote WebSocket Service initialization failed', {}, tvRemoteError);
+    }
+
     // Seed default follow-up chains
     try {
       await seedFollowUpChains();
@@ -983,6 +1000,9 @@ const startServer = async () => {
 
         // Shutdown compliance WebSocket service
         complianceWebSocketService.shutdown();
+
+        // Shutdown TV Remote WebSocket service
+        tvRemoteWebSocketService.shutdown();
 
         // Close voice calling sessions
         await closeVoiceSessions();

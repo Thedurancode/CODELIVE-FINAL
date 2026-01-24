@@ -68,6 +68,11 @@ export function SpriteTerminal({
       if (status === 'connected') {
         setLoadError(null);
         onConnected?.();
+        // Auto-focus terminal when connected
+        setTimeout(() => {
+          console.log('[SpriteTerminal] Auto-focusing terminal after connection');
+          terminalRef.current?.focus();
+        }, 100);
       } else if (status === 'disconnected') {
         onDisconnected?.();
       }
@@ -170,6 +175,7 @@ export function SpriteTerminal({
 
         // Handle input
         terminal.onData((data) => {
+          console.log('[SpriteTerminal] Input captured, sending:', JSON.stringify(data));
           send(data);
         });
 

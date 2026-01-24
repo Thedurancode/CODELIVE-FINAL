@@ -107,24 +107,24 @@ export function SpriteLaunchButton({
       } else if (hasSprite && canResume) {
         // Resume stopped sprite
         console.log('[SpriteLaunchButton] Resuming stopped sprite');
-        toast.loading('Resuming sprite...');
+        toast.loading('Resuming coding agent...');
         await resumeSprite.mutateAsync({ id: sprite!.id, projectId });
         toast.dismiss();
-        toast.success('Sprite resumed');
+        toast.success('Coding agent resumed');
         openTerminal(sprite!.id, projectId);
       } else if (!hasSprite) {
         // Create new sprite
         console.log('[SpriteLaunchButton] Creating new sprite');
-        toast.loading('Creating sprite...');
+        toast.loading('Creating coding agent...');
         const newSprite = await createSprite.mutateAsync({ projectId });
         toast.dismiss();
-        toast.success('Sprite created');
+        toast.success('Coding agent created');
         openTerminal(newSprite.id, projectId);
       }
     } catch (error) {
       console.error('[SpriteLaunchButton] Error:', error);
       toast.dismiss();
-      toast.error(error instanceof Error ? error.message : 'Failed to launch sprite');
+      toast.error(error instanceof Error ? error.message : 'Failed to launch coding agent');
     }
   };
 
@@ -150,14 +150,14 @@ export function SpriteLaunchButton({
     if (!sprite) return;
 
     try {
-      toast.loading('Deleting sprite...');
+      toast.loading('Deleting coding agent...');
       await deleteSprite.mutateAsync({ id: sprite.id, projectId });
       toast.dismiss();
-      toast.success('Sprite deleted. You can create a new one.');
+      toast.success('Coding agent deleted. You can create a new one.');
       setIsDropdownOpen(false);
     } catch (error) {
       toast.dismiss();
-      toast.error(error instanceof Error ? error.message : 'Failed to delete sprite');
+      toast.error(error instanceof Error ? error.message : 'Failed to delete coding agent');
     }
   };
 
@@ -165,16 +165,16 @@ export function SpriteLaunchButton({
     if (!sprite) return;
 
     try {
-      toast.loading('Recreating sprite...');
+      toast.loading('Recreating coding agent...');
       await deleteSprite.mutateAsync({ id: sprite.id, projectId });
       const newSprite = await createSprite.mutateAsync({ projectId });
       toast.dismiss();
-      toast.success('Sprite recreated');
+      toast.success('Coding agent recreated');
       openTerminal(newSprite.id, projectId);
       setIsDropdownOpen(false);
     } catch (error) {
       toast.dismiss();
-      toast.error(error instanceof Error ? error.message : 'Failed to recreate sprite');
+      toast.error(error instanceof Error ? error.message : 'Failed to recreate coding agent');
     }
   };
 
@@ -232,10 +232,10 @@ export function SpriteLaunchButton({
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {!hasSprite && 'Launch Claude Sprite'}
+            {!hasSprite && 'Launch Coding Agent'}
             {hasSprite && isActive && 'Open Terminal'}
-            {hasSprite && canResume && 'Resume Sprite'}
-            {hasSprite && isInError && 'Recreate Sprite (checkpoint lost)'}
+            {hasSprite && canResume && 'Resume Coding Agent'}
+            {hasSprite && isInError && 'Recreate Coding Agent (checkpoint lost)'}
             {hasSprite && isTransitioning && sprite?.status}
           </TooltipContent>
         </Tooltip>
@@ -268,14 +268,38 @@ export function SpriteLaunchButton({
           <Bot className="h-4 w-4" />
         )}
         <span>
-          {!hasSprite && 'Claude Sprite'}
+          {!hasSprite && 'Coding Agent'}
           {hasSprite && isActive && 'Open Terminal'}
           {hasSprite && canResume && 'Resume'}
-          {hasSprite && isInError && 'Recreate Sprite'}
+          {hasSprite && isInError && 'Recreate'}
           {hasSprite && isTransitioning && 'Starting...'}
         </span>
         {hasSprite && !isInError && <SpriteStatusDot status={sprite!.status} />}
       </Button>
+
+      {/* Stop button - visible when sprite is running */}
+      {hasSprite && isActive && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStop}
+                disabled={stopSprite.isPending}
+                className="px-2 border-red-500/50 text-red-500 hover:bg-red-500/10 hover:text-red-400"
+              >
+                {stopSprite.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Stop Coding Agent</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       {hasSprite && (
         <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
@@ -297,11 +321,11 @@ export function SpriteLaunchButton({
               <>
                 <DropdownMenuItem onClick={handleDeleteAndRecreate}>
                   <RotateCcw className="mr-2 h-4 w-4" />
-                  Recreate Sprite
+                  Recreate Coding Agent
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleDelete} className="text-destructive">
                   <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Sprite
+                  Delete Coding Agent
                 </DropdownMenuItem>
               </>
             )}
@@ -320,14 +344,14 @@ export function SpriteLaunchButton({
                 }
               >
                 <Play className="mr-2 h-4 w-4" />
-                Resume Sprite
+                Resume Coding Agent
               </DropdownMenuItem>
             )}
 
             {isActive && (
               <DropdownMenuItem onClick={handleStop}>
                 <Square className="mr-2 h-4 w-4" />
-                Stop Sprite
+                Stop Coding Agent
               </DropdownMenuItem>
             )}
 
@@ -359,7 +383,7 @@ export function SpriteLaunchButton({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleDelete} className="text-destructive">
                   <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Sprite
+                  Delete Coding Agent
                 </DropdownMenuItem>
               </>
             )}

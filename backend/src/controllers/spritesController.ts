@@ -19,6 +19,7 @@ import Project from '../models/Project';
 
 /**
  * List all sprites for the organization
+ * Syncs status with Sprites.dev API to show accurate status
  */
 export const listSprites = async (req: Request, res: Response) => {
   try {
@@ -31,11 +32,65 @@ export const listSprites = async (req: Request, res: Response) => {
       });
     }
 
-    const { includeDeleted } = req.query;
+    const { includeDeleted, syncStatus } = req.query;
     const sprites = await ProjectSprite.getByOrganization(
       organizationId,
       includeDeleted === 'true'
     );
+
+    // Optionally sync status with Sprites.dev API (default: true)
+    if (syncStatus !== 'false') {
+      try {
+        // Fetch actual sprites from Sprites.dev API
+        const apiSprites = await spritesService.listSpritesFromApi(organizationId);
+        const apiStatusMap = new Map<string, string>();
+
+        for (const apiSprite of apiSprites.sprites) {
+          // Get detailed status for each sprite
+          try {
+            const details = await spritesService.getSpriteDetails(organizationId, apiSprite.name);
+            apiStatusMap.set(apiSprite.name, details.status);
+          } catch {
+            // Sprite might not exist anymore
+            apiStatusMap.set(apiSprite.name, 'unknown');
+          }
+        }
+
+        // Update local status based on API status
+        for (const sprite of sprites) {
+          const apiStatus = apiStatusMap.get(sprite.spriteName);
+          if (apiStatus) {
+            let newStatus = sprite.status;
+            if (apiStatus === 'warm' || apiStatus === 'cold') {
+              newStatus = 'hibernating';
+            } else if (apiStatus === 'running' || apiStatus === 'hot') {
+              newStatus = 'running';
+            }
+
+            // Don't overwrite user-requested statuses: error, deleted, stopped
+            const protectedStatuses = ['error', 'deleted', 'stopped'];
+            if (newStatus !== sprite.status && !protectedStatuses.includes(sprite.status)) {
+              await sprite.update({ status: newStatus });
+            }
+          }
+        }
+
+        // Reload sprites to get updated status
+        const updatedSprites = await ProjectSprite.getByOrganization(
+          organizationId,
+          includeDeleted === 'true'
+        );
+
+        return res.json({
+          success: true,
+          data: updatedSprites,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (syncError) {
+        console.warn('[listSprites] Failed to sync with Sprites API:', syncError);
+        // Fall through to return local data
+      }
+    }
 
     res.json({
       success: true,
@@ -348,6 +403,56 @@ export const resumeSprite = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Initialize or re-initialize a sprite (clone repo, setup Claude)
+ */
+export const initializeSprite = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const userId = (req as any).user?.id;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Update status to initializing
+    await sprite.update({
+      status: 'initializing',
+      statusMessage: 'Running initialization (cloning repo, setting up Claude)...',
+      lastAccessedAt: new Date(),
+      lastAccessedById: userId,
+    });
+
+    // Run initialization (this clones the repo and sets up Claude)
+    await spritesService.initializeSprite(id);
+
+    // Reload to get updated status
+    await sprite.reload();
+
+    res.json({
+      success: true,
+      data: sprite,
+      message: 'Sprite initialized successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
 // ============================================================================
 // CHECKPOINTS
 // ============================================================================
@@ -567,6 +672,55 @@ export const getTerminalInfo = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Update URL settings for a sprite (public/private access)
+ */
+export const updateUrlSettings = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { auth } = req.body;
+
+    if (!auth || !['sprite', 'public'].includes(auth)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid auth value. Must be "sprite" or "public"',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.updateUrlSettings(id, { auth });
+
+    // Reload to get updated settings
+    await sprite.reload();
+
+    res.json({
+      success: true,
+      data: sprite,
+      message: `URL access set to ${auth === 'public' ? 'public' : 'private'}`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
 // ============================================================================
 // ORGANIZATION CONFIGURATION
 // ============================================================================
@@ -667,6 +821,183 @@ export const removeSpritesToken = async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'Sprites API token removed',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// GITHUB TOKEN CONFIGURATION
+// ============================================================================
+
+/**
+ * Get GitHub configuration status for organization
+ */
+export const getGitHubConfig = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const hasToken = await spritesService.hasGitHubToken(organizationId);
+    const tokenPrefix = await spritesService.getGitHubTokenPrefix(organizationId);
+
+    res.json({
+      success: true,
+      data: {
+        configured: hasToken,
+        tokenPrefix: tokenPrefix,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Set GitHub Personal Access Token for organization
+ * This token is used to authenticate git operations in sprites
+ * Required scopes: repo, workflow (for PR creation and pushing)
+ */
+export const setGitHubToken = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    const { token } = req.body;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub token is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Basic validation: GitHub PATs start with 'ghp_' (classic) or 'github_pat_' (fine-grained)
+    if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid GitHub token format. Token should start with "ghp_" (classic) or "github_pat_" (fine-grained)',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.setGitHubToken(organizationId, token);
+
+    res.json({
+      success: true,
+      message: 'GitHub token configured successfully. New sprites will be authenticated with GitHub.',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Remove GitHub token for organization
+ */
+export const removeGitHubToken = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.removeGitHubToken(organizationId);
+
+    res.json({
+      success: true,
+      message: 'GitHub token removed. New sprites will not have GitHub authentication.',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// SPRITE SETTINGS
+// ============================================================================
+
+/**
+ * Update sprite settings (e.g., autoShutdownAfterTask)
+ */
+export const updateSpriteSettings = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { autoShutdownAfterTask } = req.body;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Build updates object with only provided fields
+    const updates: Partial<{ autoShutdownAfterTask: boolean }> = {};
+    if (typeof autoShutdownAfterTask === 'boolean') {
+      updates.autoShutdownAfterTask = autoShutdownAfterTask;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid settings provided to update',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await sprite.update(updates);
+
+    res.json({
+      success: true,
+      data: sprite,
+      message: 'Sprite settings updated successfully',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

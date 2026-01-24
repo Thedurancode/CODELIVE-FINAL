@@ -83,13 +83,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       return;
     }
 
-    // Get auth token from localStorage or cookie
+    // Get auth token from localStorage or cookie (try all possible token keys)
     let token: string | null = null;
     if (typeof window !== 'undefined') {
-      token = localStorage.getItem('dispotree_token');
+      token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
       // Fallback to cookie if not in localStorage
       if (!token) {
-        const match = document.cookie.match(/dispotree_token=([^;]+)/);
+        const match = document.cookie.match(/(?:dispotree_token|codelive_token)=([^;]+)/);
         token = match ? match[1] : null;
       }
     }

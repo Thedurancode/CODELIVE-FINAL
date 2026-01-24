@@ -159,6 +159,7 @@ import Project from './Project';
 import ProjectContact from './ProjectContact';
 import ProjectNote from './ProjectNote';
 import ProjectMember from './ProjectMember';
+import ProjectClient from './ProjectClient';
 
 // Deal Team Member Models
 import DealTeamMember from './DealTeamMember';
@@ -180,6 +181,7 @@ import CodingTask from './CodingTask';
 
 // Sprites Integration Models
 import ProjectSprite from './ProjectSprite';
+import SpriteTask from './SpriteTask';
 
 // State Compliance Workflow Models
 import StateDealCompliance, { initStateDealCompliance } from './StateDealCompliance';
@@ -1257,6 +1259,43 @@ ProjectMember.belongsTo(MarketplaceUser, {
 });
 
 // ============================================================================
+// PROJECT CLIENT ASSOCIATIONS (Client Portal)
+// ============================================================================
+
+// Project -> ProjectClient (one-to-many)
+Project.hasMany(ProjectClient, {
+  foreignKey: 'projectId',
+  as: 'clients',
+  onDelete: 'CASCADE',
+});
+ProjectClient.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// MarketplaceUser (client) -> ProjectClient (one-to-many)
+MarketplaceUser.hasMany(ProjectClient, {
+  foreignKey: 'clientUserId',
+  as: 'clientProjects',
+  onDelete: 'CASCADE',
+});
+ProjectClient.belongsTo(MarketplaceUser, {
+  foreignKey: 'clientUserId',
+  as: 'client',
+});
+
+// MarketplaceUser (inviter) -> ProjectClient (one-to-many)
+MarketplaceUser.hasMany(ProjectClient, {
+  foreignKey: 'invitedByUserId',
+  as: 'invitedClients',
+  onDelete: 'CASCADE',
+});
+ProjectClient.belongsTo(MarketplaceUser, {
+  foreignKey: 'invitedByUserId',
+  as: 'invitedBy',
+});
+
+// ============================================================================
 // CODING TASK ASSOCIATIONS (Claude Agent SDK)
 // ============================================================================
 
@@ -1317,6 +1356,50 @@ MarketplaceUser.hasMany(ProjectSprite, {
 ProjectSprite.belongsTo(MarketplaceUser, {
   foreignKey: 'lastAccessedById',
   as: 'lastAccessedBy',
+});
+
+// ProjectSprite -> SpriteTask (one-to-many)
+ProjectSprite.hasMany(SpriteTask, {
+  foreignKey: 'spriteId',
+  as: 'tasks',
+  onDelete: 'SET NULL',
+});
+SpriteTask.belongsTo(ProjectSprite, {
+  foreignKey: 'spriteId',
+  as: 'sprite',
+});
+
+// Project -> SpriteTask (one-to-many)
+Project.hasMany(SpriteTask, {
+  foreignKey: 'projectId',
+  as: 'spriteTasks',
+  onDelete: 'CASCADE',
+});
+SpriteTask.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// Organization -> SpriteTask (one-to-many)
+Organization.hasMany(SpriteTask, {
+  foreignKey: 'organizationId',
+  as: 'spriteTasks',
+  onDelete: 'CASCADE',
+});
+SpriteTask.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
+// MarketplaceUser -> SpriteTask (one-to-many, creator)
+MarketplaceUser.hasMany(SpriteTask, {
+  foreignKey: 'createdById',
+  as: 'createdSpriteTasks',
+  onDelete: 'SET NULL',
+});
+SpriteTask.belongsTo(MarketplaceUser, {
+  foreignKey: 'createdById',
+  as: 'createdBy',
 });
 
 // MarketplaceUser -> CodingTask (one-to-many, creator)
@@ -1498,6 +1581,9 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         CodingTask,
         // Sprites Integration Models
         ProjectSprite,
+        SpriteTask,
+        // Client Portal Models
+        ProjectClient,
       ];
       for (const model of mlModels) {
         try {
@@ -1667,6 +1753,7 @@ export {
   ProjectContact,
   ProjectNote,
   ProjectMember,
+  ProjectClient,
   // Deal Team Member Models
   DealTeamMember,
   // Persona & User Modeling
@@ -1675,6 +1762,7 @@ export {
   CodingTask,
   // Sprites Integration Models
   ProjectSprite,
+  SpriteTask,
 };
 
 export default {
@@ -1807,12 +1895,14 @@ export default {
   ProjectContact,
   ProjectNote,
   ProjectMember,
+  ProjectClient,
   // Persona & User Modeling
   UserPersonaPreference,
   // Coding Task Models
   CodingTask,
   // Sprites Integration Models
   ProjectSprite,
+  SpriteTask,
   syncDatabase,
   testConnection,
 };

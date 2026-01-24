@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,9 +53,18 @@ import {
   Copy,
   Check,
   CircleDot,
+  MonitorDown,
+  Code2,
+  UserPlus,
+  Link2,
+  Trash2 as TrashIcon,
+  Mail,
+  MailCheck,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
+import { useGitHubCollaboratorAccess } from '@/hooks/use-github';
+import { useProjectClients, useGenerateInvite, useRevokeClientAccess } from '@/hooks/use-client-portal';
 import { toast } from 'sonner';
 import type { Project, ProjectStatus } from '@/types';
 import { ProjectForm } from '@/components/projects/ProjectForm';
@@ -64,7 +74,7 @@ import { ProjectTasksPanel } from '@/components/projects/ProjectTasksPanel';
 import { GitHubRepoPanel } from '@/components/projects/GitHubRepoPanel';
 import { StartCodingTaskDialog } from '@/components/projects/StartCodingTaskDialog';
 import { CodingTasksList } from '@/components/projects/CodingTasksList';
-import { SpriteLaunchButton } from '@/components/sprites';
+import { SpriteLaunchButton, SpritePanel } from '@/components/sprites';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   active: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -119,6 +129,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [selectedIssue, setSelectedIssue] = useState<{ id: number; number: number; title: string; body: string | null; url: string; createdAt: string; state: string; user: { login: string; avatar_url: string }; labels: Array<{ name: string; color: string }> } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [isClientPortalDialogOpen, setIsClientPortalDialogOpen] = useState(false);
+  const [clientInviteEmail, setClientInviteEmail] = useState('');
+  const [sendInviteEmail, setSendInviteEmail] = useState(true);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
+  const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
+  const [inviteEmailSent, setInviteEmailSent] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -146,6 +162,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { data: closedIssues } = useGitHubIssues(repoInfo?.owner, repoInfo?.repo, { state: 'closed', perPage: 100 });
   const { data: commits } = useGitHubCommits(repoInfo?.owner, repoInfo?.repo, { perPage: 100 });
   const { data: pullRequests } = useGitHubPullRequests(repoInfo?.owner, repoInfo?.repo, { state: 'open', perPage: 100 });
+  const { data: collaboratorAccess } = useGitHubCollaboratorAccess(project?.githubUrl);
+  const canClone = collaboratorAccess?.isCollaborator ?? false;
+
+  // Client Portal hooks
+  const { data: projectClients, refetch: refetchClients } = useProjectClients(id);
+  const generateInvite = useGenerateInvite();
+  const revokeClientAccess = useRevokeClientAccess();
 
   const handleUpdate = async (projectData: Partial<Project>) => {
     try {
@@ -174,6 +197,46 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       toast.success(`Project status updated to ${newStatus.replace('_', ' ')}`);
     } catch {
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleGenerateInvite = async () => {
+    try {
+      const result = await generateInvite.mutateAsync({
+        projectId: id,
+        clientEmail: clientInviteEmail || undefined,
+        sendEmail: sendInviteEmail && !!clientInviteEmail,
+      });
+      setGeneratedInviteUrl(result.inviteUrl);
+      setInviteEmailSent(result.emailSent);
+      if (result.emailSent) {
+        toast.success('Invite sent! Email notification delivered.');
+      } else {
+        toast.success('Invite link generated!');
+      }
+      refetchClients();
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to generate invite');
+    }
+  };
+
+  const handleCopyInviteLink = () => {
+    if (generatedInviteUrl) {
+      navigator.clipboard.writeText(generatedInviteUrl);
+      setInviteLinkCopied(true);
+      toast.success('Invite link copied to clipboard');
+      setTimeout(() => setInviteLinkCopied(false), 2000);
+    }
+  };
+
+  const handleRevokeClient = async (clientId: number) => {
+    if (!confirm('Are you sure you want to revoke this client\'s access?')) return;
+    try {
+      await revokeClientAccess.mutateAsync({ projectId: id, clientId });
+      toast.success('Client access revoked');
+      refetchClients();
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to revoke access');
     }
   };
 
@@ -320,8 +383,22 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           )}
           {project.githubUrl && (
             <Button variant="outline" size="sm" className="border" asChild>
-              <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
+              <a href={project.githubUrl} target="_blank" rel="noopener noreferrer" title="Open in GitHub">
                 <Github className="h-4 w-4" />
+              </a>
+            </Button>
+          )}
+          {project.githubUrl && canClone && (
+            <Button variant="outline" size="sm" className="border" asChild>
+              <a href={`x-github-client://openRepo/${project.githubUrl}`} title="Clone in GitHub Desktop">
+                <MonitorDown className="h-4 w-4" />
+              </a>
+            </Button>
+          )}
+          {project.githubUrl && canClone && (
+            <Button variant="outline" size="sm" className="border" asChild>
+              <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`} title="Clone in VS Code">
+                <Code2 className="h-4 w-4" />
               </a>
             </Button>
           )}
@@ -338,6 +415,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <Share2 className="h-4 w-4 mr-1" />
             )}
             Share
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border"
+            onClick={() => setIsClientPortalDialogOpen(true)}
+            title="Manage client portal access"
+          >
+            <UserPlus className="h-4 w-4 mr-1" />
+            Clients
           </Button>
           <Button
             variant="outline"
@@ -490,6 +577,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </CardContent>
           </Card>
+
+          {/* Sprite Panel */}
+          {project.githubUrl && (
+            <SpritePanel
+              projectId={project.id}
+              projectTitle={project.title}
+            />
+          )}
 
           {/* Recent Tickets */}
           {project.githubUrl && (
@@ -760,6 +855,180 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Client Portal Dialog */}
+      <Dialog open={isClientPortalDialogOpen} onOpenChange={(open) => {
+        setIsClientPortalDialogOpen(open);
+        if (!open) {
+          setClientInviteEmail('');
+          setGeneratedInviteUrl(null);
+          setSendInviteEmail(true);
+          setInviteEmailSent(false);
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Client Portal Access
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {/* Generate Invite Section */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium">Generate Invite Link</h3>
+              <div className="space-y-2">
+                <Label htmlFor="client-email">Client Email (optional)</Label>
+                <Input
+                  id="client-email"
+                  type="email"
+                  placeholder="client@example.com"
+                  value={clientInviteEmail}
+                  onChange={(e) => setClientInviteEmail(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  If provided, the invite will be tracked for this email.
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="send-email"
+                  checked={sendInviteEmail}
+                  onCheckedChange={(checked) => setSendInviteEmail(checked === true)}
+                  disabled={!clientInviteEmail}
+                />
+                <Label
+                  htmlFor="send-email"
+                  className={`text-sm ${!clientInviteEmail ? 'text-muted-foreground' : ''}`}
+                >
+                  Send email notification
+                </Label>
+              </div>
+              <Button
+                onClick={handleGenerateInvite}
+                disabled={generateInvite.isPending}
+                className="w-full"
+              >
+                {generateInvite.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="mr-2 h-4 w-4" />
+                    Generate Invite Link
+                  </>
+                )}
+              </Button>
+
+              {/* Generated Link */}
+              {generatedInviteUrl && (
+                <div className="p-3 bg-secondary/50 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-green-400">Invite link generated!</p>
+                    {inviteEmailSent && (
+                      <span className="inline-flex items-center gap-1 text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
+                        <MailCheck className="h-3 w-3" />
+                        Email sent
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={generatedInviteUrl}
+                      readOnly
+                      className="text-xs bg-secondary"
+                    />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={handleCopyInviteLink}
+                    >
+                      {inviteLinkCopied ? (
+                        <Check className="h-4 w-4 text-green-400" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {inviteEmailSent
+                      ? `An invite email has been sent to ${clientInviteEmail}. They can also use this link directly.`
+                      : "Share this link with your client. They'll create an account and get access to view issues, PRs, and commits."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Active Clients Section */}
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="text-sm font-medium">
+                Active Clients ({projectClients?.filter(c => c.status === 'active').length || 0})
+              </h3>
+              {projectClients && projectClients.length > 0 ? (
+                <div className="space-y-2">
+                  {projectClients.map((client) => (
+                    <div
+                      key={client.id}
+                      className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg"
+                    >
+                      <div>
+                        <p className="font-medium text-sm">
+                          {client.clientName || client.clientEmail || 'Pending invite'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {client.status === 'active' ? (
+                            <>Joined {new Date(client.acceptedAt || client.invitedAt).toLocaleDateString()}</>
+                          ) : client.status === 'pending' ? (
+                            <>Invited {new Date(client.invitedAt).toLocaleDateString()} • Pending</>
+                          ) : (
+                            <>Revoked</>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={
+                            client.status === 'active'
+                              ? 'text-green-400 border-green-400/50'
+                              : client.status === 'pending'
+                                ? 'text-amber-400 border-amber-400/50'
+                                : 'text-red-400 border-red-400/50'
+                          }
+                        >
+                          {client.status}
+                        </Badge>
+                        {client.status !== 'revoked' && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                            onClick={() => handleRevokeClient(client.id)}
+                            title="Revoke access"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No clients have been invited yet.
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsClientPortalDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

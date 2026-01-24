@@ -16,6 +16,7 @@ import {
   Phone,
   Calendar,
   FolderKanban,
+  Tv,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/email', label: 'Email', icon: Mail },
+  { href: '/tv-display', label: 'TV Display', icon: Tv },
 ];
 
 export function Sidebar() {

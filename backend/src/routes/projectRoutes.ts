@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import * as projectController from '../controllers/projectController';
+import { clientPortalController } from '../controllers/clientPortalController';
 import { authenticate } from '../middleware/auth';
 import { uploadSingle } from '../middleware/upload';
 
@@ -1229,5 +1230,110 @@ router.patch('/:id/members/:memberId', projectController.updateProjectMember);
  *         description: Member removed from project
  */
 router.delete('/:id/members/:memberId', projectController.removeProjectMember);
+
+// ============================================================================
+// PROJECT CLIENTS (Client Portal Access)
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/clients:
+ *   get:
+ *     summary: List clients for a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: List of project clients
+ */
+router.get('/:id/clients', clientPortalController.listProjectClients);
+
+/**
+ * @swagger
+ * /api/projects/{id}/clients/invite:
+ *   post:
+ *     summary: Generate client invite link
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               clientEmail:
+ *                 type: string
+ *                 format: email
+ *                 description: Optional email to track who the invite is for
+ *               expiresInDays:
+ *                 type: integer
+ *                 description: Number of days until invite expires (default 7)
+ *     responses:
+ *       201:
+ *         description: Invite link generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     inviteToken:
+ *                       type: string
+ *                     inviteUrl:
+ *                       type: string
+ *                     expiresAt:
+ *                       type: string
+ *                       format: date-time
+ */
+router.post('/:id/clients/invite', clientPortalController.generateInvite);
+
+/**
+ * @swagger
+ * /api/projects/{id}/clients/{clientId}:
+ *   delete:
+ *     summary: Revoke client access
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: clientId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ProjectClient ID
+ *     responses:
+ *       200:
+ *         description: Client access revoked
+ *       404:
+ *         description: Client not found
+ */
+router.delete('/:id/clients/:clientId', clientPortalController.revokeClientAccess);
 
 export default router;

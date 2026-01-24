@@ -9,3 +9,4 @@ export { SpriteTerminalDialog } from './SpriteTerminalDialog';
 export { SpriteTerminal, useSpriteTerminalControls } from './SpriteTerminal';
 export { SpriteManagementPanel } from './SpriteManagementPanel';
 export { SpriteStatusBadge, SpriteStatusDot } from './SpriteStatusBadge';
+export { SpritePanel } from './SpritePanel';

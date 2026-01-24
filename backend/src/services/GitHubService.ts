@@ -154,7 +154,9 @@ class GitHubService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(`GitHub API error: ${error.message || response.statusText}`);
+      const err = new Error(`GitHub API error: ${error.message || response.statusText}`) as Error & { status: number };
+      err.status = response.status;
+      throw err;
     }
 
     return response.json();
@@ -583,6 +585,64 @@ class GitHubService {
    */
   async listCollaborators(owner: string, repo: string): Promise<Array<{ login: string; avatar_url: string; permissions: any }>> {
     return this.request(`/repos/${owner}/${repo}/collaborators`);
+  }
+
+  /**
+   * Check if the authenticated user is a collaborator on a repository
+   * Returns the permission level if they are, null if not
+   *
+   * Note: This uses the backend's GITHUB_TOKEN, so it can only check repos
+   * that token has access to. For repos the token can't access, we return
+   * isCollaborator: true as a fallback (let the user try and get a proper
+   * error from their Git client if they truly don't have access).
+   */
+  async checkCollaboratorAccess(
+    owner: string,
+    repo: string
+  ): Promise<{ isCollaborator: boolean; permission: string | null; error?: string }> {
+    try {
+      // First get the authenticated user
+      const user = await this.getAuthenticatedUser();
+
+      // Check if user is the owner
+      if (user.login.toLowerCase() === owner.toLowerCase()) {
+        return { isCollaborator: true, permission: 'admin' };
+      }
+
+      // Check collaborator permission using the permission endpoint
+      // This returns 200 with permission level, or 404 if not a collaborator
+      const response = await this.request<{ permission: string }>(
+        `/repos/${owner}/${repo}/collaborators/${user.login}/permission`
+      );
+
+      // GitHub returns 'none' for non-collaborators on public repos
+      const isCollaborator = response.permission !== 'none';
+      return {
+        isCollaborator,
+        permission: isCollaborator ? response.permission : null,
+      };
+    } catch (error) {
+      const err = error as Error & { status?: number };
+
+      // 404 on the collaborator endpoint means user is not a collaborator
+      // But 404 "Not Found" on the repo itself means the token can't access the repo
+      if (err.message?.includes('Not Found')) {
+        // The backend token can't access this repo - default to allowing
+        // (the user will get a proper error from their Git client if they don't have access)
+        console.log(`GitHub: Can't access repo ${owner}/${repo} - defaulting to allow clone buttons`);
+        return { isCollaborator: true, permission: null, error: 'repo_not_accessible' };
+      }
+
+      // For 403 (no permission to check collaborators), default to allow
+      if (err.status === 403) {
+        console.log(`GitHub: No permission to check collaborators on ${owner}/${repo} - defaulting to allow`);
+        return { isCollaborator: true, permission: null, error: 'no_permission_to_check' };
+      }
+
+      // For other errors, log and default to allow
+      console.error('Error checking collaborator access:', error);
+      return { isCollaborator: true, permission: null, error: 'unknown_error' };
+    }
   }
 
   /**

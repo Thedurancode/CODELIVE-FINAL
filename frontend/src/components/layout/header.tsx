@@ -411,7 +411,7 @@ export function Header() {
       {/* Left - Logo */}
       <div className="flex items-center">
         <img
-          src="https://i.ibb.co/nsx4Njzz/CODELIVE1.png"
+          src="/codelive-logo.png"
           alt="CodeLive"
           className="h-12 w-auto object-contain"
         />

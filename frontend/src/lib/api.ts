@@ -18,12 +18,12 @@ async function fetchApi<T>(
   let token = null;
 
   if (typeof window !== 'undefined') {
-    // 1. Check localStorage first (fastest)
-    token = localStorage.getItem('dispotree_token');
+    // 1. Check localStorage first (fastest) - try all possible token keys
+    token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
 
     // 2. Check cookie if no localStorage token
     if (!token) {
-      const cookieMatch = document.cookie.match(/dispotree_token=([^;]+)/);
+      const cookieMatch = document.cookie.match(/(?:dispotree_token|codelive_token)=([^;]+)/);
       if (cookieMatch) {
         token = cookieMatch[1];
         // Cache in localStorage for faster access
@@ -120,9 +120,9 @@ export const api = {
   upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
     let token = null;
     if (typeof window !== 'undefined') {
-      token = localStorage.getItem('dispotree_token');
+      token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
       if (!token) {
-        const cookieMatch = document.cookie.match(/dispotree_token=([^;]+)/);
+        const cookieMatch = document.cookie.match(/(?:dispotree_token|codelive_token)=([^;]+)/);
         if (cookieMatch) {
           token = cookieMatch[1];
         }
@@ -180,7 +180,7 @@ export async function streamChat(
 
     // Fallback to localStorage if no session
     if (!token) {
-      token = localStorage.getItem('dispotree_token');
+      token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
     }
   }
 

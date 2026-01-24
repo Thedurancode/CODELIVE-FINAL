@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -11,10 +11,12 @@ import {
   Calendar,
   Mail,
   Settings,
-  ChevronUp,
+  ChevronDown,
+  Pin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DockItem } from './dock-item';
+import { DockAgentsItem } from './dock-agents-item';
 
 const dockItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -27,23 +29,20 @@ const dockItems = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-const DOCK_HIDE_DELAY = 1000; // ms before hiding dock
-const DOCK_TRIGGER_ZONE = 50; // px from bottom to trigger dock show
+const DOCK_TRIGGER_ZONE = 8; // px from very bottom edge to trigger dock show
 
 export function Dock() {
   const [mouseX, setMouseX] = useState<number | null>(null);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
-  const [autoHide, setAutoHide] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isHovering, setIsHovering] = useState(false);
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const dockRef = useRef<HTMLDivElement>(null);
 
-  // Load auto-hide preference from localStorage
+  // Load hidden preference from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('dock_auto_hide');
+    const saved = localStorage.getItem('dock_hidden');
     if (saved === 'true') {
-      setAutoHide(true);
+      setIsHidden(true);
       setIsVisible(false);
     }
   }, []);
@@ -53,42 +52,38 @@ export function Dock() {
     setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
   }, []);
 
-  // Handle global mouse movement for auto-hide
+  // Handle showing dock when mouse hits bottom edge
   useEffect(() => {
-    if (!autoHide) {
+    if (!isHidden) {
       setIsVisible(true);
       return;
     }
 
-    const handleGlobalMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (e: MouseEvent) => {
       const distanceFromBottom = window.innerHeight - e.clientY;
 
+      // Only show when mouse is at the very bottom edge
       if (distanceFromBottom <= DOCK_TRIGGER_ZONE) {
-        // Mouse near bottom - show dock
         setIsVisible(true);
-        if (hideTimeoutRef.current) {
-          clearTimeout(hideTimeoutRef.current);
-          hideTimeoutRef.current = null;
-        }
-      } else if (!isHovering) {
-        // Mouse away and not hovering on dock - start hide timer
-        if (!hideTimeoutRef.current) {
-          hideTimeoutRef.current = setTimeout(() => {
-            setIsVisible(false);
-            hideTimeoutRef.current = null;
-          }, DOCK_HIDE_DELAY);
-        }
       }
     };
 
-    window.addEventListener('mousemove', handleGlobalMouseMove);
-    return () => {
-      window.removeEventListener('mousemove', handleGlobalMouseMove);
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-      }
-    };
-  }, [autoHide, isHovering]);
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [isHidden]);
+
+  // Hide dock when mouse leaves (only in hidden mode)
+  useEffect(() => {
+    if (!isHidden || !isVisible) return;
+
+    // If not hovering over dock, hide after a short delay
+    if (!isHovering) {
+      const timeout = setTimeout(() => {
+        setIsVisible(false);
+      }, 400);
+      return () => clearTimeout(timeout);
+    }
+  }, [isHidden, isVisible, isHovering]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isTouchDevice) {
@@ -98,10 +93,6 @@ export function Dock() {
 
   const handleMouseEnter = useCallback(() => {
     setIsHovering(true);
-    if (hideTimeoutRef.current) {
-      clearTimeout(hideTimeoutRef.current);
-      hideTimeoutRef.current = null;
-    }
   }, []);
 
   const handleMouseLeave = useCallback(() => {
@@ -109,42 +100,35 @@ export function Dock() {
     setIsHovering(false);
   }, []);
 
-  const toggleAutoHide = useCallback(() => {
-    const newValue = !autoHide;
-    setAutoHide(newValue);
-    localStorage.setItem('dock_auto_hide', String(newValue));
-    if (!newValue) {
-      setIsVisible(true);
-    }
-  }, [autoHide]);
+  const handleHide = useCallback(() => {
+    setIsHidden(true);
+    setIsVisible(false);
+    localStorage.setItem('dock_hidden', 'true');
+  }, []);
 
-  // Show indicator when dock is hidden
-  const showDockIndicator = autoHide && !isVisible;
+  const handlePin = useCallback(() => {
+    setIsHidden(false);
+    setIsVisible(true);
+    localStorage.setItem('dock_hidden', 'false');
+  }, []);
 
   return (
     <>
-      {/* Hidden dock trigger zone / indicator */}
-      <AnimatePresence>
-        {showDockIndicator && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 pb-1"
-          >
-            <div className="flex flex-col items-center gap-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-              <ChevronUp className="w-4 h-4 animate-bounce" />
-              <div className="w-16 h-1 bg-muted-foreground/30 rounded-full" />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Hidden dock trigger zone - full width at bottom */}
+      {isHidden && !isVisible && (
+        <div
+          className="fixed bottom-0 left-0 right-0 h-2 z-50 cursor-pointer"
+          onMouseEnter={() => setIsVisible(true)}
+        >
+          {/* Visual indicator line */}
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40 transition-colors" />
+        </div>
+      )}
 
       {/* Main Dock */}
       <AnimatePresence>
         {isVisible && (
           <motion.div
-            ref={dockRef}
             onMouseMove={handleMouseMove}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
@@ -183,34 +167,36 @@ export function Dock() {
             {/* Separator */}
             <div className="w-px h-10 bg-border/50 mx-1" />
 
-            {/* Auto-hide toggle button */}
-            <button
-              onClick={toggleAutoHide}
-              className={cn(
-                'flex flex-col items-center gap-1 cursor-pointer',
-                'transition-opacity hover:opacity-100',
-                autoHide ? 'opacity-100' : 'opacity-50'
-              )}
-              title={autoHide ? 'Disable auto-hide' : 'Enable auto-hide (like macOS)'}
-            >
-              <div
-                className={cn(
-                  'w-10 h-10 rounded-xl flex items-center justify-center',
-                  'bg-secondary/60 hover:bg-secondary transition-colors',
-                  autoHide && 'bg-primary/20 hover:bg-primary/30'
-                )}
+            {/* Running Agents */}
+            <DockAgentsItem mouseX={isTouchDevice ? null : mouseX} />
+
+            {/* Separator */}
+            <div className="w-px h-10 bg-border/50 mx-1" />
+
+            {/* Hide/Pin button */}
+            {isHidden ? (
+              <button
+                onClick={handlePin}
+                className="flex flex-col items-center gap-1 cursor-pointer transition-opacity hover:opacity-100 opacity-70"
+                title="Pin dock (always visible)"
               >
-                <ChevronUp
-                  className={cn(
-                    'w-5 h-5 transition-transform',
-                    autoHide ? 'text-primary rotate-180' : 'text-muted-foreground'
-                  )}
-                />
-              </div>
-              <span className="text-[10px] font-medium text-muted-foreground">
-                {autoHide ? 'Pinned' : 'Hide'}
-              </span>
-            </button>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary/60 hover:bg-secondary transition-colors">
+                  <Pin className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <span className="text-[10px] font-medium text-muted-foreground">Pin</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleHide}
+                className="flex flex-col items-center gap-1 cursor-pointer transition-opacity hover:opacity-100 opacity-70"
+                title="Hide dock"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary/60 hover:bg-secondary transition-colors">
+                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <span className="text-[10px] font-medium text-muted-foreground">Hide</span>
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

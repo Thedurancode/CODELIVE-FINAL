@@ -53,6 +53,8 @@ interface ProxyConnection {
   spriteId: string;
   projectSpriteId: string;
   sessionId: string;
+  cols: number;
+  rows: number;
   connectedAt: Date;
   lastActivityAt: Date;
   status: 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -107,8 +109,11 @@ class SpritesWebSocketProxy {
         const { parse } = require('url');
         const { pathname } = parse(request.url || '');
 
+        console.log('[SpritesWebSocket] Upgrade event received for path:', pathname);
+
         // Only handle /ws/sprites path
         if (pathname !== '/ws/sprites') {
+          console.log('[SpritesWebSocket] Skipping - not our path');
           return; // Let other handlers deal with this
         }
 
@@ -170,8 +175,10 @@ class SpritesWebSocketProxy {
     const token = url.searchParams.get('token');
     const spriteId = url.searchParams.get('spriteId');
     const sessionId = url.searchParams.get('sessionId');
+    const cols = parseInt(url.searchParams.get('cols') || '80', 10);
+    const rows = parseInt(url.searchParams.get('rows') || '24', 10);
 
-    console.log(`[SpritesWebSocket] Parsed params - spriteId: ${spriteId}, sessionId: ${sessionId}, hasToken: ${!!token}`);
+    console.log(`[SpritesWebSocket] Parsed params - spriteId: ${spriteId}, sessionId: ${sessionId}, cols: ${cols}, rows: ${rows}, hasToken: ${!!token}`);
 
     // Validate required parameters
     if (!token || !spriteId) {
@@ -235,6 +242,8 @@ class SpritesWebSocketProxy {
       spriteId: projectSprite.spriteId || projectSprite.spriteName,
       projectSpriteId: spriteId,
       sessionId: sessionId || `session_${Date.now()}`,
+      cols,
+      rows,
       connectedAt: new Date(),
       lastActivityAt: new Date(),
       status: 'connecting',
@@ -283,11 +292,30 @@ class SpritesWebSocketProxy {
     console.log(`[SpritesWebSocket] Connecting to Sprites API for ${connection.id}... (retryWithoutCheckpoint: ${retryWithoutCheckpoint})`);
 
     try {
+      // First, check if sprite needs to be woken up
+      const sprite = await ProjectSprite.findByPk(connection.projectSpriteId);
+      if (sprite && (sprite.status === 'hibernating' || sprite.status === 'stopped')) {
+        console.log(`[SpritesWebSocket] Sprite is ${sprite.status}, waking up...`);
+        this.sendToFrontend(connection, {
+          type: 'status',
+          status: 'connecting',
+          data: `Waking up sprite (${sprite.status})...`,
+        });
+
+        // Resume the sprite to wake it up
+        try {
+          await spritesService.resumeSprite(connection.projectSpriteId);
+          console.log(`[SpritesWebSocket] Sprite woken up successfully`);
+        } catch (wakeError) {
+          console.warn(`[SpritesWebSocket] Failed to wake sprite, will try to connect anyway:`, wakeError);
+        }
+      }
+
       // Get WebSocket connection info from SpritesService
-      console.log(`[SpritesWebSocket] Getting WebSocket info for sprite: ${connection.projectSpriteId}`);
+      console.log(`[SpritesWebSocket] Getting WebSocket info for sprite: ${connection.projectSpriteId}, cols: ${connection.cols}, rows: ${connection.rows}`);
       const wsInfo = await spritesService.getExecWebSocketInfo(connection.projectSpriteId, {
-        cols: 80,
-        rows: 24,
+        cols: connection.cols,
+        rows: connection.rows,
         sessionId: connection.sessionId,
       });
 
@@ -387,7 +415,8 @@ class SpritesWebSocketProxy {
 
       spritesWs.on('error', (error) => {
         const errorStr = String(error);
-        console.error(`[SpritesWebSocket] Sprites API WebSocket error (${connection.id}):`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[SpritesWebSocket] Sprites API WebSocket error (${connection.id}):`, errorMessage, error);
 
         // Check for checkpoint-related errors
         if (errorStr.includes('checkpoint') || errorStr.includes('restore')) {
@@ -398,7 +427,7 @@ class SpritesWebSocketProxy {
 
         this.sendToFrontend(connection.frontendWs, {
           type: 'error',
-          error: 'Failed to connect to Sprites API terminal. Please ensure the sprite is running.',
+          error: `Failed to connect to Sprites API: ${errorMessage}`,
           status: 'error',
           timestamp: new Date().toISOString(),
         });
@@ -456,24 +485,34 @@ class SpritesWebSocketProxy {
 
       switch (message.type) {
         case 'input':
-          // Forward stdin to Sprites
+          // Forward stdin to Sprites as raw binary (TTY mode expects raw bytes)
+          console.log(`[SpritesWebSocket] Received input from frontend: ${JSON.stringify(message.data)}`);
           if (connection.spritesWs?.readyState === WebSocket.OPEN && message.data) {
-            connection.spritesWs.send(JSON.stringify({
-              type: 'stdin',
-              data: message.data,
-            }));
-            this.stats.totalBytesOut += message.data.length;
+            // Sprites API expects raw stdin data as binary buffer for TTY sessions
+            const inputBuffer = Buffer.from(message.data, 'utf8');
+            console.log(`[SpritesWebSocket] Forwarding ${inputBuffer.length} bytes to Sprites API as binary...`);
+            connection.spritesWs.send(inputBuffer);
+            this.stats.totalBytesOut += inputBuffer.length;
+          } else {
+            console.warn(`[SpritesWebSocket] Cannot forward input - Sprites WS state: ${connection.spritesWs?.readyState}`);
           }
           break;
 
         case 'resize':
-          // Forward resize to Sprites
+          // Update connection dimensions
+          connection.cols = message.cols || connection.cols;
+          connection.rows = message.rows || connection.rows;
+
+          // Forward resize to Sprites - try both raw JSON and structured message
           if (connection.spritesWs?.readyState === WebSocket.OPEN) {
-            connection.spritesWs.send(JSON.stringify({
+            // Sprites API uses a special resize control message
+            // Format: JSON with type 'resize'
+            const resizeMsg = JSON.stringify({
               type: 'resize',
-              cols: message.cols || 80,
-              rows: message.rows || 24,
-            }));
+              cols: connection.cols,
+              rows: connection.rows,
+            });
+            connection.spritesWs.send(resizeMsg);
           }
           break;
 
@@ -494,56 +533,112 @@ class SpritesWebSocketProxy {
 
   /**
    * Handle message from Sprites API
+   *
+   * Protocol (per Sprites docs):
+   * - TTY mode: raw binary data, no prefixes
+   * - Non-TTY mode: stream ID prefix (0x00=stdin, 0x01=stdout, 0x02=stderr, 0x03=exit)
+   * - JSON messages for session info, resize responses, etc.
    */
   private handleSpritesMessage(connection: ProxyConnection, data: Buffer | ArrayBuffer | Buffer[]): void {
     connection.lastActivityAt = new Date();
+    console.log(`[SpritesWebSocket] Received message from Sprites API, type: ${typeof data}, isBuffer: ${Buffer.isBuffer(data)}`);
 
     try {
-      // Handle both binary and text data
-      let messageData: string;
+      // Convert to Buffer
+      let rawBuffer: Buffer;
       if (Buffer.isBuffer(data)) {
-        messageData = data.toString('utf8');
+        rawBuffer = data;
       } else if (data instanceof ArrayBuffer) {
-        messageData = Buffer.from(data).toString('utf8');
+        rawBuffer = Buffer.from(data);
       } else {
-        messageData = Buffer.concat(data).toString('utf8');
+        rawBuffer = Buffer.concat(data);
       }
 
-      this.stats.totalBytesIn += messageData.length;
+      this.stats.totalBytesIn += rawBuffer.length;
 
-      // Try to parse as JSON first
-      try {
-        const parsed = JSON.parse(messageData);
+      // Check for binary protocol stream IDs (non-TTY mode)
+      // Stream IDs: 0x00=stdin, 0x01=stdout, 0x02=stderr, 0x03=exit, 0x04=stdin_eof
+      const firstByte = rawBuffer[0];
+      if (rawBuffer.length > 1 && firstByte >= 0x00 && firstByte <= 0x04) {
+        const streamId = firstByte;
+        const payload = rawBuffer.slice(1);
 
-        // Handle different Sprites API message types
-        if (parsed.type === 'stdout' || parsed.type === 'stderr') {
-          this.sendToFrontend(connection.frontendWs, {
-            type: 'output',
-            data: parsed.data,
-            timestamp: new Date().toISOString(),
-          });
-        } else if (parsed.type === 'exit') {
-          this.sendToFrontend(connection.frontendWs, {
-            type: 'status',
-            status: 'disconnected',
-            data: `Process exited with code ${parsed.code}`,
-            timestamp: new Date().toISOString(),
-          });
-        } else if (parsed.type === 'error') {
-          this.sendToFrontend(connection.frontendWs, {
-            type: 'error',
-            error: parsed.message || parsed.data,
-            timestamp: new Date().toISOString(),
-          });
+        switch (streamId) {
+          case 0x01: // stdout
+          case 0x02: // stderr
+            this.sendToFrontend(connection.frontendWs, {
+              type: 'output',
+              data: payload.toString('utf8'),
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          case 0x03: // exit
+            const exitCode = payload.length > 0 ? payload[0] : 0;
+            this.sendToFrontend(connection.frontendWs, {
+              type: 'status',
+              status: 'disconnected',
+              data: `Process exited with code ${exitCode}`,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          default:
+            // Unknown stream ID or stdin echo, skip
+            break;
         }
-      } catch {
-        // If not JSON, treat as raw terminal output
-        this.sendToFrontend(connection.frontendWs, {
-          type: 'output',
-          data: messageData,
-          timestamp: new Date().toISOString(),
-        });
       }
+
+      // Try to decode as UTF-8 text
+      const messageData = rawBuffer.toString('utf8');
+
+      // Check if it looks like JSON (session info, errors, etc.)
+      const trimmed = messageData.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+
+          // Handle different Sprites API message types
+          if (parsed.type === 'stdout' || parsed.type === 'stderr') {
+            this.sendToFrontend(connection.frontendWs, {
+              type: 'output',
+              data: parsed.data,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          } else if (parsed.type === 'exit') {
+            this.sendToFrontend(connection.frontendWs, {
+              type: 'status',
+              status: 'disconnected',
+              data: `Process exited with code ${parsed.code || parsed.exit_code || 0}`,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          } else if (parsed.type === 'error') {
+            this.sendToFrontend(connection.frontendWs, {
+              type: 'error',
+              error: parsed.message || parsed.error || parsed.data,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          } else if (parsed.type === 'session_info') {
+            // Session info message - update connection cols/rows if provided
+            if (parsed.cols) connection.cols = parsed.cols;
+            if (parsed.rows) connection.rows = parsed.rows;
+            console.log(`[SpritesWebSocket] Session info:`, parsed);
+            return;
+          }
+          // Fall through if unknown JSON type - forward as output
+        } catch {
+          // Not valid JSON, treat as raw output
+        }
+      }
+
+      // Forward raw terminal output to frontend (TTY mode sends raw data)
+      console.log(`[SpritesWebSocket] Forwarding output to frontend: ${messageData.substring(0, 100)}...`);
+      this.sendToFrontend(connection.frontendWs, {
+        type: 'output',
+        data: messageData,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       console.error(`[SpritesWebSocket] Error processing Sprites message:`, error);
     }

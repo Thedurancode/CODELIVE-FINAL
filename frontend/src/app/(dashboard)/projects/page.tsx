@@ -53,7 +53,14 @@ import {
   Tag,
   X,
   ExternalLink,
+  LayoutList,
+  LayoutGrid,
+  Columns3,
+  GripVertical,
+  MonitorDown,
+  Code2,
 } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import {
   useProjects,
   useCreateProject,
@@ -69,10 +76,10 @@ import { ProjectForm } from '@/components/projects/ProjectForm';
 import { SpriteLaunchButton } from '@/components/sprites';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
-  active: 'bg-green-500/20 text-green-400 border-green-500/30',
-  on_hold: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  in_talks: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  now_coding: 'bg-green-500/20 text-green-400 border-green-500/30',
+  needs_review: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   completed: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  archived: 'bg-zinc-500/20 text-muted-foreground border-zinc-500/30',
   cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
 
@@ -83,6 +90,16 @@ const TAG_COLORS = [
   'bg-amber-500/20 text-amber-400 border-amber-500/30',
   'bg-pink-500/20 text-pink-400 border-pink-500/30',
   'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+];
+
+type ViewMode = 'list' | 'grid' | 'kanban';
+
+const KANBAN_COLUMNS: { status: ProjectStatus; title: string }[] = [
+  { status: 'in_talks', title: 'In Talks' },
+  { status: 'now_coding', title: 'Now Coding' },
+  { status: 'needs_review', title: 'Needs Review' },
+  { status: 'completed', title: 'Completed' },
+  { status: 'cancelled', title: 'Cancelled' },
 ];
 
 function getTagColor(tag: string) {
@@ -111,6 +128,7 @@ export default function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [mounted, setMounted] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   useEffect(() => {
     setMounted(true);
@@ -222,6 +240,27 @@ export default function ProjectsPage() {
     setEditingProject(project);
   };
 
+  const handleDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+
+    const projectId = result.draggableId;
+    const newStatus = result.destination.droppableId as ProjectStatus;
+    const project = projects.find((p: Project) => p.id === projectId);
+
+    if (!project || project.status === newStatus) return;
+
+    try {
+      await updateProject.mutateAsync({ id: projectId, data: { status: newStatus } });
+      toast.success(`Project moved to ${newStatus.replace('_', ' ')}`);
+    } catch {
+      toast.error('Failed to update project status');
+    }
+  };
+
+  const getProjectsByStatus = (status: ProjectStatus) => {
+    return projects.filter((p: Project) => p.status === status);
+  };
+
   if (error) {
     return (
       <div className="space-y-6">
@@ -254,6 +293,36 @@ export default function ProjectsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3">
+          {/* View Toggle */}
+          <div className="flex border rounded-lg overflow-hidden">
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              className={`rounded-none ${viewMode === 'list' ? 'bg-accent-600 text-white' : ''}`}
+              onClick={() => setViewMode('list')}
+              title="List View"
+            >
+              <LayoutList className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              className={`rounded-none border-x ${viewMode === 'grid' ? 'bg-accent-600 text-white' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Grid View"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+              size="sm"
+              className={`rounded-none ${viewMode === 'kanban' ? 'bg-accent-600 text-white' : ''}`}
+              onClick={() => setViewMode('kanban')}
+              title="Kanban View"
+            >
+              <Columns3 className="h-4 w-4" />
+            </Button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -410,19 +479,19 @@ export default function ProjectsPage() {
                 </SelectTrigger>
                 <SelectContent className="bg-secondary border">
                   <SelectItem value="all" className="text-foreground">All Status</SelectItem>
-                  <SelectItem value="active" className="text-foreground">Active</SelectItem>
-                  <SelectItem value="on_hold" className="text-foreground">On Hold</SelectItem>
+                  <SelectItem value="in_talks" className="text-foreground">In Talks</SelectItem>
+                  <SelectItem value="now_coding" className="text-foreground">Now Coding</SelectItem>
+                  <SelectItem value="needs_review" className="text-foreground">Needs Review</SelectItem>
                   <SelectItem value="completed" className="text-foreground">Completed</SelectItem>
-                  <SelectItem value="archived" className="text-foreground">Archived</SelectItem>
                   <SelectItem value="cancelled" className="text-foreground">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             )}
           </div>
 
-          {/* Table */}
-          <Card className="bg-card border">
-            {isLoading ? (
+          {/* Content Views */}
+          {isLoading ? (
+            <Card className="bg-card border">
               <CardContent className="p-6">
                 <div className="space-y-4">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -436,215 +505,9 @@ export default function ProjectsPage() {
                   ))}
                 </div>
               </CardContent>
-            ) : projects.length > 0 ? (
-              <>
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[800px]">
-                    <TableHeader>
-                      <TableRow className="border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground w-10">
-                          <Checkbox
-                            checked={selectedIds.size === projects.length && projects.length > 0}
-                            onCheckedChange={() => toggleSelectAll()}
-                          />
-                        </TableHead>
-                        <TableHead className="text-muted-foreground">Project</TableHead>
-                        <TableHead className="text-muted-foreground">Status</TableHead>
-                        <TableHead className="text-muted-foreground">Tags</TableHead>
-                        <TableHead className="text-muted-foreground">Start Date</TableHead>
-                        <TableHead className="text-muted-foreground">Target End</TableHead>
-                        <TableHead className="text-muted-foreground text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {projects.map((project: Project) => (
-                        <TableRow
-                          key={project.id}
-                          className={`border hover:bg-secondary/50 ${selectedIds.has(project.id) ? 'bg-accent-600/10' : ''}`}
-                        >
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Checkbox
-                              checked={selectedIds.has(project.id)}
-                              onCheckedChange={() => toggleSelect(project.id)}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Link href={`/projects/${project.id}`} className="block">
-                              <div className="flex items-center gap-3">
-                                {project.logoUrl ? (
-                                  <img
-                                    src={project.logoUrl}
-                                    alt={`${project.title} logo`}
-                                    className="h-10 w-10 rounded-lg object-cover shrink-0"
-                                  />
-                                ) : (
-                                  <div className="h-10 w-10 rounded-lg bg-accent-600/20 flex items-center justify-center shrink-0">
-                                    <FolderKanban className="h-5 w-5 text-accent-400" />
-                                  </div>
-                                )}
-                                <div>
-                                  <p className="font-medium text-foreground hover:text-accent-400 transition-colors">
-                                    {project.title}
-                                  </p>
-                                  {project.description && (
-                                    <p className="text-sm text-muted-foreground line-clamp-1">
-                                      {project.description}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={STATUS_COLORS[project.status]}>
-                              {project.status.replace('_', ' ')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {project.tags && project.tags.length > 0 ? (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {project.tags.slice(0, 2).map((tag) => (
-                                  <Badge
-                                    key={tag}
-                                    variant="outline"
-                                    className={`${getTagColor(tag)} text-xs cursor-pointer`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setTagFilter(tag);
-                                    }}
-                                  >
-                                    {tag}
-                                  </Badge>
-                                ))}
-                                {project.tags.length > 2 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    +{project.tags.length - 2}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Calendar className="h-3.5 w-3.5" />
-                              {formatDate(project.startDate)}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground flex items-center gap-1">
-                              <Calendar className="h-3.5 w-3.5" />
-                              {formatDate(project.targetEndDate)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {project.githubUrl && (
-                                <>
-                                  <SpriteLaunchButton
-                                    projectId={project.id}
-                                    projectTitle={project.title}
-                                    compact
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    asChild
-                                  >
-                                    <a
-                                      href={project.githubUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <Github className="h-4 w-4" />
-                                    </a>
-                                  </Button>
-                                </>
-                              )}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="bg-secondary border">
-                                  <DropdownMenuItem asChild className="text-foreground cursor-pointer">
-                                    <Link href={`/projects/${project.id}`}>
-                                      <ExternalLink className="mr-2 h-4 w-4" />
-                                      View
-                                    </Link>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => openEditDialog(project)}
-                                    className="text-foreground cursor-pointer"
-                                  >
-                                    <Edit2 className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                  {project.githubUrl && (
-                                    <DropdownMenuItem asChild className="text-foreground cursor-pointer">
-                                      <a
-                                        href={project.githubUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                      >
-                                        <Github className="mr-2 h-4 w-4" />
-                                        Open GitHub
-                                      </a>
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuSeparator className="bg-border" />
-                                  <DropdownMenuItem
-                                    onClick={() => handleDelete(project.id)}
-                                    className="text-red-400 cursor-pointer"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Pagination */}
-                {pagination && pagination.totalPages > 1 && (
-                  <div className="flex items-center justify-between px-6 py-4 border-t border">
-                    <p className="text-sm text-muted-foreground">
-                      Showing {(page - 1) * pagination.limit + 1} to{' '}
-                      {Math.min(page * pagination.limit, pagination.total)} of {pagination.total}
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage(page - 1)}
-                        disabled={page === 1}
-                        className="border"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage(page + 1)}
-                        disabled={page >= pagination.totalPages}
-                        className="border"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
+            </Card>
+          ) : projects.length === 0 ? (
+            <Card className="bg-card border">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-medium text-foreground mb-2">No projects found</h3>
@@ -654,8 +517,524 @@ export default function ProjectsPage() {
                     : 'Create your first project to get started'}
                 </p>
               </CardContent>
-            )}
-          </Card>
+            </Card>
+          ) : viewMode === 'grid' ? (
+            /* Grid View */
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {projects.map((project: Project) => (
+                  <Card
+                    key={project.id}
+                    className={`bg-card border hover:border-accent-600/50 transition-all cursor-pointer group ${
+                      selectedIds.has(project.id) ? 'border-accent-600 ring-1 ring-accent-600' : ''
+                    }`}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            checked={selectedIds.has(project.id)}
+                            onCheckedChange={() => toggleSelect(project.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          {project.logoUrl ? (
+                            <img
+                              src={project.logoUrl}
+                              alt={`${project.title} logo`}
+                              className="h-12 w-12 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-lg bg-accent-600/20 flex items-center justify-center">
+                              <FolderKanban className="h-6 w-6 text-accent-400" />
+                            </div>
+                          )}
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-secondary border">
+                            <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                              <Link href={`/projects/${project.id}`}>
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                View
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditDialog(project)} className="text-foreground cursor-pointer">
+                              <Edit2 className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            {project.githubUrl && (
+                              <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
+                                  <Github className="mr-2 h-4 w-4" />
+                                  GitHub
+                                </a>
+                              </DropdownMenuItem>
+                            )}
+                            {project.githubUrl && (
+                              <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                <a href={`x-github-client://openRepo/${project.githubUrl}`}>
+                                  <MonitorDown className="mr-2 h-4 w-4" />
+                                  Clone in Desktop
+                                </a>
+                              </DropdownMenuItem>
+                            )}
+                            {project.githubUrl && (
+                              <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}>
+                                  <Code2 className="mr-2 h-4 w-4" />
+                                  Clone in VS Code
+                                </a>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator className="bg-border" />
+                            <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400 cursor-pointer">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      <Link href={`/projects/${project.id}`} className="block">
+                        <h3 className="font-semibold text-foreground group-hover:text-accent-400 transition-colors line-clamp-1 mb-1">
+                          {project.title}
+                        </h3>
+                        {project.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                            {project.description}
+                          </p>
+                        )}
+                      </Link>
+
+                      <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/50">
+                        <Badge variant="outline" className={`${STATUS_COLORS[project.status]} text-xs`}>
+                          {project.status.replace('_', ' ')}
+                        </Badge>
+                        <div className="flex items-center gap-1">
+                          {project.githubUrl && (
+                            <SpriteLaunchButton projectId={project.id} projectTitle={project.title} compact />
+                          )}
+                          {project.tags && project.tags.length > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              {project.tags.length} tag{project.tags.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Pagination for Grid */}
+              {pagination && pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {(page - 1) * pagination.limit + 1} to{' '}
+                    {Math.min(page * pagination.limit, pagination.total)} of {pagination.total}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 1} className="border">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= pagination.totalPages} className="border">
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : viewMode === 'kanban' ? (
+            /* Kanban View */
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {KANBAN_COLUMNS.map(({ status, title }) => {
+                  const columnProjects = getProjectsByStatus(status);
+                  return (
+                    <div key={status} className="flex-shrink-0 w-72">
+                      <div className={`rounded-lg p-3 mb-3 ${STATUS_COLORS[status].replace('text-', 'bg-').split(' ')[0]}`}>
+                        <div className="flex items-center justify-between">
+                          <h3 className={`font-medium ${STATUS_COLORS[status].split(' ')[1]}`}>
+                            {title}
+                          </h3>
+                          <Badge variant="outline" className={`${STATUS_COLORS[status]} text-xs`}>
+                            {columnProjects.length}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Droppable droppableId={status}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                            className={`space-y-3 min-h-[200px] p-2 rounded-lg transition-colors ${
+                              snapshot.isDraggingOver ? 'bg-accent-600/10' : 'bg-secondary/30'
+                            }`}
+                          >
+                            {columnProjects.map((project: Project, index: number) => (
+                              <Draggable key={project.id} draggableId={project.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    className={`bg-card border rounded-lg p-3 transition-shadow ${
+                                      snapshot.isDragging ? 'shadow-lg ring-2 ring-accent-600' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      <div
+                                        {...provided.dragHandleProps}
+                                        className="mt-1 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+                                      >
+                                        <GripVertical className="h-4 w-4" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <Link href={`/projects/${project.id}`} className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              {project.logoUrl ? (
+                                                <img
+                                                  src={project.logoUrl}
+                                                  alt=""
+                                                  className="h-6 w-6 rounded object-cover"
+                                                />
+                                              ) : (
+                                                <div className="h-6 w-6 rounded bg-accent-600/20 flex items-center justify-center">
+                                                  <FolderKanban className="h-3 w-3 text-accent-400" />
+                                                </div>
+                                              )}
+                                              <h4 className="font-medium text-sm text-foreground hover:text-accent-400 transition-colors truncate">
+                                                {project.title}
+                                              </h4>
+                                            </div>
+                                          </Link>
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                                                <MoreHorizontal className="h-3 w-3" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="bg-secondary border">
+                                              <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                                <Link href={`/projects/${project.id}`}>
+                                                  <ExternalLink className="mr-2 h-4 w-4" />
+                                                  View
+                                                </Link>
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={() => openEditDialog(project)} className="text-foreground cursor-pointer">
+                                                <Edit2 className="mr-2 h-4 w-4" />
+                                                Edit
+                                              </DropdownMenuItem>
+                                              <DropdownMenuSeparator className="bg-border" />
+                                              <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400 cursor-pointer">
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
+                                        {project.description && (
+                                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                            {project.description}
+                                          </p>
+                                        )}
+                                        {project.tags && project.tags.length > 0 && (
+                                          <div className="flex flex-wrap gap-1 mt-2">
+                                            {project.tags.slice(0, 2).map((tag) => (
+                                              <Badge key={tag} variant="outline" className={`${getTagColor(tag)} text-xs py-0`}>
+                                                {tag}
+                                              </Badge>
+                                            ))}
+                                            {project.tags.length > 2 && (
+                                              <span className="text-xs text-muted-foreground">+{project.tags.length - 2}</span>
+                                            )}
+                                          </div>
+                                        )}
+                                        {project.targetEndDate && (
+                                          <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                                            <Calendar className="h-3 w-3" />
+                                            {formatDate(project.targetEndDate)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                            {columnProjects.length === 0 && (
+                              <div className="text-center py-8 text-muted-foreground text-sm">
+                                No projects
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </Droppable>
+                    </div>
+                  );
+                })}
+              </div>
+            </DragDropContext>
+          ) : (
+            /* List View (Table) */
+            <Card className="bg-card border">
+              <div className="overflow-x-auto">
+                <Table className="min-w-[800px]">
+                  <TableHeader>
+                    <TableRow className="border hover:bg-transparent">
+                      <TableHead className="text-muted-foreground w-10">
+                        <Checkbox
+                          checked={selectedIds.size === projects.length && projects.length > 0}
+                          onCheckedChange={() => toggleSelectAll()}
+                        />
+                      </TableHead>
+                      <TableHead className="text-muted-foreground">Project</TableHead>
+                      <TableHead className="text-muted-foreground">Status</TableHead>
+                      <TableHead className="text-muted-foreground">Tags</TableHead>
+                      <TableHead className="text-muted-foreground">Start Date</TableHead>
+                      <TableHead className="text-muted-foreground">Target End</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {projects.map((project: Project) => (
+                      <TableRow
+                        key={project.id}
+                        className={`border hover:bg-secondary/50 ${selectedIds.has(project.id) ? 'bg-accent-600/10' : ''}`}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(project.id)}
+                            onCheckedChange={() => toggleSelect(project.id)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Link href={`/projects/${project.id}`} className="block">
+                            <div className="flex items-center gap-3">
+                              {project.logoUrl ? (
+                                <img
+                                  src={project.logoUrl}
+                                  alt={`${project.title} logo`}
+                                  className="h-10 w-10 rounded-lg object-cover shrink-0"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-lg bg-accent-600/20 flex items-center justify-center shrink-0">
+                                  <FolderKanban className="h-5 w-5 text-accent-400" />
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-medium text-foreground hover:text-accent-400 transition-colors">
+                                  {project.title}
+                                </p>
+                                {project.description && (
+                                  <p className="text-sm text-muted-foreground line-clamp-1">
+                                    {project.description}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={STATUS_COLORS[project.status]}>
+                            {project.status.replace('_', ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {project.tags && project.tags.length > 0 ? (
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {project.tags.slice(0, 2).map((tag) => (
+                                <Badge
+                                  key={tag}
+                                  variant="outline"
+                                  className={`${getTagColor(tag)} text-xs cursor-pointer`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTagFilter(tag);
+                                  }}
+                                >
+                                  {tag}
+                                </Badge>
+                              ))}
+                              {project.tags.length > 2 && (
+                                <span className="text-xs text-muted-foreground">
+                                  +{project.tags.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {formatDate(project.startDate)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {formatDate(project.targetEndDate)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {project.githubUrl && (
+                              <>
+                                <SpriteLaunchButton
+                                  projectId={project.id}
+                                  projectTitle={project.title}
+                                  compact
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  asChild
+                                  title="Open in GitHub"
+                                >
+                                  <a
+                                    href={project.githubUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Github className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  asChild
+                                  title="Clone in GitHub Desktop"
+                                >
+                                  <a
+                                    href={`x-github-client://openRepo/${project.githubUrl}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MonitorDown className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  asChild
+                                  title="Clone in VS Code"
+                                >
+                                  <a
+                                    href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Code2 className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                              </>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-secondary border">
+                                <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                  <Link href={`/projects/${project.id}`}>
+                                    <ExternalLink className="mr-2 h-4 w-4" />
+                                    View
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => openEditDialog(project)}
+                                  className="text-foreground cursor-pointer"
+                                >
+                                  <Edit2 className="mr-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                                {project.githubUrl && (
+                                  <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                    <a
+                                      href={project.githubUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <Github className="mr-2 h-4 w-4" />
+                                      Open GitHub
+                                    </a>
+                                  </DropdownMenuItem>
+                                )}
+                                {project.githubUrl && (
+                                  <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                    <a href={`x-github-client://openRepo/${project.githubUrl}`}>
+                                      <MonitorDown className="mr-2 h-4 w-4" />
+                                      Clone in Desktop
+                                    </a>
+                                  </DropdownMenuItem>
+                                )}
+                                {project.githubUrl && (
+                                  <DropdownMenuItem asChild className="text-foreground cursor-pointer">
+                                    <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}>
+                                      <Code2 className="mr-2 h-4 w-4" />
+                                      Clone in VS Code
+                                    </a>
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator className="bg-border" />
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(project.id)}
+                                  className="text-red-400 cursor-pointer"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {pagination && pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border">
+                  <p className="text-sm text-muted-foreground">
+                    Showing {(page - 1) * pagination.limit + 1} to{' '}
+                    {Math.min(page * pagination.limit, pagination.total)} of {pagination.total}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page - 1)}
+                      disabled={page === 1}
+                      className="border"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page + 1)}
+                      disabled={page >= pagination.totalPages}
+                      className="border"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       </div>
 

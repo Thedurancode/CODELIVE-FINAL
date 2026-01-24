@@ -9,6 +9,8 @@ const publicRoutes = [
   '/property-chat',
   '/broker-apply',
   '/chat', // AI chat should be accessible - it handles its own auth fallback
+  '/ipad', // TV remote controller
+  '/tv', // TV display
 ];
 
 export function middleware(request: NextRequest) {

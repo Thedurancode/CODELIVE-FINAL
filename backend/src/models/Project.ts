@@ -9,7 +9,7 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 
 // Project status options
-export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived' | 'cancelled';
+export type ProjectStatus = 'in_talks' | 'now_coding' | 'needs_review' | 'completed' | 'cancelled';
 
 interface ProjectAttributes {
   id: string;
@@ -108,7 +108,7 @@ class Project
 
   static async getActiveProjects(organizationId: string) {
     return this.findAll({
-      where: { organizationId, status: 'active' },
+      where: { organizationId, status: 'now_coding' },
       order: [['updatedAt', 'DESC']],
     });
   }
@@ -118,7 +118,7 @@ class Project
     return this.findAll({
       where: {
         organizationId,
-        status: ['active', 'on_hold'],
+        status: ['in_talks', 'now_coding', 'needs_review'],
         targetEndDate: { [Op.lt]: new Date() },
       },
       order: [['targetEndDate', 'ASC']],
@@ -130,7 +130,7 @@ class Project
    */
   isOverdue(): boolean {
     if (!this.targetEndDate) return false;
-    if (['completed', 'archived', 'cancelled'].includes(this.status)) return false;
+    if (['completed', 'cancelled'].includes(this.status)) return false;
     return new Date(this.targetEndDate) < new Date();
   }
 
@@ -185,9 +185,9 @@ Project.init(
       comment: 'Live deployment/preview URL',
     },
     status: {
-      type: DataTypes.ENUM('active', 'on_hold', 'completed', 'archived', 'cancelled'),
+      type: DataTypes.ENUM('in_talks', 'now_coding', 'needs_review', 'completed', 'cancelled'),
       allowNull: false,
-      defaultValue: 'active',
+      defaultValue: 'in_talks',
     },
     organizationId: {
       type: DataTypes.UUID,

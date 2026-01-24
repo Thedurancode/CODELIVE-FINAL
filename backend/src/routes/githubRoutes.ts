@@ -1080,4 +1080,49 @@ router.get('/repos/:owner/:repo/pulls', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/github/repos/{owner}/{repo}/collaborator-access:
+ *   get:
+ *     summary: Check if authenticated user is a collaborator
+ *     tags: [GitHub]
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Collaborator access status
+ */
+router.get('/repos/:owner/:repo/collaborator-access', async (req: Request, res: Response) => {
+  try {
+    if (!gitHubService.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub integration not configured',
+      });
+    }
+
+    const { owner, repo } = req.params;
+    const result = await gitHubService.checkCollaboratorAccess(owner, repo);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+});
+
 export default router;

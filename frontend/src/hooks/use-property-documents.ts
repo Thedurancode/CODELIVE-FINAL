@@ -123,8 +123,8 @@ export function useUploadDocuments(propertyId: string) {
         formData.append('documentType', documentType);
       }
 
-      // Get token from Supabase session or localStorage
-      let token = localStorage.getItem('dispotree_token') || localStorage.getItem('token');
+      // Get token from Supabase session or localStorage (try all possible token keys)
+      let token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token') || localStorage.getItem('token');
 
       try {
         const { supabase } = await import('@/lib/supabase');

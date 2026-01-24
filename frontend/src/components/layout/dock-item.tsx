@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, useSpring, useTransform } from 'framer-motion';
 import { LucideIcon } from 'lucide-react';
@@ -28,7 +28,10 @@ export function DockItem({ href, label, icon: Icon, mouseX }: DockItemProps) {
     e.preventDefault();
     e.stopPropagation();
     console.log('Dock item clicked:', href);
-    router.push(href);
+    // Small delay to ensure click registers properly
+    setTimeout(() => {
+      router.push(href);
+    }, 10);
   }, [href, router]);
 
   // Calculate size based on distance with spring physics
@@ -38,23 +41,25 @@ export function DockItem({ href, label, icon: Icon, mouseX }: DockItemProps) {
     mass: 0.5,
   });
 
-  // Update size when mouseX changes
-  if (ref.current && mouseX !== null) {
-    const rect = ref.current.getBoundingClientRect();
-    const itemCenterX = rect.left + rect.width / 2;
-    const dist = Math.abs(mouseX - itemCenterX);
+  // Update size when mouseX changes - properly in useEffect
+  useEffect(() => {
+    if (ref.current && mouseX !== null) {
+      const rect = ref.current.getBoundingClientRect();
+      const itemCenterX = rect.left + rect.width / 2;
+      const dist = Math.abs(mouseX - itemCenterX);
 
-    // Calculate new size with cosine-based falloff
-    if (dist < MAGNIFICATION_DISTANCE) {
-      const magnificationFactor = Math.cos((dist / MAGNIFICATION_DISTANCE) * (Math.PI / 2));
-      const newSize = BASE_SIZE + (MAX_SIZE - BASE_SIZE) * magnificationFactor;
-      sizeSpring.set(newSize);
+      // Calculate new size with cosine-based falloff
+      if (dist < MAGNIFICATION_DISTANCE) {
+        const magnificationFactor = Math.cos((dist / MAGNIFICATION_DISTANCE) * (Math.PI / 2));
+        const newSize = BASE_SIZE + (MAX_SIZE - BASE_SIZE) * magnificationFactor;
+        sizeSpring.set(newSize);
+      } else {
+        sizeSpring.set(BASE_SIZE);
+      }
     } else {
       sizeSpring.set(BASE_SIZE);
     }
-  } else if (mouseX === null) {
-    sizeSpring.set(BASE_SIZE);
-  }
+  }, [mouseX, sizeSpring]);
 
   // Transform size to icon size (50% of container)
   const iconSize = useTransform(sizeSpring, (size) => size * 0.5);

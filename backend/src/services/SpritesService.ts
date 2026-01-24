@@ -137,17 +137,28 @@ class SpritesService {
     const credentialStore = getCredentialStore();
     const credential = await credentialStore.getCredential(`sprites:org:${organizationId}`);
 
-    if (!credential) {
-      throw new Error('Sprites API token not configured for this organization');
+    if (credential) {
+      // Cache for 5 minutes
+      this.tokenCache.set(organizationId, {
+        token: credential.password,
+        expiresAt: Date.now() + 300000,
+      });
+      return credential.password;
     }
 
-    // Cache for 5 minutes
-    this.tokenCache.set(organizationId, {
-      token: credential.password,
-      expiresAt: Date.now() + 300000,
-    });
+    // Fallback to environment variable for local development
+    const envToken = process.env.SPRITES_API_TOKEN;
+    if (envToken && envToken !== 'your_token_here') {
+      console.log('[SpritesService] Using SPRITES_API_TOKEN from environment');
+      // Cache env token too
+      this.tokenCache.set(organizationId, {
+        token: envToken,
+        expiresAt: Date.now() + 300000,
+      });
+      return envToken;
+    }
 
-    return credential.password;
+    throw new Error('Sprites API token not configured. Set SPRITES_API_TOKEN in .env or configure in Settings.');
   }
 
   /**
@@ -203,6 +214,97 @@ class SpritesService {
     } catch {
       return null;
     }
+  }
+
+  // ============================================================================
+  // GITHUB TOKEN MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get GitHub token for organization from secure storage
+   * Used to authenticate git operations in sprites (push, PR creation, etc.)
+   */
+  async getGitHubToken(organizationId: string): Promise<string | null> {
+    // Check cache first
+    const cacheKey = `github:${organizationId}`;
+    const cached = this.tokenCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.token;
+    }
+
+    // Retrieve from SecureCredentialStore
+    const credentialStore = getCredentialStore();
+    const credential = await credentialStore.getCredential(`github:org:${organizationId}`);
+
+    if (credential) {
+      // Cache for 5 minutes
+      this.tokenCache.set(cacheKey, {
+        token: credential.password,
+        expiresAt: Date.now() + 300000,
+      });
+      return credential.password;
+    }
+
+    // Fallback to environment variable for local development
+    const envToken = process.env.GITHUB_TOKEN;
+    if (envToken && envToken !== 'your_token_here') {
+      console.log('[SpritesService] Using GITHUB_TOKEN from environment');
+      this.tokenCache.set(cacheKey, {
+        token: envToken,
+        expiresAt: Date.now() + 300000,
+      });
+      return envToken;
+    }
+
+    return null;
+  }
+
+  /**
+   * Store GitHub token for organization
+   */
+  async setGitHubToken(organizationId: string, token: string): Promise<void> {
+    const credentialStore = getCredentialStore();
+    await credentialStore.setCredential(
+      `github:org:${organizationId}`,
+      'github_pat',
+      token,
+      { type: 'github', organizationId }
+    );
+
+    // Update cache
+    const cacheKey = `github:${organizationId}`;
+    this.tokenCache.set(cacheKey, {
+      token,
+      expiresAt: Date.now() + 300000,
+    });
+
+    console.log(`🔐 GitHub token stored for organization: ${organizationId}`);
+  }
+
+  /**
+   * Remove GitHub token for organization
+   */
+  async removeGitHubToken(organizationId: string): Promise<boolean> {
+    const credentialStore = getCredentialStore();
+    const deleted = await credentialStore.deleteCredential(`github:org:${organizationId}`);
+    this.tokenCache.delete(`github:${organizationId}`);
+    return deleted;
+  }
+
+  /**
+   * Check if organization has GitHub token configured
+   */
+  async hasGitHubToken(organizationId: string): Promise<boolean> {
+    const token = await this.getGitHubToken(organizationId);
+    return token !== null;
+  }
+
+  /**
+   * Get GitHub token prefix for display (first 8 chars)
+   */
+  async getGitHubTokenPrefix(organizationId: string): Promise<string | null> {
+    const token = await this.getGitHubToken(organizationId);
+    return token ? token.substring(0, 8) : null;
   }
 
   // ============================================================================
@@ -372,8 +474,12 @@ class SpritesService {
 
   /**
    * Initialize sprite with repo clone and Claude setup
+   * Can be called manually to re-run initialization if it failed
+   *
+   * When GitHub is configured, automatically creates a feature branch for the sprite
+   * to work on. This allows Claude to make commits and create PRs without touching main.
    */
-  private async initializeSprite(spriteId: string): Promise<void> {
+  async initializeSprite(spriteId: string): Promise<void> {
     const sprite = await ProjectSprite.findByPk(spriteId);
     if (!sprite) throw new Error('Sprite not found');
 
@@ -381,41 +487,118 @@ class SpritesService {
       // Wait for sprite to be ready
       await this.waitForSpriteReady(sprite.organizationId, sprite.spriteName);
 
-      // Execute initialization commands
-      const commands = [
-        // Clone repository
-        `git clone --depth 1 ${sprite.repoUrl} ${sprite.workingDirectory}`,
-        // Checkout branch if not main
-        sprite.branch !== 'main' ? `cd ${sprite.workingDirectory} && git checkout ${sprite.branch}` : null,
-        // Create working directory if clone fails (empty project)
+      // Get GitHub token for the organization (if configured)
+      const githubToken = await this.getGitHubToken(sprite.organizationId);
+      let githubConfigured = false;
+
+      // Generate feature branch name for this sprite
+      // Format: sprite/{spriteName} - unique per sprite, easy to identify
+      const featureBranch = `sprite/${sprite.spriteName}`;
+
+      // Build initialization commands
+      const commands: string[] = [];
+
+      // Configure GitHub authentication first (if token available)
+      if (githubToken) {
+        commands.push(
+          // Configure git credential helper to use the token
+          `git config --global credential.helper store`,
+          // Store credentials for GitHub (token as password, 'x-access-token' as username for PAT)
+          `echo "https://x-access-token:${githubToken}@github.com" > ~/.git-credentials`,
+          `chmod 600 ~/.git-credentials`,
+          // Install GitHub CLI if not present
+          `which gh || (curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt-get update && sudo apt-get install gh -y)`,
+          // Authenticate gh CLI with the token
+          `echo "${githubToken}" | gh auth login --with-token`,
+          // Configure git to use gh for authentication (backup method)
+          `gh auth setup-git`,
+          // Verify gh auth status
+          `gh auth status`
+        );
+      }
+
+      // Clone repository only if not already cloned (check for .git directory)
+      // Use authenticated URL for private repos
+      let cloneUrl = sprite.repoUrl;
+      if (githubToken && sprite.repoUrl.includes('github.com')) {
+        // Convert https://github.com/owner/repo to https://x-access-token:TOKEN@github.com/owner/repo
+        cloneUrl = sprite.repoUrl.replace(
+          'https://github.com/',
+          `https://x-access-token:${githubToken}@github.com/`
+        );
+      }
+      commands.push(
+        // Only clone if .git directory doesn't exist (repo not yet cloned)
+        `[ -d "${sprite.workingDirectory}/.git" ] || git clone ${cloneUrl} ${sprite.workingDirectory}`,
+        // Checkout base branch if not main (only if not already on it)
+        sprite.branch !== 'main' ? `cd ${sprite.workingDirectory} && git checkout ${sprite.branch} 2>/dev/null || true` : null,
+        // Create working directory if it doesn't exist (empty project case)
         `mkdir -p ${sprite.workingDirectory}`,
+        // Configure git user for commits (use a default, can be overridden)
+        `git config --global user.email "sprite@dispotree.com"`,
+        `git config --global user.name "Dispotree Sprite"`,
+        // Set the remote URL back to the clean URL (without token) for safety
+        githubToken ? `cd ${sprite.workingDirectory} && git remote set-url origin ${sprite.repoUrl} 2>/dev/null || true` : null
+      );
+
+      // Create and push feature branch (only if GitHub is configured)
+      if (githubToken) {
+        commands.push(
+          // Create the feature branch only if it doesn't already exist locally
+          `cd ${sprite.workingDirectory} && git rev-parse --verify ${featureBranch} 2>/dev/null || git checkout -b ${featureBranch}`,
+          // Switch to feature branch if not already on it
+          `cd ${sprite.workingDirectory} && git checkout ${featureBranch} 2>/dev/null || true`,
+          // Push the feature branch (will succeed if already pushed, or push new)
+          `cd ${sprite.workingDirectory} && git push -u origin ${featureBranch} 2>/dev/null || true`
+        );
+      }
+
+      // Install Claude CLI
+      commands.push(
         // Install Claude CLI if not present
         `which claude || npm install -g @anthropic-ai/claude-code`,
         // Verify Claude
-        `claude --version`,
-      ].filter(Boolean) as string[];
+        `claude --version`
+      );
+
+      // Filter out null commands
+      const filteredCommands = commands.filter(Boolean) as string[];
 
       let claudeConfigured = false;
+      let featureBranchCreated = false;
 
-      for (const command of commands) {
+      for (const command of filteredCommands) {
         try {
           const result = await this.execCommand(sprite.organizationId, sprite.spriteName, command);
           if (command.includes('claude --version') && result.exitCode === 0) {
             claudeConfigured = true;
+          }
+          if (command.includes('gh auth status') && result.exitCode === 0) {
+            githubConfigured = true;
+          }
+          if (command.includes(`git push -u origin ${featureBranch}`) && result.exitCode === 0) {
+            featureBranchCreated = true;
           }
         } catch (error) {
           console.warn(`Command failed (continuing): ${command}`, error);
         }
       }
 
+      // Determine the active branch - feature branch if created, otherwise base branch
+      const activeBranch = featureBranchCreated ? featureBranch : sprite.branch;
+
       await sprite.update({
         status: 'running',
         statusMessage: 'Ready',
         claudeConfigured,
+        githubConfigured,
+        featureBranch: featureBranchCreated ? featureBranch : null,
         lastAccessedAt: new Date(),
       });
 
       console.log(`✅ Sprite initialized: ${sprite.spriteName}`);
+      console.log(`   GitHub: ${githubConfigured ? 'yes' : 'no'}`);
+      console.log(`   Feature branch: ${featureBranchCreated ? featureBranch : 'none (working on ' + sprite.branch + ')'}`);
     } catch (error) {
       await sprite.update({
         status: 'error',
@@ -502,16 +685,38 @@ class SpritesService {
   }
 
   /**
-   * Stop a sprite (mark as stopped, sprite will hibernate automatically)
+   * Stop a sprite (mark as stopped and set URL to private)
+   * Note: Sprites.dev doesn't have a pause API - sprites auto-hibernate after 30s of inactivity.
+   * We set the URL to private so the public link won't work while "stopped".
    */
   async stopSprite(spriteId: string): Promise<void> {
     const sprite = await ProjectSprite.findByPk(spriteId);
     if (!sprite) throw new Error('Sprite not found');
 
-    // Sprites auto-hibernate, so we just update local status
+    // Store the previous auth setting so we can restore it on resume
+    const previousAuth = sprite.urlSettings?.auth || 'sprite';
+
+    // Set URL to private (requires auth) so public link won't work
+    try {
+      await this.request<void>(
+        sprite.organizationId,
+        'PUT',
+        `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/url`,
+        { auth: 'sprite' } // Require authentication
+      );
+    } catch (error) {
+      console.warn('Failed to set sprite URL to private:', error);
+      // Continue anyway - still mark as stopped locally
+    }
+
     await sprite.update({
       status: 'stopped',
       statusMessage: 'Stopped by user',
+      urlSettings: {
+        ...sprite.urlSettings,
+        auth: 'sprite',
+        previousAuth, // Store previous setting for resume
+      },
     });
   }
 
@@ -533,10 +738,29 @@ class SpritesService {
       throw new Error(`Failed to wake sprite: ${(error as Error).message}`);
     }
 
+    // Restore previous URL auth setting if it was public before
+    const previousAuth = (sprite.urlSettings as any)?.previousAuth;
+    if (previousAuth === 'public') {
+      try {
+        await this.request<void>(
+          sprite.organizationId,
+          'PUT',
+          `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/url`,
+          { auth: 'public' }
+        );
+      } catch (error) {
+        console.warn('Failed to restore sprite URL to public:', error);
+      }
+    }
+
     await sprite.update({
       status: 'running',
       statusMessage: 'Resumed',
       lastAccessedAt: new Date(),
+      urlSettings: {
+        ...sprite.urlSettings,
+        auth: previousAuth || sprite.urlSettings?.auth || 'sprite',
+      },
     });
 
     return sprite.reload();
@@ -796,21 +1020,74 @@ class SpritesService {
     console.log(`[SpritesService] Got org token for: ${sprite.organizationId}`);
 
     const params = new URLSearchParams();
+    const isTty = options.tty !== false;
     // Default to tty mode for terminal
-    params.append('tty', options.tty !== false ? 'true' : 'false');
-    if (options.command) params.append('cmd', options.command);
-    if (options.cols) params.append('cols', options.cols.toString());
-    if (options.rows) params.append('rows', options.rows.toString());
+    params.append('tty', isTty ? 'true' : 'false');
+
+    // Build command: Start Claude Code
+    let command = options.command;
+    if (!command && isTty) {
+      command = 'claude';
+    }
+
+    if (command) {
+      params.append('cmd', command);
+      console.log(`[SpritesService] Command: ${command}`);
+    } else {
+      throw new Error('No command specified for exec');
+    }
+
+    // Always pass cols/rows for proper terminal sizing
+    params.append('cols', (options.cols || 80).toString());
+    params.append('rows', (options.rows || 24).toString());
     // Note: sessionId might be used for reconnecting to existing sessions
-    // The Sprites API may or may not support this parameter
 
     const wsUrl = `wss://api.sprites.dev/v1/sprites/${encodeURIComponent(sprite.spriteName)}/exec?${params.toString()}`;
     console.log(`[SpritesService] Built WebSocket URL: ${wsUrl}`);
 
+    // Check actual sprite status from Sprites API and wake if needed
+    try {
+      const spriteStatus = await this.request<{ status: string }>(
+        sprite.organizationId,
+        'GET',
+        `/v1/sprites/${encodeURIComponent(sprite.spriteName)}`
+      );
+      console.log(`[SpritesService] Sprite actual status on Sprites.dev: ${spriteStatus.status}`);
+
+      if (spriteStatus.status === 'warm' || spriteStatus.status === 'cold') {
+        console.log(`[SpritesService] Sprite is ${spriteStatus.status}, waking up and waiting...`);
+        // Update local status
+        await sprite.update({ status: 'initializing', statusMessage: 'Waking up sprite...' });
+
+        // Wait for sprite to be ready (poll until status is 'running' or 'hot')
+        const maxWaitMs = 30000; // 30 seconds
+        const startTime = Date.now();
+        while (Date.now() - startTime < maxWaitMs) {
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+          try {
+            const checkStatus = await this.request<{ status: string }>(
+              sprite.organizationId,
+              'GET',
+              `/v1/sprites/${encodeURIComponent(sprite.spriteName)}`
+            );
+            console.log(`[SpritesService] Sprite wake check: ${checkStatus.status}`);
+            if (checkStatus.status === 'running' || checkStatus.status === 'hot') {
+              console.log(`[SpritesService] Sprite is now running!`);
+              await sprite.update({ status: 'running', statusMessage: null });
+              break;
+            }
+          } catch (pollError) {
+            console.warn(`[SpritesService] Error polling sprite status:`, pollError);
+          }
+        }
+      }
+    } catch (statusError) {
+      console.warn(`[SpritesService] Could not check sprite status:`, statusError);
+    }
+
     // Update last accessed
     await sprite.update({
       lastAccessedAt: new Date(),
-      status: 'running',
     });
 
     return { wsUrl, token };

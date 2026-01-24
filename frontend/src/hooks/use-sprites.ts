@@ -262,6 +262,41 @@ export function useResumeSprite() {
 }
 
 /**
+ * Initialize or re-initialize a sprite (clone repo, setup Claude)
+ */
+export function useInitializeSprite() {
+  const queryClient = useQueryClient();
+  const updateSpriteStatus = useSpriteStore((state) => state.updateSpriteStatus);
+
+  return useMutation({
+    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+      console.log('[useInitializeSprite] Starting initialization for sprite:', id);
+      // Note: api.post already extracts data.data from response
+      const sprite = await api.post<Sprite>(`/api/sprites/${id}/initialize`);
+      console.log('[useInitializeSprite] Initialization complete:', sprite);
+      return { sprite, projectId };
+    },
+    onMutate: async ({ projectId }) => {
+      console.log('[useInitializeSprite] onMutate - setting status to initializing');
+      // Optimistic update to 'initializing' status
+      updateSpriteStatus(projectId, 'initializing');
+    },
+    onSuccess: ({ sprite, projectId }) => {
+      console.log('[useInitializeSprite] onSuccess - initialization completed');
+      // Update cache
+      queryClient.setQueryData(spriteKeys.detail(sprite.id), sprite);
+      queryClient.setQueryData(spriteKeys.byProject(projectId), sprite);
+      queryClient.invalidateQueries({ queryKey: spriteKeys.lists() });
+    },
+    onError: (error, { projectId }) => {
+      console.error('[useInitializeSprite] onError - initialization failed:', error);
+      // Revert optimistic update
+      queryClient.invalidateQueries({ queryKey: spriteKeys.byProject(projectId) });
+    },
+  });
+}
+
+/**
  * Create a checkpoint for a sprite
  */
 export function useCreateCheckpoint() {
@@ -379,6 +414,90 @@ export function useRemoveSpritesToken() {
       queryClient.invalidateQueries({ queryKey: spriteKeys.config() });
       // Invalidate all sprites since they won't work without token
       queryClient.invalidateQueries({ queryKey: spriteKeys.all });
+    },
+  });
+}
+
+// ============================================================================
+// GITHUB TOKEN CONFIGURATION
+// ============================================================================
+
+/**
+ * Get GitHub configuration status
+ */
+export function useGitHubConfig() {
+  return useQuery({
+    queryKey: [...spriteKeys.config(), 'github'],
+    queryFn: () => api.get<{ configured: boolean; tokenPrefix: string | null }>('/api/sprites/config/github'),
+    staleTime: 30000, // Cache for 30 seconds
+  });
+}
+
+/**
+ * Set GitHub Personal Access Token
+ */
+export function useSetGitHubToken() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (token: string) => {
+      await api.post('/api/sprites/config/github', { token });
+    },
+    onSuccess: () => {
+      // Invalidate GitHub config to refresh status
+      queryClient.invalidateQueries({ queryKey: [...spriteKeys.config(), 'github'] });
+    },
+  });
+}
+
+/**
+ * Remove GitHub token
+ */
+export function useRemoveGitHubToken() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      await api.delete('/api/sprites/config/github');
+    },
+    onSuccess: () => {
+      // Invalidate GitHub config to refresh status
+      queryClient.invalidateQueries({ queryKey: [...spriteKeys.config(), 'github'] });
+    },
+  });
+}
+
+// ============================================================================
+// SPRITE SETTINGS
+// ============================================================================
+
+/**
+ * Update sprite settings (e.g., autoShutdownAfterTask)
+ */
+export function useUpdateSpriteSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      projectId,
+      settings,
+    }: {
+      spriteId: string;
+      projectId: string;
+      settings: { autoShutdownAfterTask?: boolean };
+    }) => {
+      const sprite = await api.patch<Sprite>(
+        `/api/sprites/${spriteId}/settings`,
+        settings
+      );
+      return { sprite, projectId };
+    },
+    onSuccess: ({ sprite, projectId }) => {
+      // Update cache
+      queryClient.setQueryData(spriteKeys.detail(sprite.id), sprite);
+      queryClient.setQueryData(spriteKeys.byProject(projectId), sprite);
+      queryClient.invalidateQueries({ queryKey: spriteKeys.lists() });
     },
   });
 }

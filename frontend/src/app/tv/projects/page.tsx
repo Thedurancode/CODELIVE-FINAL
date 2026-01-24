@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '@/lib/api';
 import type { Project, ProjectStatus, PaginatedResponse } from '@/types';
-import { RefreshCw, Wifi, WifiOff, Loader2, Github, AlertTriangle, Calendar, Clock, Rocket, PauseCircle, CheckCircle2, Archive, XCircle, X, ExternalLink, CalendarDays, User, GitCommit, CircleDot, MessageSquare, Globe, Play, Maximize, Minimize, Settings, Pause, SkipForward, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff, Loader2, Github, AlertTriangle, Calendar, Clock, Rocket, PauseCircle, CheckCircle2, Archive, XCircle, X, ExternalLink, CalendarDays, User, GitCommit, CircleDot, MessageSquare, Globe, Play, Maximize, Minimize, Settings, Pause, SkipForward, ChevronLeft, ChevronRight, QrCode, Smartphone } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { useTVRemoteReceiver, generateRoomCode, type TVRemoteHandlers, type SlideConfig as RemoteSlideConfig } from '@/hooks/use-tv-remote';
 
 // Create a client for this standalone page
 const queryClient = new QueryClient();
 
 // ============ SLIDESHOW TYPES ============
-type SlideType = 'overview' | 'column-active' | 'column-on_hold' | 'column-completed' | 'column-archived' | 'logo' | 'top3' | 'video' | 'youtube' | 'recent-issues' | 'recent-commits' | 'hacker-news';
+type SlideType = 'overview' | 'column-active' | 'column-on_hold' | 'column-completed' | 'column-archived' | 'logo' | 'top3' | 'video' | 'youtube' | 'recent-issues' | 'recent-commits' | 'hacker-news' | 'reddit';
 
 interface SlideConfig {
   type: SlideType;
@@ -22,15 +25,20 @@ interface SlideConfig {
 interface SlideshowSettings {
   enabled: boolean;
   slides: SlideConfig[];
+  redditSubreddits?: string[];
 }
+
+const DEFAULT_SUBREDDITS = ['news', 'technology', 'worldnews', 'science', 'business', 'stocks', 'realestate', 'programming'];
 
 const DEFAULT_SLIDESHOW_SETTINGS: SlideshowSettings = {
   enabled: false,
   slides: [
     { type: 'overview', duration: 20, label: 'All Projects' },
-    { type: 'column-active', duration: 20, label: 'Active Projects' },
+    { type: 'column-active', duration: 20, label: 'In Talks' },
+    { type: 'reddit', duration: 30, label: 'Reddit Feed' },
     { type: 'logo', duration: 5, label: 'Logo' },
   ],
+  redditSubreddits: DEFAULT_SUBREDDITS,
 };
 
 // Load settings from localStorage
@@ -70,6 +78,7 @@ function SettingsPanel({
     { type: 'recent-issues', label: 'Recent GitHub Issues' },
     { type: 'recent-commits', label: 'Recent Commits' },
     { type: 'hacker-news', label: 'Hacker News Feed' },
+    { type: 'reddit', label: 'Reddit Feed' },
     { type: 'column-active', label: 'Active Column Only' },
     { type: 'column-on_hold', label: 'On Hold Column Only' },
     { type: 'column-completed', label: 'Completed Column Only' },
@@ -359,47 +368,315 @@ function SettingsPanel({
 
 // ============ LOGO SLIDE ============
 function LogoSlide() {
-  return (
-    <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-zinc-900 via-black to-zinc-900 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
-      </div>
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rendererRef = useRef<any>(null);
 
-      {/* Content */}
-      <div className="relative z-10 flex flex-col items-center animate-fade-in">
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Dynamic import Three.js to avoid SSR issues
+    const initThree = async () => {
+      const THREE = await import('three');
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Scene setup
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 2000);
+      camera.position.z = 100;
+
+      const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+      rendererRef.current = renderer;
+
+      // ============ PARTICLE SYSTEM 1: Flowing particles ============
+      const particleCount1 = 3000;
+      const positions1 = new Float32Array(particleCount1 * 3);
+      const colors1 = new Float32Array(particleCount1 * 3);
+      const sizes1 = new Float32Array(particleCount1);
+
+      for (let i = 0; i < particleCount1; i++) {
+        positions1[i * 3] = (Math.random() - 0.5) * 400;
+        positions1[i * 3 + 1] = (Math.random() - 0.5) * 400;
+        positions1[i * 3 + 2] = (Math.random() - 0.5) * 400;
+
+        const colorChoice = Math.random();
+        if (colorChoice < 0.4) {
+          colors1[i * 3] = 0.1;
+          colors1[i * 3 + 1] = 0.6 + Math.random() * 0.4;
+          colors1[i * 3 + 2] = 1;
+        } else if (colorChoice < 0.7) {
+          colors1[i * 3] = 0.5 + Math.random() * 0.5;
+          colors1[i * 3 + 1] = 0.1;
+          colors1[i * 3 + 2] = 1;
+        } else {
+          colors1[i * 3] = 1;
+          colors1[i * 3 + 1] = 1;
+          colors1[i * 3 + 2] = 1;
+        }
+
+        sizes1[i] = Math.random() * 3 + 1;
+      }
+
+      const geometry1 = new THREE.BufferGeometry();
+      geometry1.setAttribute('position', new THREE.BufferAttribute(positions1, 3));
+      geometry1.setAttribute('color', new THREE.BufferAttribute(colors1, 3));
+      geometry1.setAttribute('size', new THREE.BufferAttribute(sizes1, 1));
+
+      const material1 = new THREE.ShaderMaterial({
+        uniforms: {
+          time: { value: 0 },
+          pixelRatio: { value: renderer.getPixelRatio() },
+        },
+        vertexShader: `
+          attribute float size;
+          attribute vec3 color;
+          varying vec3 vColor;
+          varying float vAlpha;
+          uniform float time;
+          uniform float pixelRatio;
+
+          void main() {
+            vColor = color;
+            vec3 pos = position;
+
+            // Spiral motion
+            float angle = time * 0.5 + length(position.xy) * 0.01;
+            pos.x += sin(angle + position.z * 0.01) * 10.0;
+            pos.y += cos(angle + position.z * 0.01) * 10.0;
+            pos.z += sin(time * 0.3 + position.x * 0.01) * 5.0;
+
+            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+            float dist = length(mvPosition.xyz);
+            vAlpha = smoothstep(300.0, 50.0, dist);
+            gl_PointSize = size * pixelRatio * (200.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          varying float vAlpha;
+
+          void main() {
+            float dist = length(gl_PointCoord - vec2(0.5));
+            if (dist > 0.5) discard;
+            float alpha = (1.0 - smoothstep(0.0, 0.5, dist)) * vAlpha * 0.6;
+            gl_FragColor = vec4(vColor * 1.5, alpha);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+
+      const particles1 = new THREE.Points(geometry1, material1);
+      scene.add(particles1);
+
+      // ============ PARTICLE SYSTEM 2: Ring particles ============
+      const ringCount = 1500;
+      const ringPositions = new Float32Array(ringCount * 3);
+      const ringColors = new Float32Array(ringCount * 3);
+      const ringSizes = new Float32Array(ringCount);
+
+      for (let i = 0; i < ringCount; i++) {
+        const ringRadius = 40 + Math.random() * 60;
+        const theta = Math.random() * Math.PI * 2;
+        ringPositions[i * 3] = ringRadius * Math.cos(theta);
+        ringPositions[i * 3 + 1] = (Math.random() - 0.5) * 20;
+        ringPositions[i * 3 + 2] = ringRadius * Math.sin(theta);
+
+        ringColors[i * 3] = 0.3 + Math.random() * 0.7;
+        ringColors[i * 3 + 1] = 0.8 + Math.random() * 0.2;
+        ringColors[i * 3 + 2] = 1;
+
+        ringSizes[i] = Math.random() * 2 + 0.5;
+      }
+
+      const ringGeometry = new THREE.BufferGeometry();
+      ringGeometry.setAttribute('position', new THREE.BufferAttribute(ringPositions, 3));
+      ringGeometry.setAttribute('color', new THREE.BufferAttribute(ringColors, 3));
+      ringGeometry.setAttribute('size', new THREE.BufferAttribute(ringSizes, 1));
+
+      const ringMaterial = new THREE.ShaderMaterial({
+        uniforms: { time: { value: 0 }, pixelRatio: { value: renderer.getPixelRatio() } },
+        vertexShader: `
+          attribute float size;
+          attribute vec3 color;
+          varying vec3 vColor;
+          uniform float time;
+          uniform float pixelRatio;
+
+          void main() {
+            vColor = color;
+            vec3 pos = position;
+            float angle = time * 0.8;
+            float c = cos(angle);
+            float s = sin(angle);
+            pos.xz = mat2(c, -s, s, c) * pos.xz;
+            pos.y += sin(time * 2.0 + position.x * 0.1) * 3.0;
+
+            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+            gl_PointSize = size * pixelRatio * (150.0 / -mvPosition.z);
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          void main() {
+            float dist = length(gl_PointCoord - vec2(0.5));
+            if (dist > 0.5) discard;
+            float alpha = (1.0 - smoothstep(0.0, 0.5, dist)) * 0.8;
+            gl_FragColor = vec4(vColor, alpha);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+
+      const ringParticles = new THREE.Points(ringGeometry, ringMaterial);
+      scene.add(ringParticles);
+
+      // ============ GEOMETRIC SHAPES: Wireframe icosahedrons ============
+      const icoGeometry = new THREE.IcosahedronGeometry(35, 1);
+      const icoMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.15,
+      });
+      const icosahedron = new THREE.Mesh(icoGeometry, icoMaterial);
+      scene.add(icosahedron);
+
+      const icoGeometry2 = new THREE.IcosahedronGeometry(50, 0);
+      const icoMaterial2 = new THREE.MeshBasicMaterial({
+        color: 0x8844ff,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.1,
+      });
+      const icosahedron2 = new THREE.Mesh(icoGeometry2, icoMaterial2);
+      scene.add(icosahedron2);
+
+      // ============ LIGHT BEAMS ============
+      const beamCount = 8;
+      const beams: THREE.Mesh[] = [];
+      for (let i = 0; i < beamCount; i++) {
+        const beamGeometry = new THREE.CylinderGeometry(0.5, 2, 200, 8);
+        const beamMaterial = new THREE.MeshBasicMaterial({
+          color: i % 2 === 0 ? 0x00ffff : 0x8844ff,
+          transparent: true,
+          opacity: 0.05,
+        });
+        const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+        beam.rotation.x = Math.PI / 2;
+        beam.rotation.z = (i / beamCount) * Math.PI * 2;
+        beam.position.z = -50;
+        beams.push(beam);
+        scene.add(beam);
+      }
+
+      // ============ ANIMATION LOOP ============
+      let animationId: number;
+      const clock = new THREE.Clock();
+
+      const animate = () => {
+        animationId = requestAnimationFrame(animate);
+        const elapsedTime = clock.getElapsedTime();
+
+        // Update shader uniforms
+        material1.uniforms.time.value = elapsedTime;
+        ringMaterial.uniforms.time.value = elapsedTime;
+
+        // Rotate main particle system
+        particles1.rotation.y = elapsedTime * 0.05;
+        particles1.rotation.x = Math.sin(elapsedTime * 0.1) * 0.1;
+
+        // Rotate geometric shapes
+        icosahedron.rotation.x = elapsedTime * 0.2;
+        icosahedron.rotation.y = elapsedTime * 0.3;
+        icosahedron2.rotation.x = -elapsedTime * 0.15;
+        icosahedron2.rotation.y = -elapsedTime * 0.2;
+
+        // Animate beams
+        beams.forEach((beam, i) => {
+          beam.rotation.z = (i / beamCount) * Math.PI * 2 + elapsedTime * 0.2;
+          (beam.material as THREE.MeshBasicMaterial).opacity = 0.03 + Math.sin(elapsedTime * 2 + i) * 0.02;
+        });
+
+        // Camera subtle movement
+        camera.position.x = Math.sin(elapsedTime * 0.2) * 5;
+        camera.position.y = Math.cos(elapsedTime * 0.15) * 3;
+        camera.lookAt(0, 0, 0);
+
+        renderer.render(scene, camera);
+      };
+
+      animate();
+
+      // Handle resize
+      const handleResize = () => {
+        if (!container) return;
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      // Cleanup
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        cancelAnimationFrame(animationId);
+        renderer.dispose();
+        geometry1.dispose();
+        material1.dispose();
+        ringGeometry.dispose();
+        ringMaterial.dispose();
+        icoGeometry.dispose();
+        icoMaterial.dispose();
+        icoGeometry2.dispose();
+        icoMaterial2.dispose();
+        beams.forEach(beam => {
+          beam.geometry.dispose();
+          (beam.material as THREE.Material).dispose();
+        });
+        if (container && renderer.domElement) {
+          container.removeChild(renderer.domElement);
+        }
+      };
+    };
+
+    const cleanup = initThree();
+    return () => {
+      cleanup.then((cleanupFn) => cleanupFn && cleanupFn());
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full bg-black relative overflow-hidden">
+      {/* Three.js animated background */}
+      <div ref={containerRef} className="absolute inset-0 z-0" />
+
+      {/* Vignette overlay */}
+      <div className="absolute inset-0 z-10 pointer-events-none" style={{
+        background: 'radial-gradient(ellipse at center, transparent 0%, transparent 40%, rgba(0,0,0,0.8) 100%)'
+      }} />
+
+      {/* Logo - static and prominent */}
+      <div className="relative z-20">
         <img
           src="https://i.ibb.co/nsx4Njzz/CODELIVE1.png"
           alt="CodeLive"
-          className="h-48 mb-8 drop-shadow-2xl animate-float"
+          className="h-64 drop-shadow-2xl"
+          style={{
+            filter: 'drop-shadow(0 0 60px rgba(0, 200, 255, 0.4)) drop-shadow(0 0 120px rgba(136, 68, 255, 0.3))'
+          }}
         />
-        <p className="text-4xl text-zinc-400 font-light tracking-wider">Project Management</p>
-        <div className="flex items-center gap-3 mt-6">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.2s' }} />
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" style={{ animationDelay: '0.4s' }} />
-        </div>
       </div>
-
-      {/* CSS for custom animations */}
-      <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        @keyframes fade-in {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-float {
-          animation: float 3s ease-in-out infinite;
-        }
-        .animate-fade-in {
-          animation: fade-in 0.8s ease-out;
-        }
-      `}</style>
     </div>
   );
 }
@@ -1339,6 +1616,329 @@ function HackerNewsSlide() {
   );
 }
 
+// ============ REDDIT SLIDE ============
+interface RedditPostItem {
+  id: string;
+  title: string;
+  author: string;
+  subreddit: string;
+  url: string;
+  permalink: string;
+  thumbnail: string | null;
+  preview: string | null;
+  selftext: string;
+  score: number;
+  numComments: number;
+  createdAt: string;
+  flair: string | null;
+  isImage?: boolean;
+}
+
+// Helper to get the best image URL from a post
+function getPostImage(post: RedditPostItem): string | null {
+  // Priority: preview > direct image URL > thumbnail
+  if (post.preview) return post.preview;
+  if (post.isImage && post.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(post.url)) return post.url;
+  if (post.thumbnail && !['self', 'default', 'nsfw', 'spoiler', ''].includes(post.thumbnail)) return post.thumbnail;
+  return null;
+}
+
+const SUBREDDIT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  news: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+  technology: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+  worldnews: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
+  science: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/30' },
+  business: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+  stocks: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+  realestate: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+  programming: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/30' },
+};
+
+function getSubredditColor(subreddit: string) {
+  return SUBREDDIT_COLORS[subreddit.toLowerCase()] || { bg: 'bg-zinc-500/20', text: 'text-zinc-400', border: 'border-zinc-500/30' };
+}
+
+function RedditSlide({ subreddits = DEFAULT_SUBREDDITS }: { subreddits?: string[] }) {
+  const [posts, setPosts] = useState<RedditPostItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Fetch posts from our backend
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          subreddits: subreddits.join(','),
+          sort: 'hot',
+          limit: '10',
+          totalLimit: '30',
+        });
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${apiUrl}/api/reddit/feed?${params.toString()}`);
+        const data = await res.json();
+
+        // Handle nested response structure: { success: true, data: { posts: [...] } }
+        const postsArray = data?.data?.posts || data?.posts || [];
+        if (Array.isArray(postsArray) && postsArray.length > 0) {
+          setPosts(postsArray);
+        } else {
+          setError('No posts returned from Reddit API');
+        }
+      } catch (err) {
+        console.error('Failed to fetch Reddit posts:', err);
+        setError(err instanceof Error ? err.message : 'Failed to connect to backend');
+      }
+      setIsLoading(false);
+    };
+
+    fetchPosts();
+    const refreshInterval = setInterval(fetchPosts, 300000); // Refresh every 5 minutes
+    return () => clearInterval(refreshInterval);
+  }, [subreddits]);
+
+  // Cycle through posts one at a time
+  useEffect(() => {
+    if (posts.length === 0) return;
+
+    const interval = setInterval(() => {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setCurrentIndex((prev) => (prev + 1) % posts.length);
+        setIsTransitioning(false);
+      }, 500);
+    }, 8000); // Show each post for 8 seconds
+
+    return () => clearInterval(interval);
+  }, [posts.length]);
+
+  const currentPost = posts[currentIndex];
+
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+  };
+
+  const formatScore = (score: number) => {
+    if (score >= 1000000) return `${(score / 1000000).toFixed(1)}M`;
+    if (score >= 1000) return `${(score / 1000).toFixed(1)}k`;
+    return score.toString();
+  };
+
+  const colors = currentPost ? getSubredditColor(currentPost.subreddit) : getSubredditColor('');
+
+  return (
+    <div className="flex flex-col h-full bg-gradient-to-br from-orange-950/20 via-black to-zinc-900 relative overflow-hidden">
+      {/* Animated background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-orange-600/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-orange-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.75s' }} />
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-10 py-6 relative z-10">
+        <div className="flex items-center gap-5">
+          <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/30">
+            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-4xl font-bold text-white">Reddit</h2>
+            <p className="text-orange-400/80 text-lg">Trending Posts</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
+          <span className="text-zinc-400 text-lg">Live Feed</span>
+        </div>
+      </div>
+
+      {/* Single Post Display */}
+      <div className="flex-1 px-12 pb-8 overflow-hidden relative z-10 flex items-center justify-center">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center gap-6">
+            <Loader2 className="h-20 w-20 text-orange-500 animate-spin" />
+            <p className="text-2xl text-zinc-500">Loading Reddit feed...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center gap-6 text-center">
+            <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center">
+              <AlertTriangle className="h-12 w-12 text-red-400" />
+            </div>
+            <div>
+              <p className="text-2xl text-white mb-2">Failed to load Reddit feed</p>
+              <p className="text-lg text-zinc-500 max-w-md">{error}</p>
+              <p className="text-sm text-zinc-600 mt-4">Make sure the backend is running on port 3001</p>
+            </div>
+          </div>
+        ) : currentPost ? (
+          <div className={`w-full h-full flex transition-all duration-700 ${isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+            {/* Left Side - Image */}
+            {(currentPost.preview || currentPost.thumbnail) && (
+              <div className="w-1/2 h-full relative overflow-hidden">
+                <img
+                  src={currentPost.preview || currentPost.thumbnail || ''}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800x600/1a1a1a/333?text=No+Image'; }}
+                />
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/90" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
+
+                {/* Score badge on image */}
+                <div className="absolute top-6 left-6 flex items-center gap-3 bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-orange-500/30">
+                  <svg className="w-8 h-8 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
+                  </svg>
+                  <span className="text-4xl font-black text-orange-400">{formatScore(currentPost.score)}</span>
+                </div>
+
+                {/* Hot badge */}
+                {currentPost.score > 5000 && (
+                  <div className="absolute top-6 right-6 px-5 py-3 text-xl font-bold rounded-2xl bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/30 animate-pulse">
+                    🔥 TRENDING
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Right Side - Content */}
+            <div className={`${(currentPost.preview || currentPost.thumbnail) ? 'w-1/2' : 'w-full'} h-full flex flex-col justify-center p-12`}>
+              {/* Subreddit & Time */}
+              <div className="flex items-center gap-4 mb-6">
+                <span className={`px-6 py-3 rounded-2xl ${colors.bg} ${colors.text} border-2 ${colors.border} font-bold text-2xl`}>
+                  r/{currentPost.subreddit}
+                </span>
+                <span className="text-zinc-500 text-xl">•</span>
+                <span className="text-orange-400 font-semibold text-xl">{formatTimeAgo(currentPost.createdAt)}</span>
+                {currentPost.flair && (
+                  <>
+                    <span className="text-zinc-500 text-xl">•</span>
+                    <span className="px-4 py-2 text-lg font-medium rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700">
+                      {currentPost.flair}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Title */}
+              <h2 className="text-5xl font-black text-white leading-tight mb-8 line-clamp-4">
+                {currentPost.title}
+              </h2>
+
+              {/* Self text preview (only if no image) */}
+              {currentPost.selftext && !(currentPost.preview || currentPost.thumbnail) && (
+                <p className="text-2xl text-zinc-400 mb-8 line-clamp-4 leading-relaxed">{currentPost.selftext}</p>
+              )}
+
+              {/* Stats Row */}
+              <div className="flex items-center gap-6 mb-8">
+                {!(currentPost.preview || currentPost.thumbnail) && (
+                  <div className="flex items-center gap-3 bg-orange-500/20 px-6 py-4 rounded-2xl border border-orange-500/30">
+                    <svg className="w-8 h-8 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
+                    </svg>
+                    <span className="text-4xl font-black text-orange-400">{formatScore(currentPost.score)}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 bg-zinc-800/80 px-6 py-4 rounded-2xl border border-zinc-700/50">
+                  <MessageSquare className="w-7 h-7 text-blue-400" />
+                  <span className="text-3xl font-bold text-white">{currentPost.numComments}</span>
+                  <span className="text-zinc-500 text-lg">comments</span>
+                </div>
+              </div>
+
+              {/* Author */}
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-400 via-red-500 to-purple-600 flex items-center justify-center shadow-lg shadow-orange-500/20">
+                  <User className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-sm uppercase tracking-wider">Posted by</p>
+                  <p className="text-2xl font-bold text-white">u/{currentPost.author}</p>
+                </div>
+              </div>
+
+              {/* Progress indicator */}
+              <div className="mt-auto pt-8">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-zinc-600 text-sm uppercase tracking-wider">Post {currentIndex + 1} of {posts.length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {posts.slice(0, 12).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all duration-500 ${
+                        idx === currentIndex
+                          ? 'w-12 bg-gradient-to-r from-orange-500 to-red-500'
+                          : idx < currentIndex
+                          ? 'w-6 bg-orange-500/30'
+                          : 'w-6 bg-zinc-800'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-2xl text-zinc-600">No posts available</p>
+        )}
+      </div>
+
+      {/* Bottom Bar - Next Up Preview with Thumbnails */}
+      {posts.length > 1 && !isLoading && (
+        <div className="relative z-10 border-t border-orange-500/20 bg-gradient-to-r from-black via-zinc-900/90 to-black backdrop-blur-md">
+          <div className="flex items-center gap-6 px-8 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
+              <span className="text-orange-400 font-bold text-sm uppercase tracking-widest">Coming Up</span>
+            </div>
+            <div className="flex-1 flex items-center gap-4 overflow-hidden">
+              {posts.slice(currentIndex + 1, currentIndex + 5).concat(posts.slice(0, Math.max(0, 4 - (posts.length - currentIndex - 1)))).slice(0, 4).map((post, idx) => {
+                const postColors = getSubredditColor(post.subreddit);
+                return (
+                  <div key={post.id} className={`flex items-center gap-3 transition-opacity ${idx === 0 ? 'opacity-90' : idx === 1 ? 'opacity-60' : 'opacity-40'}`}>
+                    {/* Thumbnail */}
+                    {(post.preview || post.thumbnail) && (
+                      <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-zinc-700/50">
+                        <img
+                          src={post.preview || post.thumbnail || ''}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      </div>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                      <span className={`text-xs font-bold ${postColors.text}`}>r/{post.subreddit}</span>
+                      <span className="text-zinc-400 text-sm truncate max-w-[200px]">{post.title}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============ TOP 3 SLIDE ============
 function Top3Slide({ projects }: { projects: Project[] }) {
   const activeProjects = projects
@@ -1347,18 +1947,57 @@ function Top3Slide({ projects }: { projects: Project[] }) {
 
   return (
     <div className="flex flex-col h-full p-12 bg-gradient-to-br from-zinc-900 via-black to-zinc-900">
-      <h2 className="text-5xl font-bold text-emerald-400 mb-12 text-center">Top Active Projects</h2>
+      <motion.h2
+        initial={{ opacity: 0, y: -50, scale: 0.8 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="text-5xl font-bold text-emerald-400 mb-12 text-center"
+      >
+        Top Projects In Talks
+      </motion.h2>
       <div className="flex-1 grid grid-cols-3 gap-8">
         {activeProjects.map((project, index) => (
-          <div
+          <motion.div
             key={project.id}
-            className="flex flex-col bg-zinc-900/80 rounded-3xl border border-zinc-700 p-8 transform hover:scale-105 transition-transform"
-            style={{ animationDelay: `${index * 0.2}s` }}
+            initial={{
+              opacity: 0,
+              y: 150,
+              scale: 0.7,
+              rotateY: index === 1 ? 0 : index === 0 ? 25 : -25,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              rotateY: 0,
+            }}
+            transition={{
+              duration: 0.8,
+              delay: index * 0.15 + 0.3,
+              ease: [0.25, 0.46, 0.45, 0.94],
+            }}
+            whileHover={{
+              scale: 1.05,
+              y: -10,
+              boxShadow: '0 25px 50px rgba(16, 185, 129, 0.2)',
+              transition: { duration: 0.2 }
+            }}
+            className="flex flex-col bg-zinc-900/80 rounded-3xl border border-zinc-700 p-8"
           >
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-4xl font-bold text-emerald-400">
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 400,
+                  damping: 15,
+                  delay: index * 0.15 + 0.5,
+                }}
+                className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-4xl font-bold text-emerald-400"
+              >
                 {index + 1}
-              </div>
+              </motion.div>
               <div className="flex-1">
                 <h3 className="text-2xl font-bold text-white line-clamp-2">{project.title}</h3>
               </div>
@@ -1368,10 +2007,16 @@ function Top3Slide({ projects }: { projects: Project[] }) {
             )}
             {project.tags && project.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
-                {project.tags.slice(0, 3).map(tag => (
-                  <span key={tag} className="px-3 py-1 bg-zinc-800 text-zinc-300 rounded-full text-sm">
+                {project.tags.slice(0, 3).map((tag, tagIndex) => (
+                  <motion.span
+                    key={tag}
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.15 + tagIndex * 0.05 + 0.7 }}
+                    className="px-3 py-1 bg-zinc-800 text-zinc-300 rounded-full text-sm"
+                  >
                     {tag}
-                  </span>
+                  </motion.span>
                 ))}
               </div>
             )}
@@ -1379,12 +2024,17 @@ function Top3Slide({ projects }: { projects: Project[] }) {
               {project.githubUrl && <Github className="h-6 w-6" />}
               {project.deploymentUrl && <Globe className="h-6 w-6 text-emerald-400" />}
             </div>
-          </div>
+          </motion.div>
         ))}
         {activeProjects.length === 0 && (
-          <div className="col-span-3 flex items-center justify-center text-2xl text-zinc-600">
-            No active projects
-          </div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="col-span-3 flex items-center justify-center text-2xl text-zinc-600"
+          >
+            No projects in talks
+          </motion.div>
         )}
       </div>
     </div>
@@ -1403,18 +2053,60 @@ function SingleColumnSlide({ projects, status, config }: {
   return (
     <div className="flex flex-col h-full p-8 bg-gradient-to-br from-zinc-900 via-black to-zinc-900">
       {/* Header */}
-      <div className="flex items-center justify-center gap-6 mb-8">
-        <Icon className={`h-16 w-16 ${config.headerColor}`} />
+      <motion.div
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+        className="flex items-center justify-center gap-6 mb-8"
+      >
+        <motion.div
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.2 }}
+        >
+          <Icon className={`h-16 w-16 ${config.headerColor}`} />
+        </motion.div>
         <h2 className={`text-6xl font-bold ${config.headerColor}`}>{config.label}</h2>
-        <span className={`px-6 py-3 text-3xl font-bold rounded-full border ${config.countColor}`}>
+        <motion.span
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 25, delay: 0.3 }}
+          className={`px-6 py-3 text-3xl font-bold rounded-full border ${config.countColor}`}
+        >
           {columnProjects.length}
-        </span>
-      </div>
+        </motion.span>
+      </motion.div>
 
       {/* Projects grid */}
       <div className="flex-1 grid grid-cols-3 gap-6 overflow-hidden">
-        {columnProjects.slice(0, 9).map((project) => (
-          <div key={project.id} className="bg-zinc-900/80 rounded-2xl border border-zinc-800 p-6">
+        {columnProjects.slice(0, 9).map((project, index) => (
+          <motion.div
+            key={project.id}
+            initial={{
+              opacity: 0,
+              scale: 0.5,
+              y: 100,
+              rotateX: 45,
+            }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              y: 0,
+              rotateX: 0,
+            }}
+            transition={{
+              duration: 0.6,
+              delay: index * 0.1 + 0.3,
+              ease: [0.25, 0.46, 0.45, 0.94],
+            }}
+            whileHover={{
+              scale: 1.05,
+              y: -8,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              transition: { duration: 0.2 }
+            }}
+            className="bg-zinc-900/80 rounded-2xl border border-zinc-800 p-6"
+          >
             <h3 className="text-xl font-semibold text-white mb-3 line-clamp-2">{project.title}</h3>
             {project.description && (
               <p className="text-zinc-400 line-clamp-2 mb-4">{project.description}</p>
@@ -1428,12 +2120,17 @@ function SingleColumnSlide({ projects, status, config }: {
                 ))}
               </div>
             )}
-          </div>
+          </motion.div>
         ))}
         {columnProjects.length === 0 && (
-          <div className="col-span-3 flex items-center justify-center text-2xl text-zinc-600">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="col-span-3 flex items-center justify-center text-2xl text-zinc-600"
+          >
             No {config.label.toLowerCase()} projects
-          </div>
+          </motion.div>
         )}
       </div>
     </div>
@@ -1925,10 +2622,10 @@ function ProjectCard({ project, onClick }: { project: Project; onClick: () => vo
 
 // ============ COLUMN CONFIG ============
 const columns: { status: ProjectStatus; label: string; icon: React.ElementType; headerColor: string; countColor: string }[] = [
-  { status: 'active', label: 'Active', icon: Rocket, headerColor: 'text-emerald-400', countColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-  { status: 'on_hold', label: 'On Hold', icon: PauseCircle, headerColor: 'text-amber-400', countColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-  { status: 'completed', label: 'Completed', icon: CheckCircle2, headerColor: 'text-blue-400', countColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
-  { status: 'archived', label: 'Archived', icon: Archive, headerColor: 'text-zinc-400', countColor: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30' },
+  { status: 'active', label: 'In Talks', icon: MessageSquare, headerColor: 'text-emerald-400', countColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  { status: 'on_hold', label: 'Now Coding', icon: Rocket, headerColor: 'text-amber-400', countColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+  { status: 'completed', label: 'In Review', icon: CircleDot, headerColor: 'text-blue-400', countColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+  { status: 'archived', label: 'Complete', icon: CheckCircle2, headerColor: 'text-zinc-400', countColor: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30' },
 ];
 
 // ============ MAIN BOARD ============
@@ -1944,6 +2641,37 @@ function TVBoard() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [slideProgress, setSlideProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  // Remote control state
+  const [speed, setSpeed] = useState(1);
+  const [brightness, setBrightness] = useState(100);
+
+  // Room code for cross-device remote connection
+  const [roomCode, setRoomCode] = useState<string | undefined>(undefined);
+  const [showRoomCode, setShowRoomCode] = useState(false);
+
+  // Load/generate room code on mount
+  useEffect(() => {
+    const savedRoom = localStorage.getItem('tv-display-room');
+    if (savedRoom) {
+      setRoomCode(savedRoom);
+    }
+  }, []);
+
+  // Generate a new room code
+  const createRoomCode = () => {
+    const code = generateRoomCode();
+    setRoomCode(code);
+    localStorage.setItem('tv-display-room', code);
+    setShowRoomCode(true);
+  };
+
+  // Clear room code (disconnect)
+  const clearRoomCode = () => {
+    setRoomCode(undefined);
+    localStorage.removeItem('tv-display-room');
+    setShowRoomCode(false);
+  };
 
   // Toggle fullscreen mode
   const toggleFullscreen = async () => {
@@ -1977,11 +2705,13 @@ function TVBoard() {
 
     const currentSlide = slideshowSettings.slides[currentSlideIndex];
     const duration = currentSlide?.duration || 10;
+    // Apply speed multiplier: higher speed = faster progression
+    const effectiveDuration = duration / speed;
 
     // Progress timer (updates every 100ms for smooth progress bar)
     const progressInterval = setInterval(() => {
       setSlideProgress((prev) => {
-        const newProgress = prev + (100 / (duration * 10));
+        const newProgress = prev + (100 / (effectiveDuration * 10));
         if (newProgress >= 100) {
           // Move to next slide
           setCurrentSlideIndex((prevIndex) => (prevIndex + 1) % slideshowSettings.slides.length);
@@ -1992,7 +2722,7 @@ function TVBoard() {
     }, 100);
 
     return () => clearInterval(progressInterval);
-  }, [slideshowSettings.enabled, slideshowSettings.slides, currentSlideIndex, isPaused]);
+  }, [slideshowSettings.enabled, slideshowSettings.slides, currentSlideIndex, isPaused, speed]);
 
   // Reset progress when slide changes
   useEffect(() => {
@@ -2013,7 +2743,54 @@ function TVBoard() {
     }
   };
 
-  const { data, isLoading, error, dataUpdatedAt, isRefetching } = useQuery({
+  const goToSlide = (index: number) => {
+    if (index >= 0 && index < slideshowSettings.slides.length) {
+      setCurrentSlideIndex(index);
+      setSlideProgress(0);
+    }
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (e.key) {
+        case 'ArrowRight':
+        case 'ArrowDown':
+          e.preventDefault();
+          goToNextSlide();
+          break;
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          e.preventDefault();
+          goToPrevSlide();
+          break;
+        case ' ': // Spacebar
+          e.preventDefault();
+          setIsPaused((prev) => !prev);
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'Escape':
+          if (showSettings) {
+            setShowSettings(false);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [slideshowSettings.slides.length, showSettings]);
+
+  const { data, isLoading, error, dataUpdatedAt, isRefetching, refetch } = useQuery({
     queryKey: ['projects-tv-board'],
     queryFn: () => api.get<PaginatedResponse<Project>>('/api/projects?limit=200'),
     refetchInterval: 10000,
@@ -2054,6 +2831,95 @@ function TVBoard() {
     };
   }, []);
 
+  // Slide management functions
+  const addSlide = useCallback((slide: RemoteSlideConfig) => {
+    const newSettings = {
+      ...slideshowSettings,
+      slides: [...slideshowSettings.slides, slide as SlideConfig],
+    };
+    setSlideshowSettings(newSettings);
+    saveSlideshowSettings(newSettings);
+  }, [slideshowSettings]);
+
+  const removeSlide = useCallback((index: number) => {
+    const newSettings = {
+      ...slideshowSettings,
+      slides: slideshowSettings.slides.filter((_, i) => i !== index),
+    };
+    setSlideshowSettings(newSettings);
+    saveSlideshowSettings(newSettings);
+    // Adjust current index if needed
+    if (currentSlideIndex >= newSettings.slides.length && newSettings.slides.length > 0) {
+      setCurrentSlideIndex(newSettings.slides.length - 1);
+    }
+  }, [slideshowSettings, currentSlideIndex]);
+
+  const updateSlide = useCallback((index: number, updates: Partial<RemoteSlideConfig>) => {
+    const newSlides = [...slideshowSettings.slides];
+    newSlides[index] = { ...newSlides[index], ...updates } as SlideConfig;
+    const newSettings = { ...slideshowSettings, slides: newSlides };
+    setSlideshowSettings(newSettings);
+    saveSlideshowSettings(newSettings);
+  }, [slideshowSettings]);
+
+  const reorderSlide = useCallback((fromIndex: number, toIndex: number) => {
+    const newSlides = [...slideshowSettings.slides];
+    const [moved] = newSlides.splice(fromIndex, 1);
+    newSlides.splice(toIndex, 0, moved);
+    const newSettings = { ...slideshowSettings, slides: newSlides };
+    setSlideshowSettings(newSettings);
+    saveSlideshowSettings(newSettings);
+    // Adjust current index to follow the moved slide if needed
+    if (currentSlideIndex === fromIndex) {
+      setCurrentSlideIndex(toIndex);
+    }
+  }, [slideshowSettings, currentSlideIndex]);
+
+  const toggleSlideshowEnabled = useCallback((enabled: boolean) => {
+    const newSettings = { ...slideshowSettings, enabled };
+    setSlideshowSettings(newSettings);
+    saveSlideshowSettings(newSettings);
+  }, [slideshowSettings]);
+
+  // Remote control handlers
+  const remoteHandlers = useMemo<TVRemoteHandlers>(() => ({
+    onNext: goToNextSlide,
+    onPrev: goToPrevSlide,
+    onGoTo: goToSlide,
+    onPause: () => setIsPaused(true),
+    onPlay: () => setIsPaused(false),
+    onTogglePause: () => setIsPaused((prev) => !prev),
+    onFullscreen: toggleFullscreen,
+    onSetSpeed: setSpeed,
+    onSetBrightness: setBrightness,
+    onRefresh: () => refetch(),
+    // Slide management
+    onAddSlide: addSlide,
+    onRemoveSlide: removeSlide,
+    onUpdateSlide: updateSlide,
+    onReorderSlide: reorderSlide,
+    onToggleSlideshow: toggleSlideshowEnabled,
+    getStatus: () => ({
+      currentSlideIndex,
+      totalSlides: slideshowSettings.slides.length,
+      isPaused,
+      isFullscreen,
+      currentSlideLabel: slideshowSettings.slides[currentSlideIndex]?.label || 'Unknown',
+      speed,
+      brightness,
+      slideshowEnabled: slideshowSettings.enabled,
+      slides: slideshowSettings.slides,
+    }),
+  }), [currentSlideIndex, slideshowSettings, isPaused, isFullscreen, speed, brightness, refetch, addSlide, removeSlide, updateSlide, reorderSlide, toggleSlideshowEnabled]);
+
+  // Enable remote control via BroadcastChannel
+  const { broadcastStatus, connectionMode, roomInfo } = useTVRemoteReceiver(remoteHandlers, roomCode);
+
+  // Broadcast status when state changes
+  useEffect(() => {
+    broadcastStatus();
+  }, [currentSlideIndex, isPaused, isFullscreen, speed, brightness, slideshowSettings.slides, broadcastStatus]);
+
   const formatTime = (d: Date) => d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   const formatDate = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -2088,33 +2954,91 @@ function TVBoard() {
   // Render slide content based on type
   const renderSlideContent = () => {
     if (!slideshowSettings.enabled || !currentSlide) {
-      // Default: show kanban overview
+      // Default: show kanban overview with animations
       return (
         <div className="flex-1 grid grid-cols-4 gap-4 p-6 overflow-hidden">
-          {columns.map((col) => {
+          {columns.map((col, colIndex) => {
             const Icon = col.icon;
             const colProjects = projectsByStatus[col.status] || [];
             return (
-              <div key={col.status} className="flex flex-col bg-zinc-900/30 rounded-2xl border border-zinc-800/50 overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800/50">
+              <motion.div
+                key={col.status}
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  duration: 0.5,
+                  delay: colIndex * 0.1,
+                  ease: [0.25, 0.46, 0.45, 0.94],
+                }}
+                className="flex flex-col bg-zinc-900/30 rounded-2xl border border-zinc-800/50 overflow-hidden"
+              >
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: colIndex * 0.1 + 0.2 }}
+                  className="flex items-center justify-between px-5 py-4 border-b border-zinc-800/50"
+                >
                   <div className="flex items-center gap-3">
                     <Icon className={`h-7 w-7 ${col.headerColor}`} />
                     <h2 className={`text-2xl font-bold ${col.headerColor}`}>{col.label}</h2>
                   </div>
-                  <span className={`px-4 py-1.5 text-xl font-bold rounded-full border ${col.countColor}`}>
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 500,
+                      damping: 25,
+                      delay: colIndex * 0.1 + 0.3,
+                    }}
+                    className={`px-4 py-1.5 text-xl font-bold rounded-full border ${col.countColor}`}
+                  >
                     {colProjects.length}
-                  </span>
-                </div>
+                  </motion.span>
+                </motion.div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
                   {colProjects.length > 0 ? (
-                    colProjects.map((p) => (
-                      <ProjectCard key={p.id} project={p} onClick={() => setSelectedProject(p)} />
+                    colProjects.map((p, cardIndex) => (
+                      <motion.div
+                        key={p.id}
+                        initial={{
+                          opacity: 0,
+                          x: colIndex % 2 === 0 ? -100 : 100,
+                          y: 20,
+                          rotateY: colIndex % 2 === 0 ? -15 : 15,
+                        }}
+                        animate={{
+                          opacity: 1,
+                          x: 0,
+                          y: 0,
+                          rotateY: 0,
+                        }}
+                        transition={{
+                          duration: 0.6,
+                          delay: colIndex * 0.15 + cardIndex * 0.08 + 0.3,
+                          ease: [0.25, 0.46, 0.45, 0.94],
+                        }}
+                        whileHover={{
+                          scale: 1.02,
+                          y: -4,
+                          transition: { duration: 0.2 }
+                        }}
+                      >
+                        <ProjectCard project={p} onClick={() => setSelectedProject(p)} />
+                      </motion.div>
                     ))
                   ) : (
-                    <div className="flex items-center justify-center h-32 text-zinc-700 text-xl">No projects</div>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: colIndex * 0.1 + 0.4 }}
+                      className="flex items-center justify-center h-32 text-zinc-700 text-xl"
+                    >
+                      No projects
+                    </motion.div>
                   )}
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -2132,6 +3056,8 @@ function TVBoard() {
         return <RecentCommitsSlide projects={projects} />;
       case 'hacker-news':
         return <HackerNewsSlide />;
+      case 'reddit':
+        return <RedditSlide subreddits={slideshowSettings.redditSubreddits || DEFAULT_SUBREDDITS} />;
       case 'video':
         return currentSlide.url ? <VideoSlide url={currentSlide.url} label={currentSlide.label} /> : <LogoSlide />;
       case 'youtube':
@@ -2148,30 +3074,88 @@ function TVBoard() {
       default:
         return (
           <div className="flex-1 grid grid-cols-4 gap-4 p-6 overflow-hidden">
-            {columns.map((col) => {
+            {columns.map((col, colIndex) => {
               const Icon = col.icon;
               const colProjects = projectsByStatus[col.status] || [];
               return (
-                <div key={col.status} className="flex flex-col bg-zinc-900/30 rounded-2xl border border-zinc-800/50 overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800/50">
+                <motion.div
+                  key={col.status}
+                  initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    duration: 0.5,
+                    delay: colIndex * 0.1,
+                    ease: [0.25, 0.46, 0.45, 0.94],
+                  }}
+                  className="flex flex-col bg-zinc-900/30 rounded-2xl border border-zinc-800/50 overflow-hidden"
+                >
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4, delay: colIndex * 0.1 + 0.2 }}
+                    className="flex items-center justify-between px-5 py-4 border-b border-zinc-800/50"
+                  >
                     <div className="flex items-center gap-3">
                       <Icon className={`h-7 w-7 ${col.headerColor}`} />
                       <h2 className={`text-2xl font-bold ${col.headerColor}`}>{col.label}</h2>
                     </div>
-                    <span className={`px-4 py-1.5 text-xl font-bold rounded-full border ${col.countColor}`}>
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 500,
+                        damping: 25,
+                        delay: colIndex * 0.1 + 0.3,
+                      }}
+                      className={`px-4 py-1.5 text-xl font-bold rounded-full border ${col.countColor}`}
+                    >
                       {colProjects.length}
-                    </span>
-                  </div>
+                    </motion.span>
+                  </motion.div>
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {colProjects.length > 0 ? (
-                      colProjects.map((p) => (
-                        <ProjectCard key={p.id} project={p} onClick={() => setSelectedProject(p)} />
+                      colProjects.map((p, cardIndex) => (
+                        <motion.div
+                          key={p.id}
+                          initial={{
+                            opacity: 0,
+                            x: colIndex % 2 === 0 ? -100 : 100,
+                            y: 20,
+                            rotateY: colIndex % 2 === 0 ? -15 : 15,
+                          }}
+                          animate={{
+                            opacity: 1,
+                            x: 0,
+                            y: 0,
+                            rotateY: 0,
+                          }}
+                          transition={{
+                            duration: 0.6,
+                            delay: colIndex * 0.15 + cardIndex * 0.08 + 0.3,
+                            ease: [0.25, 0.46, 0.45, 0.94],
+                          }}
+                          whileHover={{
+                            scale: 1.02,
+                            y: -4,
+                            transition: { duration: 0.2 }
+                          }}
+                        >
+                          <ProjectCard project={p} onClick={() => setSelectedProject(p)} />
+                        </motion.div>
                       ))
                     ) : (
-                      <div className="flex items-center justify-center h-32 text-zinc-700 text-xl">No projects</div>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: colIndex * 0.1 + 0.4 }}
+                        className="flex items-center justify-center h-32 text-zinc-700 text-xl"
+                      >
+                        No projects
+                      </motion.div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -2179,10 +3163,37 @@ function TVBoard() {
     }
   };
 
+  // Hide header for logo slide (including fallback cases when video/youtube has no URL)
+  const isLogoSlide = currentSlide?.type === 'logo' ||
+    (currentSlide?.type === 'video' && !currentSlide?.url) ||
+    (currentSlide?.type === 'youtube' && !currentSlide?.url);
+
+  // Slide transition animation variants
+  const slideVariants = {
+    enter: {
+      opacity: 0,
+      scale: 1.02,
+      filter: 'blur(10px)',
+    },
+    center: {
+      opacity: 1,
+      scale: 1,
+      filter: 'blur(0px)',
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.98,
+      filter: 'blur(10px)',
+    },
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-black text-white">
-      {/* Progress bar for slideshow */}
-      {slideshowSettings.enabled && slideshowSettings.slides.length > 0 && (
+    <div
+      className="flex flex-col h-screen bg-black text-white transition-[filter] duration-300"
+      style={{ filter: brightness !== 100 ? `brightness(${brightness}%)` : undefined }}
+    >
+      {/* Progress bar for slideshow - hidden on logo slide */}
+      {slideshowSettings.enabled && slideshowSettings.slides.length > 0 && !isLogoSlide && (
         <div className="h-1 bg-zinc-800">
           <div
             className="h-full bg-emerald-500 transition-all duration-100 ease-linear"
@@ -2191,7 +3202,8 @@ function TVBoard() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header - hidden on logo slide */}
+      {!isLogoSlide && (
       <div className="flex items-center justify-between px-8 py-5 border-b border-zinc-800/50">
         <div className="flex items-center gap-6">
           <button
@@ -2256,6 +3268,43 @@ function TVBoard() {
             </button>
           </div>
 
+          {/* Room Code Display */}
+          <div className="flex items-center gap-2">
+            {roomCode ? (
+              <>
+                <button
+                  onClick={() => setShowRoomCode(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-xl transition-colors"
+                  title="Show QR code for remote connection"
+                >
+                  <QrCode className="h-5 w-5 text-blue-400" />
+                  <span className="text-blue-400 font-mono font-bold tracking-wider">{roomCode}</span>
+                  {roomInfo && roomInfo.remoteCount > 0 && (
+                    <span className="px-2 py-0.5 bg-blue-500/30 rounded-full text-xs text-blue-300">
+                      {roomInfo.remoteCount} connected
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={clearRoomCode}
+                  className="p-2 bg-zinc-800 hover:bg-red-500/20 rounded-lg transition-colors text-zinc-500 hover:text-red-400"
+                  title="Disable remote"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={createRoomCode}
+                className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors text-zinc-400 hover:text-zinc-300"
+                title="Enable remote control"
+              >
+                <QrCode className="h-5 w-5" />
+                <span className="text-sm">Enable Remote</span>
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center gap-3 text-zinc-500">
             {isRefetching ? (
               <RefreshCw className="h-6 w-6 animate-spin text-emerald-400" />
@@ -2270,9 +3319,25 @@ function TVBoard() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Main content - either slideshow or kanban */}
-      {renderSlideContent()}
+      {/* Main content - either slideshow or kanban with animations */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={slideshowSettings.enabled ? `slide-${currentSlideIndex}` : 'default'}
+          variants={slideVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{
+            duration: 0.6,
+            ease: [0.25, 0.46, 0.45, 0.94],
+          }}
+          className="flex-1 overflow-hidden"
+        >
+          {renderSlideContent()}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Project Detail Modal */}
       {selectedProject && (
@@ -2286,6 +3351,58 @@ function TVBoard() {
           onSettingsChange={setSlideshowSettings}
           onClose={() => setShowSettings(false)}
         />
+      )}
+
+      {/* QR Code Modal for Remote Connection */}
+      {showRoomCode && roomCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-8" onClick={() => setShowRoomCode(false)}>
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="relative bg-zinc-900 rounded-3xl border border-zinc-700 shadow-2xl p-10 max-w-lg w-full text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowRoomCode(false)}
+              className="absolute top-4 right-4 p-2 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <Smartphone className="h-8 w-8 text-blue-400" />
+              <h2 className="text-3xl font-bold text-white">Connect Remote</h2>
+            </div>
+
+            <p className="text-zinc-400 text-lg mb-8">
+              Scan this QR code with your iPad or phone to control this TV
+            </p>
+
+            {/* QR Code */}
+            <div className="bg-white p-6 rounded-2xl inline-block mb-8">
+              <QRCodeSVG
+                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/ipad?room=${roomCode}`}
+                size={220}
+                level="H"
+                includeMargin={false}
+              />
+            </div>
+
+            {/* Room Code Display */}
+            <div className="mb-6">
+              <p className="text-zinc-500 text-sm mb-2">Or enter this code manually:</p>
+              <div className="inline-flex items-center gap-3 px-8 py-4 bg-zinc-800 rounded-2xl">
+                <span className="text-5xl font-mono font-bold text-blue-400 tracking-[0.3em]">{roomCode}</span>
+              </div>
+            </div>
+
+            <p className="text-zinc-600 text-sm">
+              Open <span className="text-zinc-400">/ipad</span> on your device and enter this code
+            </p>
+          </motion.div>
+        </div>
       )}
     </div>
   );

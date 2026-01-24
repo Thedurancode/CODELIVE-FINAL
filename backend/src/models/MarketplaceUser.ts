@@ -15,7 +15,7 @@ interface MarketplaceUserAttributes {
   company?: string;
   phone?: string;
   role: 'buyer' | 'investor' | 'wholesaler' | 'agent' | 'broker' | 'broker_assistant' |
-        'transaction_coordinator' | 'team_member' | 'admin' | 'super_admin';
+        'transaction_coordinator' | 'team_member' | 'admin' | 'super_admin' | 'client';
   verified: boolean;
   avatar?: string;
   fundId?: string; // Link to Fund for institutional buyers (from Fast Buy Box)
@@ -111,7 +111,7 @@ class MarketplaceUser
   declare company: string | undefined;
   declare phone: string | undefined;
   declare role: 'buyer' | 'investor' | 'wholesaler' | 'agent' | 'broker' | 'broker_assistant' |
-        'transaction_coordinator' | 'team_member' | 'admin' | 'super_admin';
+        'transaction_coordinator' | 'team_member' | 'admin' | 'super_admin' | 'client';
   declare verified: boolean;
   declare avatar: string | undefined;
   declare fundId: string | undefined;
@@ -185,7 +185,7 @@ MarketplaceUser.init(
     },
     role: {
       type: DataTypes.ENUM('buyer', 'investor', 'wholesaler', 'agent', 'broker', 'broker_assistant',
-                          'transaction_coordinator', 'team_member', 'admin', 'super_admin'),
+                          'transaction_coordinator', 'team_member', 'admin', 'super_admin', 'client'),
       defaultValue: 'buyer',
     },
     verified: {

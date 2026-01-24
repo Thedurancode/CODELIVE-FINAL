@@ -15,7 +15,7 @@ export function useImportCSV() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('dispotree_token') : null;
+      const token = typeof window !== 'undefined' ? (localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token')) : null;
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/listings/import/csv`, {
         method: 'POST',
         headers: {
