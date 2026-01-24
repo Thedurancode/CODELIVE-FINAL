@@ -4,13 +4,16 @@
 # Deploy with: fly deploy --config frontend/fly.toml
 # ==============================================================================
 
-app = 'codelive-web'
+app = 'dispotree-web'
 primary_region = 'dfw'
 
 [build]
   dockerfile = "Dockerfile"
   [build.args]
-    NEXT_PUBLIC_API_URL = "https://codelive-api.fly.dev"
+    NEXT_PUBLIC_API_URL = "https://dispotree-api.fly.dev"
+    NEXT_PUBLIC_SUPABASE_URL = "https://gnfviibtswjbcvdlptuu.supabase.co"
+    NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduZnZpaWJ0c3dqYmN2ZGxwdHV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDY5MTgsImV4cCI6MjA4MTQ4MjkxOH0.Lz5yZFlhk3fF55JkcGw18JwdFLYgM3mDl54lXpGcJuo"
+    NEXT_PUBLIC_GOOGLE_MAPS_KEY = "AIzaSyDMKB_K78nD0BY0OcxlZmF4obCu1WI1Jvc"
 
 [env]
   NODE_ENV = "production"

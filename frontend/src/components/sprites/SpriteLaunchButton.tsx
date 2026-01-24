@@ -205,13 +205,15 @@ export function SpriteLaunchButton({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={isActive ? 'default' : isInError ? 'destructive' : 'outline'}
+              variant="ghost"
               size="icon"
               onClick={isInError ? handleDeleteAndRecreate : handleLaunch}
               disabled={isPending || isTransitioning || !isLoaded}
               className={cn(
-                'relative h-8 w-8',
-                isActive && 'bg-purple-600 hover:bg-purple-700',
+                'relative h-9 w-9 rounded-xl',
+                isInError
+                  ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                  : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400',
                 className
               )}
             >

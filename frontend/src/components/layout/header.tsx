@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Search, LogOut, User, Settings, MapPin, DollarSign, Loader2, Home, Users, UserCircle, Target, Phone, Mail, Bed, Bath, Square, TrendingUp } from 'lucide-react';
+import { Search, LogOut, User, Settings, MapPin, DollarSign, Loader2, Home, Users, UserCircle, Target, Phone, Mail, Bed, Bath, Square, TrendingUp, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUniversalSearch, type UniversalSearchResult } from '@/hooks/use-universal-search';
 import {
@@ -36,6 +36,7 @@ import { TeamProfileEditor } from '@/components/team/TeamProfileEditor';
 import type { TeamConversation } from '@/types';
 
 const resultIcons = {
+  project: FolderKanban,
   property: Home,
   contact: UserCircle,
   buyer: Users,
@@ -43,6 +44,7 @@ const resultIcons = {
 };
 
 const resultLabels = {
+  project: 'Projects',
   property: 'Deals',
   contact: 'Contacts',
   buyer: 'Buyers',
@@ -101,7 +103,7 @@ export function Header() {
     e.preventDefault();
     if (searchQuery.trim()) {
       setShowSuggestions(false);
-      router.push(`/deals?search=${encodeURIComponent(searchQuery.trim())}`);
+      router.push(`/projects?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
@@ -138,6 +140,41 @@ export function Header() {
 
   const renderHoverContent = (result: UniversalSearchResult) => {
     const data = result.data as any;
+
+    if (result.type === 'project') {
+      return (
+        <div className="w-64 space-y-3">
+          <div className="flex items-center gap-3">
+            {result.image ? (
+              <img src={result.image} alt={result.title} className="h-12 w-12 rounded-lg object-cover" />
+            ) : (
+              <div className="h-12 w-12 rounded-lg bg-purple-600/20 flex items-center justify-center">
+                <FolderKanban className="h-6 w-6 text-purple-400" />
+              </div>
+            )}
+            <div>
+              <p className="font-semibold text-foreground">{result.title}</p>
+              <p className="text-xs text-muted-foreground">{data.status?.replace('_', ' ') || 'Project'}</p>
+            </div>
+          </div>
+          {data.description && (
+            <p className="text-sm text-muted-foreground line-clamp-2">{data.description}</p>
+          )}
+          {data.tags && data.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {data.tags.slice(0, 3).map((tag: string) => (
+                <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+              ))}
+            </div>
+          )}
+          {data.githubUrl && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="text-purple-400">GitHub:</span> {data.githubUrl.split('/').slice(-1)[0]}
+            </p>
+          )}
+        </div>
+      );
+    }
 
     if (result.type === 'property') {
       return (
@@ -323,7 +360,7 @@ export function Header() {
 
   const renderResultGroup = (
     results: UniversalSearchResult[],
-    type: 'property' | 'contact' | 'buyer' | 'buybox'
+    type: 'project' | 'property' | 'contact' | 'buyer' | 'buybox'
   ) => {
     if (results.length === 0) return null;
 
@@ -356,6 +393,7 @@ export function Header() {
                 ) : (
                   <div className={cn(
                     'h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0',
+                    result.type === 'project' ? 'bg-purple-600/20 text-purple-400' :
                     result.type === 'property' ? 'bg-emerald-600/20 text-emerald-400' :
                     result.type === 'contact' ? 'bg-blue-600/20 text-blue-400' :
                     result.type === 'buyer' ? 'bg-purple-600/20 text-purple-400' :
@@ -381,6 +419,11 @@ export function Header() {
                   <div className={cn(
                     'text-xs font-medium flex items-center px-2 py-1 rounded-full flex-shrink-0',
                     result.type === 'property' ? 'bg-emerald-600/20 text-emerald-400' :
+                    result.type === 'project' && result.meta === 'now coding' ? 'bg-green-600/20 text-green-400' :
+                    result.type === 'project' && result.meta === 'in talks' ? 'bg-purple-600/20 text-purple-400' :
+                    result.type === 'project' && result.meta === 'needs review' ? 'bg-amber-600/20 text-amber-400' :
+                    result.type === 'project' && result.meta === 'completed' ? 'bg-blue-600/20 text-blue-400' :
+                    result.type === 'project' && result.meta === 'cancelled' ? 'bg-red-600/20 text-red-400' :
                     result.meta === 'Hot Buyer' ? 'bg-orange-600/20 text-orange-400' :
                     result.meta === 'Active' ? 'bg-green-600/20 text-green-400' :
                     result.meta === 'Inactive' ? 'bg-muted text-muted-foreground' :
@@ -424,7 +467,7 @@ export function Header() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search deals, contacts, buyers, buy boxes..."
+                placeholder="Search projects..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -453,6 +496,7 @@ export function Header() {
                 </div>
               ) : hasResults ? (
                 <div className="divide-y divide-border">
+                  {renderResultGroup(searchResults.projects, 'project')}
                   {renderResultGroup(searchResults.properties, 'property')}
                   {renderResultGroup(searchResults.contacts, 'contact')}
                   {renderResultGroup(searchResults.buyers, 'buyer')}
@@ -464,7 +508,7 @@ export function Header() {
                       type="button"
                       onClick={() => {
                         setShowSuggestions(false);
-                        router.push(`/deals?search=${encodeURIComponent(searchQuery.trim())}`);
+                        router.push(`/projects?search=${encodeURIComponent(searchQuery.trim())}`);
                       }}
                       className="text-accent-400 text-sm hover:text-accent-300 transition-colors"
                     >

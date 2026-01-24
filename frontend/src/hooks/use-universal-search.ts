@@ -1,20 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { Property, Contact, Buyer, PaginatedResponse } from '@/types';
+import type { Property, Contact, Buyer, Project, PaginatedResponse } from '@/types';
 
 export interface UniversalSearchResult {
-  type: 'property' | 'contact' | 'buyer' | 'buybox';
+  type: 'project' | 'property' | 'contact' | 'buyer' | 'buybox';
   id: string;
   title: string;
   subtitle: string;
   meta?: string;
-  icon: 'property' | 'contact' | 'buyer' | 'buybox';
+  icon: 'project' | 'property' | 'contact' | 'buyer' | 'buybox';
   href: string;
   image?: string;
-  data: Property | Contact | Buyer | Record<string, unknown>;
+  data: Project | Property | Contact | Buyer | Record<string, unknown>;
 }
 
 export interface UniversalSearchResults {
+  projects: UniversalSearchResult[];
   properties: UniversalSearchResult[];
   contacts: UniversalSearchResult[];
   buyers: UniversalSearchResult[];
@@ -23,8 +24,9 @@ export interface UniversalSearchResults {
 }
 
 async function fetchUniversalSearch(query: string, limit: number = 3): Promise<UniversalSearchResults> {
-  // Fetch all searches in parallel
-  const [propertiesRes, contactsRes, buyersRes, buyboxesRes] = await Promise.allSettled([
+  // Fetch all searches in parallel - projects first for priority
+  const [projectsRes, propertiesRes, contactsRes, buyersRes, buyboxesRes] = await Promise.allSettled([
+    api.get<PaginatedResponse<Project>>(`/api/projects?search=${encodeURIComponent(query)}&limit=${limit}`),
     api.get<PaginatedResponse<Property>>(`/api/listings?search=${encodeURIComponent(query)}&limit=${limit}`),
     api.get<Contact[]>(`/api/contacts/search?q=${encodeURIComponent(query)}&limit=${limit}`),
     api.get<Buyer[]>(`/api/buyers/search?q=${encodeURIComponent(query)}&limit=${limit}`),
@@ -32,12 +34,29 @@ async function fetchUniversalSearch(query: string, limit: number = 3): Promise<U
   ]);
 
   const results: UniversalSearchResults = {
+    projects: [],
     properties: [],
     contacts: [],
     buyers: [],
     buyboxes: [],
     total: 0,
   };
+
+  // Process projects (priority)
+  if (projectsRes.status === 'fulfilled' && projectsRes.value?.data) {
+    const projects = projectsRes.value.data;
+    results.projects = projects.map((p: Project) => ({
+      type: 'project' as const,
+      id: String(p.id),
+      title: p.title || 'Untitled Project',
+      subtitle: p.description || p.status?.replace('_', ' ') || 'Project',
+      meta: p.status?.replace('_', ' '),
+      icon: 'project' as const,
+      href: `/projects/${p.id}`,
+      image: p.logoUrl,
+      data: p,
+    }));
+  }
 
   // Process properties
   if (propertiesRes.status === 'fulfilled' && propertiesRes.value?.data) {
@@ -130,7 +149,7 @@ async function fetchUniversalSearch(query: string, limit: number = 3): Promise<U
     });
   }
 
-  results.total = results.properties.length + results.contacts.length + results.buyers.length + results.buyboxes.length;
+  results.total = results.projects.length + results.properties.length + results.contacts.length + results.buyers.length + results.buyboxes.length;
 
   return results;
 }

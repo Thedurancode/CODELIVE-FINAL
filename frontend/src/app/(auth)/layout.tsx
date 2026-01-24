@@ -1,4 +1,7 @@
+'use client';
+
 import { Toaster } from 'sonner';
+import { FadeTransition } from '@/components/layout/page-transition';
 
 export default function AuthLayout({
   children,
@@ -7,7 +10,7 @@ export default function AuthLayout({
 }) {
   return (
     <>
-      {children}
+      <FadeTransition>{children}</FadeTransition>
       <Toaster position="top-right" theme="dark" />
     </>
   );
