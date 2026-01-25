@@ -377,6 +377,68 @@ export const createFromIssue = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Get diff for a task's branch
+ */
+export const getTaskDiff = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const task = await SpriteTask.findByPk(id);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Task not found',
+      });
+    }
+
+    if (!task.branchName) {
+      return res.json({
+        success: true,
+        data: {
+          files: [],
+          branchName: null,
+          baseBranch: 'main',
+          additions: 0,
+          deletions: 0,
+          changedFiles: 0,
+        },
+      });
+    }
+
+    // Get diff via sprite service if task has an assigned sprite
+    if (task.spriteId) {
+      try {
+        const diff = await spriteTaskService.getTaskDiff(id);
+        return res.json({ success: true, data: diff });
+      } catch (error) {
+        console.warn('[spriteTasksController] getTaskDiff via sprite failed:', error);
+      }
+    }
+
+    // Return basic info if we can't get actual diff
+    res.json({
+      success: true,
+      data: {
+        files: [],
+        branchName: task.branchName,
+        baseBranch: 'main',
+        additions: 0,
+        deletions: 0,
+        changedFiles: 0,
+        status: task.status,
+        statusMessage: task.statusMessage,
+      },
+    });
+  } catch (error) {
+    console.error('[spriteTasksController] getTaskDiff error:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+};
+
 export default {
   createTask,
   getTasks,
@@ -392,4 +454,5 @@ export default {
   getQueueStats,
   processIssue,
   createFromIssue,
+  getTaskDiff,
 };

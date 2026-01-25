@@ -14,6 +14,9 @@ import type {
   SpriteTerminalInfo,
   SpritesConfig,
   CreateSpriteOptions,
+  SpriteService,
+  CreateServiceOptions,
+  ServiceLogsResponse,
 } from '@/types/sprite';
 import { useSpriteStore } from '@/stores/sprite-store';
 
@@ -28,7 +31,13 @@ export const spriteKeys = {
   checkpoints: (spriteId: string) => [...spriteKeys.all, 'checkpoints', spriteId] as const,
   sessions: (spriteId: string) => [...spriteKeys.all, 'sessions', spriteId] as const,
   terminal: (spriteId: string) => [...spriteKeys.all, 'terminal', spriteId] as const,
+  services: (spriteId: string) => [...spriteKeys.all, 'services', spriteId] as const,
+  service: (spriteId: string, serviceId: string) => [...spriteKeys.services(spriteId), serviceId] as const,
+  serviceLogs: (spriteId: string, serviceId: string) => [...spriteKeys.service(spriteId, serviceId), 'logs'] as const,
   config: () => [...spriteKeys.all, 'config'] as const,
+  // Git & PR keys
+  branchStatus: (spriteId: string) => [...spriteKeys.all, 'git', 'status', spriteId] as const,
+  pullRequest: (spriteId: string) => [...spriteKeys.all, 'pr', spriteId] as const,
 };
 
 // ============================================================================
@@ -237,11 +246,14 @@ export function useStopSprite() {
 export function useResumeSprite() {
   const queryClient = useQueryClient();
   const updateSpriteStatus = useSpriteStore((state) => state.updateSpriteStatus);
+  const setActiveSprite = useSpriteStore((state) => state.setActiveSprite);
 
   return useMutation({
     mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+      console.log('[useResumeSprite] Resuming sprite:', id);
       // Note: api.post already extracts data.data from response
       const sprite = await api.post<Sprite>(`/api/sprites/${id}/resume`);
+      console.log('[useResumeSprite] Resume complete, sprite status:', sprite.status);
       return { sprite, projectId };
     },
     onMutate: async ({ projectId }) => {
@@ -249,12 +261,22 @@ export function useResumeSprite() {
       updateSpriteStatus(projectId, 'restoring');
     },
     onSuccess: ({ sprite, projectId }) => {
-      // Update cache
+      console.log('[useResumeSprite] onSuccess - updating cache with status:', sprite.status);
+      // Update cache with returned sprite (should be 'running' status from backend)
       queryClient.setQueryData(spriteKeys.detail(sprite.id), sprite);
       queryClient.setQueryData(spriteKeys.byProject(projectId), sprite);
       queryClient.invalidateQueries({ queryKey: spriteKeys.lists() });
+
+      // Update store with new sprite data so terminal can access it immediately
+      setActiveSprite(projectId, sprite);
+
+      // Also update store status to match backend response
+      if (sprite.status) {
+        updateSpriteStatus(projectId, sprite.status);
+      }
     },
-    onError: (_, { projectId }) => {
+    onError: (error, { projectId }) => {
+      console.error('[useResumeSprite] Error:', error);
       // Revert optimistic update
       queryClient.invalidateQueries({ queryKey: spriteKeys.byProject(projectId) });
     },
@@ -472,7 +494,16 @@ export function useRemoveGitHubToken() {
 // ============================================================================
 
 /**
- * Update sprite settings (e.g., autoShutdownAfterTask)
+ * Sprite settings type for update mutation
+ */
+export interface SpriteSettingsUpdate {
+  autoShutdownAfterTask?: boolean;
+  startupCommand?: string | null;
+  lastShellDirectory?: string | null;
+}
+
+/**
+ * Update sprite settings (e.g., autoShutdownAfterTask, shell persistence)
  */
 export function useUpdateSpriteSettings() {
   const queryClient = useQueryClient();
@@ -485,7 +516,7 @@ export function useUpdateSpriteSettings() {
     }: {
       spriteId: string;
       projectId: string;
-      settings: { autoShutdownAfterTask?: boolean };
+      settings: SpriteSettingsUpdate;
     }) => {
       const sprite = await api.patch<Sprite>(
         `/api/sprites/${spriteId}/settings`,
@@ -532,6 +563,352 @@ export function usePollSpriteStatus(
       }
 
       return false;
+    },
+  });
+}
+
+// ============================================================================
+// SERVICES API
+// ============================================================================
+
+/**
+ * List all services for a sprite
+ */
+export function useSpriteServices(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.services(spriteId ?? ''),
+    queryFn: () => api.get<SpriteService[]>(`/api/sprites/${spriteId}/services`),
+    enabled: !!spriteId,
+  });
+}
+
+/**
+ * Get a specific service
+ */
+export function useSpriteService(
+  spriteId: string | null | undefined,
+  serviceId: string | null | undefined
+) {
+  return useQuery({
+    queryKey: spriteKeys.service(spriteId ?? '', serviceId ?? ''),
+    queryFn: () =>
+      api.get<SpriteService>(`/api/sprites/${spriteId}/services/${serviceId}`),
+    enabled: !!spriteId && !!serviceId,
+  });
+}
+
+/**
+ * Get service logs
+ */
+export function useSpriteServiceLogs(
+  spriteId: string | null | undefined,
+  serviceId: string | null | undefined,
+  options: { tail?: number; since?: string } = {}
+) {
+  const params = new URLSearchParams();
+  if (options.tail !== undefined) {
+    params.append('tail', options.tail.toString());
+  }
+  if (options.since) {
+    params.append('since', options.since);
+  }
+  const queryString = params.toString();
+
+  return useQuery({
+    queryKey: [...spriteKeys.serviceLogs(spriteId ?? '', serviceId ?? ''), options],
+    queryFn: () =>
+      api.get<ServiceLogsResponse>(
+        `/api/sprites/${spriteId}/services/${serviceId}/logs${queryString ? `?${queryString}` : ''}`
+      ),
+    enabled: !!spriteId && !!serviceId,
+    refetchInterval: 5000, // Poll for new logs every 5 seconds
+  });
+}
+
+/**
+ * Create a new service
+ */
+export function useCreateSpriteService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      options,
+    }: {
+      spriteId: string;
+      options: CreateServiceOptions;
+    }) => {
+      return api.post<SpriteService>(`/api/sprites/${spriteId}/services`, options);
+    },
+    onSuccess: (service, { spriteId }) => {
+      // Invalidate services list
+      queryClient.invalidateQueries({ queryKey: spriteKeys.services(spriteId) });
+    },
+  });
+}
+
+/**
+ * Start a service
+ */
+export function useStartSpriteService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      serviceId,
+    }: {
+      spriteId: string;
+      serviceId: string;
+    }) => {
+      return api.post<SpriteService>(
+        `/api/sprites/${spriteId}/services/${serviceId}/start`
+      );
+    },
+    onMutate: async ({ spriteId, serviceId }) => {
+      // Optimistic update
+      await queryClient.cancelQueries({
+        queryKey: spriteKeys.service(spriteId, serviceId),
+      });
+
+      const previousService = queryClient.getQueryData<SpriteService>(
+        spriteKeys.service(spriteId, serviceId)
+      );
+
+      if (previousService) {
+        queryClient.setQueryData(spriteKeys.service(spriteId, serviceId), {
+          ...previousService,
+          status: 'starting' as const,
+        });
+      }
+
+      return { previousService };
+    },
+    onError: (_err, { spriteId, serviceId }, context) => {
+      if (context?.previousService) {
+        queryClient.setQueryData(
+          spriteKeys.service(spriteId, serviceId),
+          context.previousService
+        );
+      }
+    },
+    onSuccess: (service, { spriteId }) => {
+      // Update cache with actual response
+      queryClient.setQueryData(spriteKeys.service(spriteId, service.id), service);
+      queryClient.invalidateQueries({ queryKey: spriteKeys.services(spriteId) });
+    },
+  });
+}
+
+/**
+ * Stop a service
+ */
+export function useStopSpriteService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      serviceId,
+    }: {
+      spriteId: string;
+      serviceId: string;
+    }) => {
+      return api.post<SpriteService>(
+        `/api/sprites/${spriteId}/services/${serviceId}/stop`
+      );
+    },
+    onMutate: async ({ spriteId, serviceId }) => {
+      // Optimistic update
+      await queryClient.cancelQueries({
+        queryKey: spriteKeys.service(spriteId, serviceId),
+      });
+
+      const previousService = queryClient.getQueryData<SpriteService>(
+        spriteKeys.service(spriteId, serviceId)
+      );
+
+      if (previousService) {
+        queryClient.setQueryData(spriteKeys.service(spriteId, serviceId), {
+          ...previousService,
+          status: 'stopping' as const,
+        });
+      }
+
+      return { previousService };
+    },
+    onError: (_err, { spriteId, serviceId }, context) => {
+      if (context?.previousService) {
+        queryClient.setQueryData(
+          spriteKeys.service(spriteId, serviceId),
+          context.previousService
+        );
+      }
+    },
+    onSuccess: (service, { spriteId }) => {
+      // Update cache with actual response
+      queryClient.setQueryData(spriteKeys.service(spriteId, service.id), service);
+      queryClient.invalidateQueries({ queryKey: spriteKeys.services(spriteId) });
+    },
+  });
+}
+
+/**
+ * Restart a service
+ */
+export function useRestartSpriteService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      serviceId,
+    }: {
+      spriteId: string;
+      serviceId: string;
+    }) => {
+      return api.post<SpriteService>(
+        `/api/sprites/${spriteId}/services/${serviceId}/restart`
+      );
+    },
+    onMutate: async ({ spriteId, serviceId }) => {
+      // Optimistic update
+      await queryClient.cancelQueries({
+        queryKey: spriteKeys.service(spriteId, serviceId),
+      });
+
+      const previousService = queryClient.getQueryData<SpriteService>(
+        spriteKeys.service(spriteId, serviceId)
+      );
+
+      if (previousService) {
+        queryClient.setQueryData(spriteKeys.service(spriteId, serviceId), {
+          ...previousService,
+          status: 'starting' as const,
+        });
+      }
+
+      return { previousService };
+    },
+    onError: (_err, { spriteId, serviceId }, context) => {
+      if (context?.previousService) {
+        queryClient.setQueryData(
+          spriteKeys.service(spriteId, serviceId),
+          context.previousService
+        );
+      }
+    },
+    onSuccess: (service, { spriteId }) => {
+      // Update cache with actual response
+      queryClient.setQueryData(spriteKeys.service(spriteId, service.id), service);
+      queryClient.invalidateQueries({ queryKey: spriteKeys.services(spriteId) });
+    },
+  });
+}
+
+/**
+ * Delete a service
+ */
+export function useDeleteSpriteService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      serviceId,
+    }: {
+      spriteId: string;
+      serviceId: string;
+    }) => {
+      await api.delete(`/api/sprites/${spriteId}/services/${serviceId}`);
+      return { spriteId, serviceId };
+    },
+    onSuccess: ({ spriteId, serviceId }) => {
+      // Remove from cache
+      queryClient.removeQueries({
+        queryKey: spriteKeys.service(spriteId, serviceId),
+      });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.services(spriteId) });
+    },
+  });
+}
+
+// ============================================================================
+// GIT & PULL REQUEST HOOKS
+// ============================================================================
+
+import type {
+  BranchStatus,
+  PullRequestInfo,
+  CreatePullRequestOptions,
+  PushResult,
+} from '@/types/sprite';
+
+/**
+ * Get branch status for a sprite (commits ahead/behind, uncommitted changes)
+ */
+export function useBranchStatus(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.branchStatus(spriteId ?? ''),
+    queryFn: () => api.get<BranchStatus>(`/api/sprites/${spriteId}/git/status`),
+    enabled: !!spriteId,
+    // Refresh every 30 seconds since git status can change
+    staleTime: 30000,
+  });
+}
+
+/**
+ * Get existing pull request for a sprite
+ */
+export function usePullRequest(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.pullRequest(spriteId ?? ''),
+    queryFn: () => api.get<PullRequestInfo | null>(`/api/sprites/${spriteId}/pr`),
+    enabled: !!spriteId,
+    // Cache for a bit since PRs don't change often
+    staleTime: 60000,
+  });
+}
+
+/**
+ * Push local commits to remote
+ */
+export function usePushChanges() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId }: { spriteId: string }) => {
+      return api.post<PushResult>(`/api/sprites/${spriteId}/git/push`);
+    },
+    onSuccess: (_, { spriteId }) => {
+      // Invalidate branch status to reflect pushed changes
+      queryClient.invalidateQueries({ queryKey: spriteKeys.branchStatus(spriteId) });
+    },
+  });
+}
+
+/**
+ * Create a pull request from sprite
+ */
+export function useCreatePullRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      options,
+    }: {
+      spriteId: string;
+      options?: CreatePullRequestOptions;
+    }) => {
+      return api.post<PullRequestInfo>(`/api/sprites/${spriteId}/pr`, options ?? {});
+    },
+    onSuccess: (pr, { spriteId }) => {
+      // Update PR cache
+      queryClient.setQueryData(spriteKeys.pullRequest(spriteId), pr);
+      // Invalidate branch status
+      queryClient.invalidateQueries({ queryKey: spriteKeys.branchStatus(spriteId) });
     },
   });
 }

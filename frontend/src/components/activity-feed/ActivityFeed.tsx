@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,7 +13,6 @@ import {
 } from '@/hooks/use-activity-feed';
 import { ActivityItem } from './ActivityItem';
 import { ActivityFeedFilter, ActivityFeedFilters } from './ActivityFeedFilter';
-import { Separator } from '@/components/ui/separator';
 import {
   Activity,
   RefreshCw,
@@ -24,6 +22,7 @@ import {
   ChevronsRight,
   AlertCircle,
   Inbox,
+  Loader2,
 } from 'lucide-react';
 
 interface ActivityFeedProps {
@@ -130,27 +129,35 @@ export function ActivityFeed({
   };
 
   return (
-    <Card className={cn('', className)}>
+    <div className={cn('bg-card/50 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden', className)}>
       {showHeader && (
-        <CardHeader className="pb-3">
+        <div className="p-4 border-b border-border/50">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Activity Feed
-            </CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <Activity className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Activity Feed</p>
+                <p className="text-xs text-muted-foreground">
+                  {data?.total || 0} total activities
+                </p>
+              </div>
+            </div>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={() => refetch()}
               disabled={isFetching}
+              className="h-9 w-9 rounded-full"
             >
               <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
             </Button>
           </div>
-        </CardHeader>
+        </div>
       )}
 
-      <CardContent className="space-y-4">
+      <div className="p-4 space-y-4">
         {showFilters && (
           <ActivityFeedFilter
             filters={filters}
@@ -161,15 +168,17 @@ export function ActivityFeed({
 
         {/* Error state */}
         {isError && (
-          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-            <AlertCircle className="h-8 w-8 mb-2 text-red-400" />
-            <p className="text-sm">Failed to load activities</p>
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+              <AlertCircle className="h-7 w-7 text-red-400" />
+            </div>
+            <p className="text-sm font-medium">Failed to load activities</p>
             <p className="text-xs mt-1">{error?.message || 'Unknown error'}</p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => refetch()}
-              className="mt-4"
+              className="mt-4 border-border/50"
             >
               Try again
             </Button>
@@ -178,13 +187,15 @@ export function ActivityFeed({
 
         {/* Loading state */}
         {isLoading && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex gap-4 p-4">
-                <Skeleton className="h-10 w-10 rounded-full" />
+              <div key={i} className="flex gap-3">
+                <Skeleton className="h-9 w-9 rounded-full shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
+                  <div className="p-3 rounded-lg bg-muted/30">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2 mt-2" />
+                  </div>
                 </div>
               </div>
             ))}
@@ -193,10 +204,12 @@ export function ActivityFeed({
 
         {/* Empty state */}
         {!isLoading && !isError && data?.activities.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <Inbox className="h-12 w-12 mb-4" />
-            <p className="text-lg font-medium">No activities found</p>
-            <p className="text-sm mt-1">
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+              <Inbox className="h-8 w-8 opacity-50" />
+            </div>
+            <p className="text-base font-medium">No activities found</p>
+            <p className="text-sm mt-1 text-center px-8">
               {filters.search || Object.keys(filters).length > 0
                 ? 'Try adjusting your filters'
                 : 'Activity will appear here as your team works'}
@@ -208,24 +221,21 @@ export function ActivityFeed({
         {!isLoading && !isError && data && data.activities.length > 0 && (
           <div className="flex flex-col" style={{ maxHeight }}>
             <ScrollArea className="flex-1">
-              <div>
+              <div className="pr-3">
                 {data.activities.map((activity, index) => (
-                  <div key={activity.id}>
-                    <ActivityItem
-                      activity={activity}
-                      isRead={isActivityRead(activity)}
-                      onMarkAsRead={handleMarkAsRead}
-                    />
-                    {index < data.activities.length - 1 && (
-                      <Separator className="my-0" />
-                    )}
-                  </div>
+                  <ActivityItem
+                    key={activity.id}
+                    activity={activity}
+                    isRead={isActivityRead(activity)}
+                    onMarkAsRead={handleMarkAsRead}
+                    isLast={index === data.activities.length - 1}
+                  />
                 ))}
               </div>
             </ScrollArea>
 
             {/* Footer with stats and pagination */}
-            <div className="flex-shrink-0 pt-4 border-t mt-4">
+            <div className="flex-shrink-0 pt-4 mt-2 border-t border-border/50">
               {/* Stats */}
               <div className="text-center text-xs text-muted-foreground mb-4">
                 Showing {data.activities.length} of {data.total} activities
@@ -234,86 +244,89 @@ export function ActivityFeed({
               {/* Pagination controls */}
               {totalPages > 1 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                {/* Page info */}
-                <div className="text-sm text-muted-foreground">
-                  Page {page} of {totalPages} ({data.total} total)
-                </div>
-
-                {/* Pagination buttons */}
-                <div className="flex items-center gap-1">
-                  {/* First page */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handlePageChange(1)}
-                    disabled={page === 1 || isFetching}
-                  >
-                    <ChevronsLeft className="h-4 w-4" />
-                  </Button>
-
-                  {/* Previous page */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page === 1 || isFetching}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-
-                  {/* Page numbers */}
-                  <div className="flex items-center gap-1 mx-2">
-                    {getPageNumbers().map((pageNum, idx) =>
-                      pageNum === 'ellipsis' ? (
-                        <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground">
-                          ...
-                        </span>
-                      ) : (
-                        <Button
-                          key={pageNum}
-                          variant={page === pageNum ? 'default' : 'outline'}
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handlePageChange(pageNum)}
-                          disabled={isFetching}
-                        >
-                          {pageNum}
-                        </Button>
-                      )
-                    )}
+                  {/* Page info */}
+                  <div className="text-sm text-muted-foreground">
+                    Page {page} of {totalPages}
                   </div>
 
-                  {/* Next page */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={page === totalPages || isFetching}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                  {/* Pagination buttons */}
+                  <div className="flex items-center gap-1">
+                    {/* First page */}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg border-border/50"
+                      onClick={() => handlePageChange(1)}
+                      disabled={page === 1 || isFetching}
+                    >
+                      <ChevronsLeft className="h-4 w-4" />
+                    </Button>
 
-                  {/* Last page */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handlePageChange(totalPages)}
-                    disabled={page === totalPages || isFetching}
-                  >
-                    <ChevronsRight className="h-4 w-4" />
-                  </Button>
-                </div>
+                    {/* Previous page */}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg border-border/50"
+                      onClick={() => handlePageChange(page - 1)}
+                      disabled={page === 1 || isFetching}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    {/* Page numbers */}
+                    <div className="flex items-center gap-1 mx-2">
+                      {getPageNumbers().map((pageNum, idx) =>
+                        pageNum === 'ellipsis' ? (
+                          <span key={`ellipsis-${idx}`} className="px-2 text-muted-foreground">
+                            ...
+                          </span>
+                        ) : (
+                          <Button
+                            key={pageNum}
+                            variant={page === pageNum ? 'default' : 'outline'}
+                            size="icon"
+                            className={cn(
+                              'h-8 w-8 rounded-lg',
+                              page !== pageNum && 'border-border/50'
+                            )}
+                            onClick={() => handlePageChange(pageNum)}
+                            disabled={isFetching}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      )}
+                    </div>
+
+                    {/* Next page */}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg border-border/50"
+                      onClick={() => handlePageChange(page + 1)}
+                      disabled={page === totalPages || isFetching}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+
+                    {/* Last page */}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg border-border/50"
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={page === totalPages || isFetching}
+                    >
+                      <ChevronsRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 

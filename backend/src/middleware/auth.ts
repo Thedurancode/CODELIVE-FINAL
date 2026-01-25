@@ -8,6 +8,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../config/supabase';
 import MarketplaceUser from '../models/MarketplaceUser';
+import sequelize from '../config/database';
+import { QueryTypes } from 'sequelize';
 
 const USE_LOCAL_AUTH = process.env.USE_LOCAL_AUTH === 'true';
 
@@ -150,18 +152,47 @@ export const authenticate = async (
       userRole = resolveRoleFromAppMetadata(user);
     }
 
-    // Get or create user in our database (using findOrCreate to prevent race conditions)
-    const [dbUser] = await MarketplaceUser.findOrCreate({
-      where: { id: userId },
-      defaults: {
-        id: userId,
-        email: userEmail,
-        name: userName,
-        company: userCompany,
-        phone: userPhone,
-        role: userRole,
-      },
+    // Get user from database with explicit attributes to avoid missing column errors
+    let dbUser = await MarketplaceUser.findByPk(userId, {
+      attributes: ['id', 'email', 'name', 'company', 'phone', 'role', 'organizationId'],
     });
+
+    // If user doesn't exist, create using raw SQL to avoid model default issues
+    if (!dbUser) {
+      await sequelize.query(
+        `INSERT INTO marketplace_users (id, email, name, company, phone, role, verified, "createdAt", "updatedAt", "lastActiveAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        {
+          bind: [userId, userEmail, userName, userCompany || null, userPhone || null, userRole, true],
+          type: QueryTypes.INSERT,
+        }
+      );
+      // Fetch the user after creation
+      dbUser = await MarketplaceUser.findByPk(userId, {
+        attributes: ['id', 'email', 'name', 'company', 'phone', 'role', 'organizationId'],
+      });
+    }
+
+    if (!dbUser) {
+      res.status(401).json({
+        success: false,
+        error: 'Authentication failed',
+        message: 'Could not find or create user',
+      });
+      return;
+    }
+
+    // Auto-generate organizationId if not set (use user's own ID as their org)
+    let userOrgId = dbUser.organizationId;
+    if (!userOrgId) {
+      userOrgId = dbUser.id;
+      await sequelize.query(
+        `UPDATE marketplace_users SET organization_id = $1 WHERE id = $2`,
+        { bind: [userOrgId, dbUser.id], type: QueryTypes.UPDATE }
+      );
+      console.log(`Auto-set organizationId=${userOrgId} for user ${dbUser.id}`);
+    }
 
     // Attach user to request
     req.user = {
@@ -169,7 +200,7 @@ export const authenticate = async (
       email: dbUser.email,
       name: dbUser.name,
       role: dbUser.role,
-      organizationId: dbUser.organizationId,
+      organizationId: userOrgId,
     };
 
     next();
@@ -233,24 +264,36 @@ export const optionalAuth = async (
     }
 
     if (userId) {
-      // Use findOrCreate to prevent race conditions with concurrent requests
-      const [dbUser] = await MarketplaceUser.findOrCreate({
-        where: { id: userId },
-        defaults: {
-          id: userId,
-          email: userEmail,
-          name: userName,
-          role: userRole,
-        },
+      // Get user with explicit attributes to avoid missing column errors
+      let dbUser = await MarketplaceUser.findByPk(userId, {
+        attributes: ['id', 'email', 'name', 'company', 'phone', 'role', 'organizationId'],
       });
 
-      req.user = {
-        id: dbUser.id,
-        email: dbUser.email,
-        name: dbUser.name,
-        role: dbUser.role,
-        organizationId: dbUser.organizationId,
-      };
+      // If user doesn't exist, create using raw SQL
+      if (!dbUser) {
+        await sequelize.query(
+          `INSERT INTO marketplace_users (id, email, name, role, verified, "createdAt", "updatedAt", "lastActiveAt")
+           VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          {
+            bind: [userId, userEmail, userName, userRole, true],
+            type: QueryTypes.INSERT,
+          }
+        );
+        dbUser = await MarketplaceUser.findByPk(userId, {
+          attributes: ['id', 'email', 'name', 'company', 'phone', 'role', 'organizationId'],
+        });
+      }
+
+      if (dbUser) {
+        req.user = {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          role: dbUser.role,
+          organizationId: dbUser.organizationId,
+        };
+      }
     }
 
     next();

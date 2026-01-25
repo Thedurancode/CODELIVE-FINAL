@@ -336,4 +336,155 @@ export async function streamChat(
   return fullContent;
 }
 
+// Sprite chat event types
+export interface SpriteChatEvent {
+  type: 'init' | 'text' | 'tool_start' | 'tool_end' | 'error' | 'done';
+  data?: string;
+  tool?: { name: string; input?: Record<string, unknown> };
+  error?: string;
+  sessionId?: string;
+}
+
+/**
+ * Stream chat with Claude Code running in a sprite.
+ * Uses SSE to stream responses from the backend.
+ */
+export async function streamSpriteChat(
+  spriteId: string,
+  prompt: string,
+  options: {
+    conversationId?: string;
+    workDir?: string;
+    onEvent?: (event: SpriteChatEvent) => void;
+    onText?: (text: string) => void;
+    abortSignal?: AbortSignal;
+  } = {}
+): Promise<{ fullContent: string; sessionId?: string }> {
+  // Get auth token
+  let token = null;
+  if (typeof window !== 'undefined') {
+    token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
+    if (!token) {
+      const cookieMatch = document.cookie.match(/(?:dispotree_token|codelive_token)=([^;]+)/);
+      if (cookieMatch) {
+        token = cookieMatch[1];
+      }
+    }
+  }
+
+  const res = await fetch(`${API_URL}/api/sprites/${spriteId}/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: JSON.stringify({
+      prompt,
+      conversationId: options.conversationId,
+      workDir: options.workDir,
+    }),
+    signal: options.abortSignal,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => 'Unknown error');
+    throw new ApiError(res.status, `Chat failed: ${errorText}`);
+  }
+
+  const reader = res.body?.getReader();
+  const decoder = new TextDecoder();
+  let fullContent = '';
+  let sessionId: string | undefined;
+  let buffer = '';
+
+  if (reader) {
+    try {
+      while (true) {
+        if (options.abortSignal?.aborted) {
+          reader.cancel();
+          throw new DOMException('Aborted', 'AbortError');
+        }
+
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (!data) continue;
+
+          try {
+            const event = JSON.parse(data) as SpriteChatEvent;
+            options.onEvent?.(event);
+
+            if (event.type === 'init' && event.sessionId) {
+              sessionId = event.sessionId;
+            } else if (event.type === 'text' && event.data) {
+              fullContent += event.data;
+              options.onText?.(event.data);
+            } else if (event.type === 'error') {
+              throw new Error(event.error || 'Unknown error from sprite');
+            } else if (event.type === 'done' && event.sessionId) {
+              sessionId = event.sessionId;
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) {
+              console.warn('Failed to parse sprite chat event:', data);
+            } else {
+              throw e;
+            }
+          }
+        }
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        // Ignore release errors
+      }
+    }
+  }
+
+  return { fullContent, sessionId };
+}
+
+// Sprite chat conversation types
+export interface SpriteChatConversation {
+  id: string;
+  spriteId: string;
+  title: string;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SpriteChatMessage {
+  id: number;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  toolCalls?: any[];
+  createdAt: string;
+}
+
+// Fetch sprite chat conversations
+export function getSpriteChatConversations(spriteId: string) {
+  return api.get<SpriteChatConversation[]>(`/api/sprites/${spriteId}/chat/conversations`);
+}
+
+// Fetch sprite chat history for a conversation
+export function getSpriteChatHistory(spriteId: string, sessionId: string) {
+  return api.get<SpriteChatMessage[]>(`/api/sprites/${spriteId}/chat/conversations/${sessionId}`);
+}
+
+// Delete sprite chat conversation
+export function deleteSpriteChatConversation(spriteId: string, sessionId: string) {
+  return api.delete<{ deleted: number }>(`/api/sprites/${spriteId}/chat/conversations/${sessionId}`);
+}
+
 export { ApiError };

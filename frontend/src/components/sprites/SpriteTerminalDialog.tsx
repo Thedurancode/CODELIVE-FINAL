@@ -22,7 +22,7 @@ import {
 import { useSprite, useResumeSprite, useInitializeSprite } from '@/hooks/use-sprites';
 import { SpriteStatusBadge } from './SpriteStatusBadge';
 import { SpriteTerminal } from './SpriteTerminal';
-import { isSpriteActive } from '@/types/sprite';
+import { isSpriteActive, canResumeSprite } from '@/types/sprite';
 
 export function SpriteTerminalDialog() {
   const open = useTerminalOpen();
@@ -35,14 +35,30 @@ export function SpriteTerminalDialog() {
   const dragControls = useDragControls();
   const constraintsRef = useRef(null);
 
-  // Fetch sprite details
-  const { data: sprite, isLoading } = useSprite(spriteId);
+  // Fetch sprite details with polling during transitions
+  const { data: sprite, isLoading, refetch } = useSprite(spriteId);
   const resumeSprite = useResumeSprite();
   const initializeSprite = useInitializeSprite();
 
   const isActive = sprite ? isSpriteActive(sprite.status) : false;
-  const canResume = sprite?.status === 'stopped' || sprite?.status === 'hibernating';
+  const canResume = sprite ? canResumeSprite(sprite.status) : false;
+  const isRestoring = sprite?.status === 'restoring' || resumeSprite.isPending;
   const isInitializing = sprite?.status === 'initializing' || initializeSprite.isPending;
+
+  // Poll sprite status during transitions
+  useEffect(() => {
+    if (!open || !sprite) return;
+
+    const transitionStatuses = ['creating', 'initializing', 'checkpointing', 'restoring'];
+    if (transitionStatuses.includes(sprite.status)) {
+      console.log('[SpriteTerminalDialog] Polling sprite status during transition:', sprite.status);
+      const pollInterval = setInterval(() => {
+        refetch();
+      }, 2000);
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [open, sprite?.status, refetch]);
 
   const handleClose = useCallback(() => {
     closeTerminal();
@@ -235,6 +251,7 @@ export function SpriteTerminalDialog() {
               /* Active sprite - show terminal */
               <SpriteTerminal
                 spriteId={spriteId}
+                sessionId={sprite?.currentSessionId || undefined}
                 className="flex-1"
                 onConnected={handleConnected}
                 onDisconnected={handleDisconnected}
@@ -284,7 +301,13 @@ export function SpriteTerminalDialog() {
             <div className="flex items-center gap-2">
               {sprite?.repoUrl && <span>{sprite.repoUrl}</span>}
             </div>
-            {isInitializing && (
+            {isRestoring && (
+              <span className="text-blue-400 flex items-center gap-1">
+                <RotateCw className="h-3 w-3 animate-spin" />
+                Resuming coding agent...
+              </span>
+            )}
+            {isInitializing && !isRestoring && (
               <span className="text-yellow-400 flex items-center gap-1">
                 <RotateCw className="h-3 w-3 animate-spin" />
                 Cloning repo & setting up Claude...

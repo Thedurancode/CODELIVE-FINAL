@@ -62,6 +62,7 @@ import {
   MonitorDown,
   Code2,
   Folder,
+  Settings,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import {
@@ -502,7 +503,12 @@ export default function ProjectsPage() {
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       {project.githubUrl && (
-                        <SpriteLaunchButton projectId={project.id} projectTitle={project.title} compact />
+                        <SpriteLaunchButton
+                          projectId={project.id}
+                          projectTitle={project.title}
+                          githubUrl={project.githubUrl}
+                          compact
+                        />
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -637,7 +643,12 @@ export default function ProjectsPage() {
               </Badge>
               <div className="flex items-center gap-1">
                 {project.githubUrl && (
-                  <SpriteLaunchButton projectId={project.id} projectTitle={project.title} compact />
+                  <SpriteLaunchButton
+                    projectId={project.id}
+                    projectTitle={project.title}
+                    githubUrl={project.githubUrl}
+                    compact
+                  />
                 )}
               </div>
             </div>
@@ -702,15 +713,25 @@ export default function ProjectsPage() {
                     New Project
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-card border max-w-xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Create Project</DialogTitle>
+                <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-xl p-0 overflow-hidden shadow-2xl">
+                  <DialogHeader className="px-6 pt-6 pb-0">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                        <Plus className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <DialogTitle className="text-xl">Create Project</DialogTitle>
+                        <p className="text-sm text-muted-foreground">Set up a new project</p>
+                      </div>
+                    </div>
                   </DialogHeader>
-                  <ProjectForm
-                    onSubmit={handleCreate}
-                    onCancel={() => setIsFormOpen(false)}
-                    isLoading={createProject.isPending}
-                  />
+                  <div className="px-6 pb-6">
+                    <ProjectForm
+                      onSubmit={handleCreate}
+                      onCancel={() => setIsFormOpen(false)}
+                      isLoading={createProject.isPending}
+                    />
+                  </div>
                 </DialogContent>
               </Dialog>
             )}
@@ -906,18 +927,28 @@ export default function ProjectsPage() {
         {/* Edit Dialog */}
         {mounted && (
           <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
-            <DialogContent className="bg-card border max-w-xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Project</DialogTitle>
+            <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-xl p-0 overflow-hidden shadow-2xl">
+              <DialogHeader className="px-6 pt-6 pb-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                    <Settings className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl">Edit Project</DialogTitle>
+                    <p className="text-sm text-muted-foreground">Update project settings</p>
+                  </div>
+                </div>
               </DialogHeader>
-              {editingProject && (
-                <ProjectForm
-                  project={editingProject}
-                  onSubmit={handleUpdate}
-                  onCancel={() => setEditingProject(null)}
-                  isLoading={updateProject.isPending}
-                />
-              )}
+              <div className="px-6 pb-6">
+                {editingProject && (
+                  <ProjectForm
+                    project={editingProject}
+                    onSubmit={handleUpdate}
+                    onCancel={() => setEditingProject(null)}
+                    isLoading={updateProject.isPending}
+                  />
+                )}
+              </div>
             </DialogContent>
           </Dialog>
         )}

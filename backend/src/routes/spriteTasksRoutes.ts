@@ -465,4 +465,59 @@ router.post('/from-issue', spriteTasksController.createFromIssue);
  */
 router.post('/process-issue', spriteTasksController.processIssue);
 
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/diff:
+ *   get:
+ *     summary: Get diff for a task's branch
+ *     description: |
+ *       Returns the git diff between the task's branch and the base branch (main).
+ *       Useful for showing file changes in real-time during task execution.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Diff data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 files:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       path:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         enum: [added, modified, deleted, renamed]
+ *                       additions:
+ *                         type: integer
+ *                       deletions:
+ *                         type: integer
+ *                 branchName:
+ *                   type: string
+ *                 baseBranch:
+ *                   type: string
+ *                 additions:
+ *                   type: integer
+ *                 deletions:
+ *                   type: integer
+ *                 changedFiles:
+ *                   type: integer
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id/diff', spriteTasksController.getTaskDiff);
+
 export default router;

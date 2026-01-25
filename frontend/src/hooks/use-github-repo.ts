@@ -266,6 +266,7 @@ export interface GitHubIssue {
   state: 'open' | 'closed';
   url: string;
   createdAt: string;
+  closedAt?: string | null;
   user: {
     login: string;
     avatar_url: string;

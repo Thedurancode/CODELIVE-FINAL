@@ -182,6 +182,7 @@ import CodingTask from './CodingTask';
 // Sprites Integration Models
 import ProjectSprite from './ProjectSprite';
 import SpriteTask from './SpriteTask';
+import SpriteSession from './SpriteSession';
 
 // State Compliance Workflow Models
 import StateDealCompliance, { initStateDealCompliance } from './StateDealCompliance';
@@ -1402,6 +1403,61 @@ SpriteTask.belongsTo(MarketplaceUser, {
   as: 'createdBy',
 });
 
+// ProjectSprite -> SpriteSession (one-to-many)
+ProjectSprite.hasMany(SpriteSession, {
+  foreignKey: 'spriteId',
+  as: 'sessions',
+  onDelete: 'CASCADE',
+});
+SpriteSession.belongsTo(ProjectSprite, {
+  foreignKey: 'spriteId',
+  as: 'sprite',
+});
+
+// Project -> SpriteSession (one-to-many)
+Project.hasMany(SpriteSession, {
+  foreignKey: 'projectId',
+  as: 'spriteSessions',
+  onDelete: 'CASCADE',
+});
+SpriteSession.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// Organization -> SpriteSession (one-to-many)
+Organization.hasMany(SpriteSession, {
+  foreignKey: 'organizationId',
+  as: 'spriteSessions',
+  onDelete: 'CASCADE',
+});
+SpriteSession.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
+// MarketplaceUser -> SpriteSession (started by)
+MarketplaceUser.hasMany(SpriteSession, {
+  foreignKey: 'startedById',
+  as: 'startedSpriteSessions',
+  onDelete: 'SET NULL',
+});
+SpriteSession.belongsTo(MarketplaceUser, {
+  foreignKey: 'startedById',
+  as: 'startedBy',
+});
+
+// MarketplaceUser -> SpriteSession (ended by)
+MarketplaceUser.hasMany(SpriteSession, {
+  foreignKey: 'endedById',
+  as: 'endedSpriteSessions',
+  onDelete: 'SET NULL',
+});
+SpriteSession.belongsTo(MarketplaceUser, {
+  foreignKey: 'endedById',
+  as: 'endedBy',
+});
+
 // MarketplaceUser -> CodingTask (one-to-many, creator)
 MarketplaceUser.hasMany(CodingTask, {
   foreignKey: 'createdById',
@@ -1582,6 +1638,7 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         // Sprites Integration Models
         ProjectSprite,
         SpriteTask,
+        SpriteSession,
         // Client Portal Models
         ProjectClient,
       ];
@@ -1763,6 +1820,7 @@ export {
   // Sprites Integration Models
   ProjectSprite,
   SpriteTask,
+  SpriteSession,
 };
 
 export default {
@@ -1903,6 +1961,7 @@ export default {
   // Sprites Integration Models
   ProjectSprite,
   SpriteTask,
+  SpriteSession,
   syncDatabase,
   testConnection,
 };

@@ -18,6 +18,7 @@ import {
   verifyMagicLink,
   requestMagicLink,
 } from '../controllers/authController';
+import * as localAuth from '../controllers/localAuthController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -148,6 +149,37 @@ router.patch('/me', authenticate, updateProfile);
  *       - bearerAuth: []
  */
 router.put('/password', authenticate, strictLimiter, changePassword);
+
+// ============================================================================
+// LOCAL AUTH ROUTES (standalone JWT auth - no Supabase dependency)
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/auth/local/register:
+ *   post:
+ *     summary: Register a new user (local auth)
+ *     tags: [Authentication]
+ */
+router.post('/local/register', authLimiter, localAuth.register);
+
+/**
+ * @swagger
+ * /api/auth/local/login:
+ *   post:
+ *     summary: Login with email and password (local auth)
+ *     tags: [Authentication]
+ */
+router.post('/local/login', authLimiter, localAuth.login);
+
+/**
+ * @swagger
+ * /api/auth/local/me:
+ *   get:
+ *     summary: Get current user profile (local auth)
+ *     tags: [Authentication]
+ */
+router.get('/local/me', localAuth.getCurrentUser);
 
 // ============================================================================
 // DEVELOPMENT ROUTES (only enabled in development mode)

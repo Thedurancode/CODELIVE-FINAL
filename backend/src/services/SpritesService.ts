@@ -13,6 +13,8 @@
 
 import { getCredentialStore } from '../plugins/browser/SecureCredentialStore';
 import ProjectSprite, { SpriteStatus, SpriteUrlSettings } from '../models/ProjectSprite';
+import SpriteSession from '../models/SpriteSession';
+import type { SessionStartReason, SessionEndReason } from '../models/SpriteSession';
 import Project from '../models/Project';
 
 // Types for Sprites API responses
@@ -83,6 +85,155 @@ export interface StreamMessage {
   data?: string;
   error?: string;
   time: string;
+}
+
+// Kill session streaming event types
+export type KillSessionEventType = 'signal' | 'timeout' | 'exited' | 'killed' | 'error' | 'complete';
+
+export interface KillSessionEvent {
+  type: KillSessionEventType;
+  message?: string;
+  signal?: string; // e.g., 'SIGTERM', 'SIGKILL'
+  pid?: number;
+  exit_code?: number;
+}
+
+// ============================================================================
+// FILESYSTEM API TYPES
+// ============================================================================
+
+// File/directory entry from list operation
+export interface FileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  mode: string; // Octal permissions e.g., '0644'
+  modTime: string; // ISO timestamp
+  uid: number;
+  gid: number;
+}
+
+// List directory response
+export interface ListDirectoryResponse {
+  entries: FileEntry[];
+  path: string;
+}
+
+// Delete options
+export interface DeleteOptions {
+  path: string;
+  workingDir: string;
+  recursive: boolean;
+  asRoot?: boolean;
+}
+
+// Rename/move options
+export interface RenameOptions {
+  source: string;
+  dest: string;
+  workingDir: string;
+  asRoot?: boolean;
+}
+
+// Copy options
+export interface CopyOptions {
+  source: string;
+  dest: string;
+  workingDir: string;
+  recursive?: boolean;
+  preserveAttrs?: boolean;
+  asRoot?: boolean;
+}
+
+// Chmod options
+export interface ChmodOptions {
+  path: string;
+  workingDir: string;
+  mode: string; // Octal e.g., '0755'
+  recursive?: boolean;
+  asRoot?: boolean;
+}
+
+// Chown options
+export interface ChownOptions {
+  path: string;
+  workingDir: string;
+  uid: number | string;
+  gid: number | string;
+  recursive?: boolean;
+  asRoot?: boolean;
+}
+
+// Watch event from filesystem WebSocket
+export type WatchEventType = 'create' | 'modify' | 'delete' | 'rename' | 'chmod';
+
+export interface WatchEvent {
+  type: 'event' | 'error' | 'subscribed' | 'unsubscribed';
+  path?: string;
+  event?: WatchEventType;
+  timestamp?: string;
+  size?: number;
+  isDir?: boolean;
+  message?: string;
+}
+
+// Watch subscription request
+export interface WatchRequest {
+  type: 'subscribe' | 'unsubscribe';
+  paths: string[];
+  recursive?: boolean;
+  workingDir: string;
+}
+
+// ============================================================================
+// SERVICES API TYPES
+// ============================================================================
+
+// Service status
+export type ServiceStatus = 'running' | 'stopped' | 'starting' | 'stopping' | 'error';
+
+// Service definition
+export interface SpriteService {
+  id: string;
+  name: string;
+  command: string;
+  args?: string[];
+  workingDir?: string;
+  env?: Record<string, string>;
+  status: ServiceStatus;
+  pid?: number;
+  port?: number;
+  createdAt: string;
+  startedAt?: string;
+  stoppedAt?: string;
+  exitCode?: number;
+  error?: string;
+}
+
+// Create service options
+export interface CreateServiceOptions {
+  name: string;
+  command: string;
+  args?: string[];
+  workingDir?: string;
+  env?: Record<string, string>;
+  autoStart?: boolean;
+  port?: number;
+}
+
+// Service log entry
+export interface ServiceLogEntry {
+  timestamp: string;
+  stream: 'stdout' | 'stderr';
+  data: string;
+}
+
+// Service logs response
+export interface ServiceLogsResponse {
+  serviceId: string;
+  logs: ServiceLogEntry[];
+  hasMore: boolean;
 }
 
 class SpritesService {
@@ -402,6 +553,66 @@ class SpritesService {
     return messages;
   }
 
+  /**
+   * Parse a command string into an array of arguments, respecting quotes.
+   * Handles: simple commands, quoted strings, escaped characters.
+   * Examples:
+   *   "echo hello" -> ["echo", "hello"]
+   *   "git clone https://github.com/foo/bar.git" -> ["git", "clone", "https://github.com/foo/bar.git"]
+   *   'echo "hello world"' -> ["echo", "hello world"]
+   */
+  private parseCommandString(command: string): string[] {
+    const parts: string[] = [];
+    let current = '';
+    let inQuote: string | null = null;
+    let escaped = false;
+
+    for (let i = 0; i < command.length; i++) {
+      const char = command[i];
+
+      if (escaped) {
+        current += char;
+        escaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+
+      if (inQuote) {
+        if (char === inQuote) {
+          inQuote = null;
+        } else {
+          current += char;
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        inQuote = char;
+        continue;
+      }
+
+      if (char === ' ' || char === '\t') {
+        if (current) {
+          parts.push(current);
+          current = '';
+        }
+        continue;
+      }
+
+      current += char;
+    }
+
+    if (current) {
+      parts.push(current);
+    }
+
+    return parts;
+  }
+
   // ============================================================================
   // SPRITE LIFECYCLE
   // ============================================================================
@@ -461,6 +672,9 @@ class SpritesService {
       this.initializeSprite(sprite.id).catch((error) => {
         console.error(`Sprite initialization failed for ${sprite.id}:`, error);
       });
+
+      // Start tracking session when sprite is created
+      await this.startSession(sprite.id, 'created', options.createdById);
 
       return sprite.reload();
     } catch (error) {
@@ -685,9 +899,7 @@ class SpritesService {
   }
 
   /**
-   * Stop a sprite (mark as stopped and set URL to private)
-   * Note: Sprites.dev doesn't have a pause API - sprites auto-hibernate after 30s of inactivity.
-   * We set the URL to private so the public link won't work while "stopped".
+   * Stop a sprite by creating a checkpoint (forces hibernate) and setting URL to private
    */
   async stopSprite(spriteId: string): Promise<void> {
     const sprite = await ProjectSprite.findByPk(spriteId);
@@ -695,6 +907,47 @@ class SpritesService {
 
     // Store the previous auth setting so we can restore it on resume
     const previousAuth = sprite.urlSettings?.auth || 'sprite';
+
+    // Update status to show we're stopping
+    await sprite.update({
+      status: 'checkpointing',
+      statusMessage: 'Stopping and saving state...',
+    });
+
+    // Create a checkpoint to save state and force hibernate
+    try {
+      const response = await this.request<Response>(
+        sprite.organizationId,
+        'POST',
+        `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/checkpoint`,
+        { comment: 'Stopped by user' },
+        { stream: true, timeout: 120000 }
+      );
+
+      // Process streaming response
+      const messages = await this.processStream(response as unknown as Response);
+      const completeMsg = messages.find((m) => m.type === 'complete');
+
+      if (!completeMsg) {
+        const errorMsg = messages.find((m) => m.type === 'error');
+        console.warn('Checkpoint during stop may have issues:', errorMsg?.error);
+        // Continue anyway - we still want to mark as stopped
+      }
+
+      // Update checkpoint info
+      const checkpoints = await this.listCheckpoints(spriteId);
+      const latestCheckpoint = checkpoints[0];
+      if (latestCheckpoint) {
+        await sprite.update({
+          lastCheckpointId: latestCheckpoint.id,
+          lastCheckpointAt: new Date(),
+          checkpointCount: checkpoints.length,
+        });
+      }
+    } catch (error) {
+      console.warn('Checkpoint during stop failed:', error);
+      // Continue anyway - sprite may auto-hibernate, but we still mark as stopped
+    }
 
     // Set URL to private (requires auth) so public link won't work
     try {
@@ -706,12 +959,15 @@ class SpritesService {
       );
     } catch (error) {
       console.warn('Failed to set sprite URL to private:', error);
-      // Continue anyway - still mark as stopped locally
     }
+
+    // End the current session
+    await this.endSession(sprite.id, 'checkpointed');
 
     await sprite.update({
       status: 'stopped',
       statusMessage: 'Stopped by user',
+      currentSessionId: null, // Clear session ID - shell processes are terminated during checkpoint
       urlSettings: {
         ...sprite.urlSettings,
         auth: 'sprite',
@@ -731,11 +987,42 @@ class SpritesService {
       throw new Error('Cannot resume a deleted sprite');
     }
 
-    // Verify sprite exists in API (this wakes it up)
-    try {
-      await this.getSpriteDetails(sprite.organizationId, sprite.spriteName);
-    } catch (error) {
-      throw new Error(`Failed to wake sprite: ${(error as Error).message}`);
+    // If we have a checkpoint, restore from it to ensure file persistence
+    if (sprite.lastCheckpointId) {
+      console.log(`[SpritesService] Restoring sprite ${spriteId} from checkpoint ${sprite.lastCheckpointId}`);
+
+      await sprite.update({ status: 'restoring', statusMessage: 'Restoring from checkpoint...' });
+
+      try {
+        const response = await this.request<Response>(
+          sprite.organizationId,
+          'POST',
+          `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/checkpoints/${sprite.lastCheckpointId}/restore`,
+          undefined,
+          { stream: true, timeout: 120000 }
+        );
+
+        // Process streaming response
+        const messages = await this.processStream(response as unknown as Response);
+        const completeMsg = messages.find((m) => m.type === 'complete');
+
+        if (!completeMsg) {
+          const errorMsg = messages.find((m) => m.type === 'error');
+          console.warn('Checkpoint restore may have issues:', errorMsg?.error);
+          // Continue anyway - sprite might still work
+        }
+      } catch (error) {
+        console.warn('Failed to restore from checkpoint, waking sprite without restore:', error);
+        // Fall through to regular wake-up
+      }
+    } else {
+      // No checkpoint - just wake the sprite
+      console.log(`[SpritesService] Waking sprite ${spriteId} (no checkpoint to restore)`);
+      try {
+        await this.getSpriteDetails(sprite.organizationId, sprite.spriteName);
+      } catch (error) {
+        throw new Error(`Failed to wake sprite: ${(error as Error).message}`);
+      }
     }
 
     // Restore previous URL auth setting if it was public before
@@ -753,9 +1040,12 @@ class SpritesService {
       }
     }
 
+    // Start a new session for the resumed sprite
+    await this.startSession(sprite.id, 'resumed');
+
     await sprite.update({
       status: 'running',
-      statusMessage: 'Resumed',
+      statusMessage: 'Resumed from checkpoint',
       lastAccessedAt: new Date(),
       urlSettings: {
         ...sprite.urlSettings,
@@ -896,6 +1186,9 @@ class SpritesService {
         throw new Error(errorMsg?.error || 'Restore failed');
       }
 
+      // Start a new session for the restored sprite
+      await this.startSession(sprite.id, 'restored');
+
       await sprite.update({
         status: 'running',
         statusMessage: 'Restored from checkpoint',
@@ -926,7 +1219,25 @@ class SpritesService {
     return new Promise(async (resolve, reject) => {
       const token = await this.getOrgToken(organizationId);
       const params = new URLSearchParams();
-      params.append('cmd', command);
+
+      // Sprites API requires repeated 'cmd' params for command + args
+      // Detect shell operators that require wrapping in sh -c
+      const shellOperators = ['||', '&&', '|', '>', '<', ';', '`', '$', '(', ')', '{', '}'];
+      const needsShell = shellOperators.some((op) => command.includes(op));
+
+      if (needsShell) {
+        // Wrap in sh -c for shell interpretation
+        params.append('cmd', 'sh');
+        params.append('cmd', '-c');
+        params.append('cmd', command);
+      } else {
+        // Simple command - parse and pass as separate args
+        const parts = this.parseCommandString(command);
+        for (const part of parts) {
+          params.append('cmd', part);
+        }
+      }
+
       if (options.workDir) params.append('dir', options.workDir);
 
       const wsUrl = `wss://api.sprites.dev/v1/sprites/${encodeURIComponent(spriteName)}/exec?${params.toString()}`;
@@ -951,28 +1262,34 @@ class SpritesService {
       });
 
       ws.on('message', (data: Buffer) => {
+        const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+
+        // Check for binary stream protocol: 0x01=stdout, 0x02=stderr, 0x03=exit
+        if (buf.length > 1) {
+          const streamId = buf[0];
+          if (streamId === 0x01 || streamId === 0x02) {
+            // stdout or stderr - append payload
+            output += buf.slice(1).toString('utf8');
+            return;
+          }
+          if (streamId === 0x03) {
+            // exit code
+            exitCode = buf.length > 1 ? buf[1] : 0;
+            return;
+          }
+        }
+
+        // Try parsing as JSON (for session_info, exit messages)
         try {
-          // Handle binary output
-          if (Buffer.isBuffer(data)) {
-            // First byte might be channel indicator (0=stdout, 1=stderr)
-            const text = data.toString('utf8');
-            output += text;
-          } else {
-            // JSON message
-            const msg = JSON.parse(data.toString());
-            if (msg.type === 'session_info') {
-              sessionId = msg.session_id?.toString();
-            } else if (msg.type === 'exit') {
-              exitCode = msg.exit_code || 0;
-            } else if (msg.stdout) {
-              output += msg.stdout;
-            } else if (msg.stderr) {
-              output += msg.stderr;
-            }
+          const msg = JSON.parse(buf.toString('utf8'));
+          if (msg.type === 'session_info') {
+            sessionId = msg.session_id?.toString();
+          } else if (msg.type === 'exit') {
+            exitCode = msg.exit_code ?? 0;
           }
         } catch {
-          // Binary data, add to output
-          output += data.toString();
+          // Not JSON, treat as raw output
+          output += buf.toString('utf8');
         }
       });
 
@@ -1108,22 +1425,330 @@ class SpritesService {
   }
 
   /**
-   * Kill an exec session
+   * Kill session streaming event types
    */
-  async killExecSession(spriteId: string, sessionId: string | number): Promise<void> {
+  // Defined inline to avoid circular dependencies
+
+  /**
+   * Kill an exec session with streaming events
+   * Returns an array of streaming events from the kill operation
+   */
+  async killExecSession(
+    spriteId: string,
+    sessionId: string | number,
+    options: { signal?: string; timeout?: string } = {}
+  ): Promise<KillSessionEvent[]> {
     const sprite = await ProjectSprite.findByPk(spriteId);
     if (!sprite) throw new Error('Sprite not found');
+
+    // Build query params
+    const params = new URLSearchParams();
+    if (options.signal) params.append('signal', options.signal);
+    if (options.timeout) params.append('timeout', options.timeout);
+
+    const queryString = params.toString();
+    const path = `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/exec/${sessionId}/kill${queryString ? `?${queryString}` : ''}`;
 
     const response = await this.request<Response>(
       sprite.organizationId,
       'POST',
-      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/exec/${sessionId}/kill`,
+      path,
       undefined,
       { stream: true }
     );
 
-    // Process streaming response
-    await this.processStream(response as unknown as Response);
+    // Process streaming NDJSON response
+    const events = await this.processKillStream(response as unknown as Response);
+    return events;
+  }
+
+  /**
+   * Process streaming NDJSON response from kill endpoint
+   */
+  private async processKillStream(response: Response): Promise<KillSessionEvent[]> {
+    const events: KillSessionEvent[] = [];
+    const reader = response.body?.getReader();
+    if (!reader) return events;
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const event = JSON.parse(line) as KillSessionEvent;
+              events.push(event);
+              console.log(`[SpritesService] Kill event:`, event);
+            } catch {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return events;
+  }
+
+  // ============================================================================
+  // FILESYSTEM API
+  // ============================================================================
+
+  /**
+   * Read file contents from sprite filesystem
+   * Returns raw file bytes as Buffer
+   */
+  async readFile(
+    spriteId: string,
+    path: string,
+    workingDir: string = '/home/sprite'
+  ): Promise<Buffer> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    const token = await this.getOrgToken(sprite.organizationId);
+    const params = new URLSearchParams({
+      path,
+      workingDir,
+    });
+
+    const url = `${this.config.baseUrl}/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/read?${params.toString()}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to read file (${response.status}): ${errorText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  /**
+   * Read file contents as string (convenience method)
+   */
+  async readFileText(
+    spriteId: string,
+    path: string,
+    workingDir: string = '/home/sprite'
+  ): Promise<string> {
+    const buffer = await this.readFile(spriteId, path, workingDir);
+    return buffer.toString('utf8');
+  }
+
+  /**
+   * Write file contents to sprite filesystem
+   */
+  async writeFile(
+    spriteId: string,
+    path: string,
+    content: Buffer | string,
+    options: {
+      workingDir?: string;
+      mode?: string; // Octal e.g., '0644'
+      mkdir?: boolean; // Create parent directories
+    } = {}
+  ): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    const token = await this.getOrgToken(sprite.organizationId);
+    const params = new URLSearchParams({
+      path,
+      workingDir: options.workingDir || '/home/sprite',
+    });
+
+    if (options.mode) params.append('mode', options.mode);
+    if (options.mkdir) params.append('mkdir', 'true');
+
+    const url = `${this.config.baseUrl}/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/write?${params.toString()}`;
+
+    const body = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
+
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/octet-stream',
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to write file (${response.status}): ${errorText}`);
+    }
+  }
+
+  /**
+   * List directory contents
+   */
+  async listDirectory(
+    spriteId: string,
+    path: string,
+    workingDir: string = '/home/sprite'
+  ): Promise<FileEntry[]> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    const token = await this.getOrgToken(sprite.organizationId);
+    const params = new URLSearchParams({
+      path,
+      workingDir,
+    });
+
+    const url = `${this.config.baseUrl}/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/list?${params.toString()}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to list directory (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.entries || data || [];
+  }
+
+  /**
+   * Delete file or directory
+   */
+  async deleteFile(spriteId: string, options: DeleteOptions): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    await this.request<void>(
+      sprite.organizationId,
+      'DELETE',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/delete`,
+      {
+        path: options.path,
+        workingDir: options.workingDir,
+        recursive: options.recursive,
+        asRoot: options.asRoot || false,
+      }
+    );
+  }
+
+  /**
+   * Rename or move file/directory
+   */
+  async renameFile(spriteId: string, options: RenameOptions): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    await this.request<void>(
+      sprite.organizationId,
+      'POST',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/rename`,
+      {
+        source: options.source,
+        dest: options.dest,
+        workingDir: options.workingDir,
+        asRoot: options.asRoot || false,
+      }
+    );
+  }
+
+  /**
+   * Copy file or directory
+   */
+  async copyFile(spriteId: string, options: CopyOptions): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    await this.request<void>(
+      sprite.organizationId,
+      'POST',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/copy`,
+      {
+        source: options.source,
+        dest: options.dest,
+        workingDir: options.workingDir,
+        recursive: options.recursive ?? false,
+        preserveAttrs: options.preserveAttrs ?? false,
+        asRoot: options.asRoot || false,
+      }
+    );
+  }
+
+  /**
+   * Change file permissions (chmod)
+   */
+  async chmod(spriteId: string, options: ChmodOptions): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    await this.request<void>(
+      sprite.organizationId,
+      'POST',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/chmod`,
+      {
+        path: options.path,
+        workingDir: options.workingDir,
+        mode: options.mode,
+        recursive: options.recursive ?? false,
+        asRoot: options.asRoot || false,
+      }
+    );
+  }
+
+  /**
+   * Change file ownership (chown)
+   */
+  async chown(spriteId: string, options: ChownOptions): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    await this.request<void>(
+      sprite.organizationId,
+      'POST',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/chown`,
+      {
+        path: options.path,
+        workingDir: options.workingDir,
+        uid: options.uid,
+        gid: options.gid,
+        recursive: options.recursive ?? false,
+        asRoot: options.asRoot || false,
+      }
+    );
+  }
+
+  /**
+   * Get WebSocket URL for filesystem watch endpoint
+   * Used to watch for real-time file changes
+   */
+  async getFilesystemWatchInfo(spriteId: string): Promise<{ wsUrl: string; token: string }> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    const token = await this.getOrgToken(sprite.organizationId);
+    const wsUrl = `wss://api.sprites.dev/v1/sprites/${encodeURIComponent(sprite.spriteName)}/fs/watch`;
+
+    return { wsUrl, token };
   }
 
   // ============================================================================
@@ -1167,6 +1792,861 @@ class SpritesService {
         await sprite.update({ status: 'deleted' });
       }
       return sprite.reload();
+    }
+  }
+
+  /**
+   * Execute Claude Code in streaming mode for chat interface.
+   * Uses `claude -p "prompt" --output-format stream-json` for structured output.
+   * Yields parsed events as they arrive via WebSocket.
+   */
+  async *execClaudeChatStream(
+    spriteId: string,
+    prompt: string,
+    options: {
+      continueSession?: boolean;
+      workDir?: string;
+      timeout?: number;
+    } = {}
+  ): AsyncGenerator<
+    { type: 'text' | 'tool_start' | 'tool_end' | 'error' | 'done' | 'init'; data?: string; error?: string; sessionId?: string },
+    void,
+    unknown
+  > {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      yield { type: 'error', error: 'Sprite not found' };
+      return;
+    }
+
+    if (!sprite.spriteName) {
+      yield { type: 'error', error: 'Sprite not initialized' };
+      return;
+    }
+
+    if (sprite.status !== 'running') {
+      yield { type: 'error', error: `Sprite is not running (status: ${sprite.status})` };
+      return;
+    }
+
+    const token = await this.getOrgToken(sprite.organizationId);
+    const params = new URLSearchParams();
+
+    // Escape the prompt for shell
+    const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+
+    // Build claude command with stream-json output
+    // Note: --verbose is required when using --output-format=stream-json with -p
+    let command = `claude -p "${escapedPrompt}" --output-format stream-json --verbose`;
+    if (options.continueSession) {
+      command += ' --continue';
+    }
+
+    // Use sh -c to handle the complex command
+    params.append('cmd', 'sh');
+    params.append('cmd', '-c');
+    params.append('cmd', command);
+    params.append('tty', 'false');
+
+    if (options.workDir || sprite.workingDirectory) {
+      params.append('dir', options.workDir || sprite.workingDirectory);
+    }
+
+    const wsUrl = `wss://api.sprites.dev/v1/sprites/${encodeURIComponent(sprite.spriteName)}/exec?${params.toString()}`;
+
+    // Create a promise-based async iterator for WebSocket events
+    const WebSocket = require('ws');
+    const ws = new WebSocket(wsUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    // Queue to hold events until they're consumed
+    const eventQueue: Array<{ type: string; data?: string; error?: string; sessionId?: string }> = [];
+    let resolveNext: ((value: IteratorResult<any, void>) => void) | null = null;
+    let isDone = false;
+    let accumulatedText = '';
+    let sessionId: string | undefined;
+
+    const pushEvent = (event: { type: string; data?: string; error?: string; sessionId?: string }) => {
+      if (resolveNext) {
+        resolveNext({ value: event, done: false });
+        resolveNext = null;
+      } else {
+        eventQueue.push(event);
+      }
+    };
+
+    const timeout = setTimeout(() => {
+      ws.close();
+      pushEvent({ type: 'error', error: 'Command execution timeout' });
+      isDone = true;
+    }, options.timeout || this.config.initTimeout);
+
+    ws.on('open', () => {
+      pushEvent({ type: 'init', data: 'Connected to sprite', sessionId });
+    });
+
+    ws.on('message', (data: Buffer) => {
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+
+      // Check for binary stream protocol
+      if (buf.length > 1) {
+        const streamId = buf[0];
+        if (streamId === 0x01 || streamId === 0x02) {
+          // stdout or stderr
+          const text = buf.slice(1).toString('utf8');
+          accumulatedText += text;
+
+          // Try to parse complete JSON lines from accumulated text
+          const lines = accumulatedText.split('\n');
+          accumulatedText = lines.pop() || ''; // Keep incomplete line
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const event = JSON.parse(line);
+              // Parse Claude's stream-json format
+              if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+                pushEvent({ type: 'text', data: event.delta.text });
+              } else if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+                pushEvent({
+                  type: 'tool_start',
+                  data: JSON.stringify({
+                    name: event.content_block.name,
+                    id: event.content_block.id,
+                  }),
+                });
+              } else if (event.type === 'content_block_stop') {
+                // Could indicate tool_end, but we'll keep it simple for now
+              } else if (event.type === 'message_stop') {
+                pushEvent({ type: 'done' });
+              } else if (event.type === 'error') {
+                pushEvent({ type: 'error', error: event.error?.message || 'Unknown error' });
+              }
+            } catch {
+              // Not JSON or parse error, emit as raw text
+              pushEvent({ type: 'text', data: line });
+            }
+          }
+          return;
+        }
+        if (streamId === 0x03) {
+          // exit code - stream is ending
+          return;
+        }
+      }
+
+      // Try parsing as JSON (for session_info)
+      try {
+        const msg = JSON.parse(buf.toString('utf8'));
+        if (msg.type === 'session_info') {
+          sessionId = msg.session_id?.toString();
+          pushEvent({ type: 'init', sessionId });
+        }
+      } catch {
+        // Not JSON, treat as raw output
+        const text = buf.toString('utf8');
+        if (text.trim()) {
+          pushEvent({ type: 'text', data: text });
+        }
+      }
+    });
+
+    ws.on('close', () => {
+      clearTimeout(timeout);
+      // Process any remaining accumulated text
+      if (accumulatedText.trim()) {
+        try {
+          const event = JSON.parse(accumulatedText);
+          if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+            pushEvent({ type: 'text', data: event.delta.text });
+          }
+        } catch {
+          pushEvent({ type: 'text', data: accumulatedText });
+        }
+      }
+      pushEvent({ type: 'done' });
+      isDone = true;
+      if (resolveNext) {
+        resolveNext({ value: undefined, done: true });
+        resolveNext = null;
+      }
+    });
+
+    ws.on('error', (error: Error) => {
+      clearTimeout(timeout);
+      pushEvent({ type: 'error', error: error.message });
+      isDone = true;
+    });
+
+    // Async iterator implementation
+    while (!isDone || eventQueue.length > 0) {
+      if (eventQueue.length > 0) {
+        const event = eventQueue.shift()!;
+        yield event as any;
+        if (event.type === 'done' || event.type === 'error') {
+          break;
+        }
+      } else if (!isDone) {
+        // Wait for next event
+        const event = await new Promise<IteratorResult<any, void>>((resolve) => {
+          resolveNext = resolve;
+        });
+        if (event.done) break;
+        yield event.value;
+        if (event.value.type === 'done' || event.value.type === 'error') {
+          break;
+        }
+      }
+    }
+
+    // Clean up
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close();
+    }
+  }
+
+  // ============================================================================
+  // SERVICES API
+  // ============================================================================
+
+  /**
+   * List all services for a sprite
+   */
+  async listServices(spriteId: string): Promise<SpriteService[]> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    const response = await this.request<{ services: SpriteService[] }>(
+      sprite.organizationId,
+      'GET',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/services`
+    );
+
+    return response.services || [];
+  }
+
+  /**
+   * Get a specific service by ID
+   */
+  async getService(spriteId: string, serviceId: string): Promise<SpriteService> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    return this.request<SpriteService>(
+      sprite.organizationId,
+      'GET',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/services/${encodeURIComponent(serviceId)}`
+    );
+  }
+
+  /**
+   * Create a new service
+   */
+  async createService(spriteId: string, options: CreateServiceOptions): Promise<SpriteService> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    if (!sprite.isActive()) {
+      throw new Error('Sprite must be running to create services');
+    }
+
+    return this.request<SpriteService>(
+      sprite.organizationId,
+      'POST',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/services`,
+      options
+    );
+  }
+
+  /**
+   * Start a service
+   */
+  async startService(spriteId: string, serviceId: string): Promise<SpriteService> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    if (!sprite.isActive()) {
+      throw new Error('Sprite must be running to start services');
+    }
+
+    return this.request<SpriteService>(
+      sprite.organizationId,
+      'POST',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/services/${encodeURIComponent(serviceId)}/start`
+    );
+  }
+
+  /**
+   * Stop a service
+   */
+  async stopService(spriteId: string, serviceId: string): Promise<SpriteService> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    return this.request<SpriteService>(
+      sprite.organizationId,
+      'POST',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/services/${encodeURIComponent(serviceId)}/stop`
+    );
+  }
+
+  /**
+   * Delete a service
+   */
+  async deleteService(spriteId: string, serviceId: string): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    await this.request<void>(
+      sprite.organizationId,
+      'DELETE',
+      `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/services/${encodeURIComponent(serviceId)}`
+    );
+  }
+
+  /**
+   * Get service logs
+   */
+  async getServiceLogs(
+    spriteId: string,
+    serviceId: string,
+    options: { tail?: number; since?: string; follow?: boolean } = {}
+  ): Promise<ServiceLogsResponse> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    const params = new URLSearchParams();
+    if (options.tail !== undefined) {
+      params.append('tail', options.tail.toString());
+    }
+    if (options.since) {
+      params.append('since', options.since);
+    }
+
+    const queryString = params.toString();
+    const path = `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/services/${encodeURIComponent(serviceId)}/logs${queryString ? `?${queryString}` : ''}`;
+
+    return this.request<ServiceLogsResponse>(sprite.organizationId, 'GET', path);
+  }
+
+  /**
+   * Restart a service (stop + start)
+   */
+  async restartService(spriteId: string, serviceId: string): Promise<SpriteService> {
+    await this.stopService(spriteId, serviceId);
+    // Brief delay to ensure clean shutdown
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return this.startService(spriteId, serviceId);
+  }
+
+  // ============================================================================
+  // SESSION TRACKING
+  // ============================================================================
+
+  /**
+   * Start a new session for a sprite.
+   * Automatically ends any existing active session first.
+   */
+  async startSession(
+    spriteId: string,
+    reason: SessionStartReason = 'created',
+    userId?: string
+  ): Promise<SpriteSession> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    // End any existing active session first
+    if (sprite.currentSessionId) {
+      await this.endSession(spriteId, 'stopped', userId);
+    }
+
+    // Create new session
+    const session = await SpriteSession.startSession(
+      spriteId,
+      sprite.projectId,
+      sprite.organizationId,
+      reason,
+      userId
+    );
+
+    // Update sprite with session info
+    await sprite.update({
+      currentSessionId: session.id,
+      lastStartedAt: session.startedAt,
+      sessionCount: (sprite.sessionCount || 0) + 1,
+    });
+
+    console.log(`✅ Started session ${session.id} for sprite ${sprite.spriteName} (reason: ${reason})`);
+    return session;
+  }
+
+  /**
+   * End the current session for a sprite.
+   * Updates sprite's total runtime with the session duration.
+   */
+  async endSession(
+    spriteId: string,
+    reason: SessionEndReason = 'stopped',
+    userId?: string
+  ): Promise<SpriteSession | null> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    if (!sprite.currentSessionId) {
+      console.warn(`No active session for sprite ${sprite.spriteName}`);
+      return null;
+    }
+
+    // Get and end the current session
+    const session = await SpriteSession.findByPk(sprite.currentSessionId);
+    if (!session) {
+      console.warn(`Session ${sprite.currentSessionId} not found`);
+      await sprite.update({ currentSessionId: null });
+      return null;
+    }
+
+    await session.endSession(reason, userId);
+
+    // Update sprite's total runtime
+    const newTotalRuntime = (sprite.totalRuntimeSeconds || 0) + (session.durationSeconds || 0);
+    await sprite.update({
+      currentSessionId: null,
+      totalRuntimeSeconds: newTotalRuntime,
+    });
+
+    console.log(`✅ Ended session ${session.id} for sprite ${sprite.spriteName} (duration: ${session.durationSeconds}s, reason: ${reason})`);
+    return session;
+  }
+
+  /**
+   * Get session history for a sprite
+   */
+  async getSessionHistory(
+    spriteId: string,
+    options: { limit?: number; offset?: number } = {}
+  ): Promise<SpriteSession[]> {
+    return SpriteSession.getSessionsForSprite(spriteId, options);
+  }
+
+  /**
+   * Get total runtime for a sprite (in seconds)
+   * Includes current active session if any
+   */
+  async getTotalRuntime(spriteId: string): Promise<number> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    return sprite.getTotalRuntimeWithCurrent();
+  }
+
+  /**
+   * Get runtime stats for a sprite
+   */
+  async getRuntimeStats(spriteId: string): Promise<{
+    totalRuntimeSeconds: number;
+    sessionCount: number;
+    averageSessionDuration: number;
+    lastSessionAt: Date | null;
+    isCurrentlyActive: boolean;
+    currentSessionDuration: number;
+    formattedRuntime: string;
+  }> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    const totalRuntime = sprite.getTotalRuntimeWithCurrent();
+    const currentSessionDuration = sprite.getCurrentSessionRuntime();
+    const averageSessionDuration =
+      sprite.sessionCount > 0
+        ? Math.floor((sprite.totalRuntimeSeconds || 0) / sprite.sessionCount)
+        : 0;
+
+    return {
+      totalRuntimeSeconds: totalRuntime,
+      sessionCount: sprite.sessionCount || 0,
+      averageSessionDuration,
+      lastSessionAt: sprite.lastStartedAt,
+      isCurrentlyActive: !!sprite.currentSessionId,
+      currentSessionDuration,
+      formattedRuntime: sprite.getFormattedRuntime(),
+    };
+  }
+
+  /**
+   * Get organization-wide runtime statistics
+   */
+  async getOrganizationRuntimeStats(
+    organizationId: string,
+    options: { startDate?: Date; endDate?: Date } = {}
+  ): Promise<{
+    totalRuntimeSeconds: number;
+    sessionCount: number;
+    activeSpriteCount: number;
+    formattedRuntime: string;
+  }> {
+    const totalRuntimeSeconds = await SpriteSession.getOrganizationTotalRuntime(
+      organizationId,
+      options
+    );
+
+    // Get session count
+    const sessions = await SpriteSession.getSessionsForOrganization(organizationId, options);
+    const sessionCount = sessions.length;
+
+    // Get active sprite count
+    const activeSprites = await ProjectSprite.getActiveSprites(organizationId);
+    const activeSpriteCount = activeSprites.length;
+
+    // Format runtime
+    const seconds = totalRuntimeSeconds;
+    let formattedRuntime: string;
+    if (seconds < 60) {
+      formattedRuntime = `${seconds}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      formattedRuntime = `${minutes}m`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      formattedRuntime = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+
+    return {
+      totalRuntimeSeconds,
+      sessionCount,
+      activeSpriteCount,
+      formattedRuntime,
+    };
+  }
+
+  // ============================================================================
+  // PULL REQUEST MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Create a pull request from the sprite's feature branch to the base branch.
+   * Uses gh CLI which is authenticated during sprite initialization.
+   */
+  async createPullRequest(
+    spriteId: string,
+    options: {
+      title?: string;
+      body?: string;
+      draft?: boolean;
+    } = {}
+  ): Promise<{
+    url: string;
+    number: number;
+    title: string;
+    state: string;
+    headBranch: string;
+    baseBranch: string;
+  }> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    if (!sprite.featureBranch) {
+      throw new Error('No feature branch configured for this sprite');
+    }
+
+    if (!sprite.githubConfigured) {
+      throw new Error('GitHub is not configured for this sprite');
+    }
+
+    // Default title based on feature branch name
+    const defaultTitle = `Changes from sprite: ${sprite.spriteName}`;
+    const title = options.title || defaultTitle;
+
+    // Default body
+    const defaultBody = `## Summary
+This PR contains changes made by Claude Code in sprite \`${sprite.spriteName}\`.
+
+### Branch
+- **From:** \`${sprite.featureBranch}\`
+- **To:** \`${sprite.branch}\`
+
+---
+*Created automatically via Dispotree Sprites*`;
+
+    const body = options.body || defaultBody;
+
+    // Build gh pr create command
+    const ghCommand = [
+      'gh pr create',
+      `--title "${title.replace(/"/g, '\\"')}"`,
+      `--body "${body.replace(/"/g, '\\"')}"`,
+      `--base "${sprite.branch}"`,
+      `--head "${sprite.featureBranch}"`,
+      options.draft ? '--draft' : '',
+      '--json url,number,title,state,headRefName,baseRefName',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    try {
+      // Execute gh pr create in the working directory
+      const result = await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `cd ${sprite.workingDirectory} && ${ghCommand}`
+      );
+
+      if (result.exitCode !== 0) {
+        // Check if PR already exists
+        if (result.stderr?.includes('already exists')) {
+          // Get existing PR info
+          const existingPr = await this.getPullRequest(spriteId);
+          if (existingPr) {
+            return existingPr;
+          }
+        }
+        throw new Error(result.stderr || 'Failed to create pull request');
+      }
+
+      // Parse the JSON output
+      const prData = JSON.parse(result.stdout.trim());
+
+      return {
+        url: prData.url,
+        number: prData.number,
+        title: prData.title,
+        state: prData.state,
+        headBranch: prData.headRefName,
+        baseBranch: prData.baseRefName,
+      };
+    } catch (error) {
+      if ((error as Error).message.includes('already exists')) {
+        // PR already exists, try to get its info
+        const existingPr = await this.getPullRequest(spriteId);
+        if (existingPr) {
+          return existingPr;
+        }
+      }
+      throw new Error(`Failed to create PR: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Get the existing pull request for a sprite's feature branch.
+   */
+  async getPullRequest(spriteId: string): Promise<{
+    url: string;
+    number: number;
+    title: string;
+    state: string;
+    headBranch: string;
+    baseBranch: string;
+  } | null> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName || !sprite.featureBranch) {
+      return null;
+    }
+
+    try {
+      // Use gh pr view to get PR info for the feature branch
+      const result = await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `cd ${sprite.workingDirectory} && gh pr view "${sprite.featureBranch}" --json url,number,title,state,headRefName,baseRefName 2>/dev/null`
+      );
+
+      if (result.exitCode !== 0 || !result.stdout.trim()) {
+        return null;
+      }
+
+      const prData = JSON.parse(result.stdout.trim());
+
+      return {
+        url: prData.url,
+        number: prData.number,
+        title: prData.title,
+        state: prData.state,
+        headBranch: prData.headRefName,
+        baseBranch: prData.baseRefName,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get the status of commits on the feature branch vs base branch.
+   * Returns info about how many commits ahead/behind the feature branch is.
+   */
+  async getBranchStatus(spriteId: string): Promise<{
+    featureBranch: string;
+    baseBranch: string;
+    ahead: number;
+    behind: number;
+    hasUncommittedChanges: boolean;
+    lastCommitMessage: string | null;
+    lastCommitAuthor: string | null;
+    lastCommitDate: string | null;
+  }> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    const featureBranch = sprite.featureBranch || sprite.branch;
+    const baseBranch = sprite.branch;
+
+    // Fetch latest from remote
+    await this.execCommand(
+      sprite.organizationId,
+      sprite.spriteName,
+      `cd ${sprite.workingDirectory} && git fetch origin 2>/dev/null || true`
+    );
+
+    // Get ahead/behind count
+    const revListResult = await this.execCommand(
+      sprite.organizationId,
+      sprite.spriteName,
+      `cd ${sprite.workingDirectory} && git rev-list --left-right --count origin/${baseBranch}...${featureBranch} 2>/dev/null || echo "0 0"`
+    );
+
+    const [behind, ahead] = revListResult.stdout.trim().split(/\s+/).map(Number);
+
+    // Check for uncommitted changes
+    const statusResult = await this.execCommand(
+      sprite.organizationId,
+      sprite.spriteName,
+      `cd ${sprite.workingDirectory} && git status --porcelain`
+    );
+    const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
+
+    // Get last commit info
+    const logResult = await this.execCommand(
+      sprite.organizationId,
+      sprite.spriteName,
+      `cd ${sprite.workingDirectory} && git log -1 --format="%s|||%an|||%aI" 2>/dev/null || echo ""`
+    );
+
+    let lastCommitMessage: string | null = null;
+    let lastCommitAuthor: string | null = null;
+    let lastCommitDate: string | null = null;
+
+    if (logResult.stdout.trim()) {
+      const [message, author, date] = logResult.stdout.trim().split('|||');
+      lastCommitMessage = message || null;
+      lastCommitAuthor = author || null;
+      lastCommitDate = date || null;
+    }
+
+    return {
+      featureBranch,
+      baseBranch,
+      ahead: ahead || 0,
+      behind: behind || 0,
+      hasUncommittedChanges,
+      lastCommitMessage,
+      lastCommitAuthor,
+      lastCommitDate,
+    };
+  }
+
+  /**
+   * Push any local commits to the remote feature branch.
+   */
+  async pushChanges(spriteId: string): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) {
+      throw new Error('Sprite not found');
+    }
+
+    if (!sprite.spriteName) {
+      throw new Error('Sprite not initialized');
+    }
+
+    if (!sprite.githubConfigured) {
+      throw new Error('GitHub is not configured for this sprite');
+    }
+
+    const branch = sprite.featureBranch || sprite.branch;
+
+    try {
+      const result = await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `cd ${sprite.workingDirectory} && git push origin ${branch}`
+      );
+
+      if (result.exitCode !== 0) {
+        return {
+          success: false,
+          message: result.stderr || 'Push failed',
+        };
+      }
+
+      return {
+        success: true,
+        message: `Successfully pushed to ${branch}`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: (error as Error).message,
+      };
     }
   }
 }

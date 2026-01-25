@@ -9,8 +9,20 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
+
+interface AuthResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    company?: string;
+    verified?: boolean;
+  };
+  token: string;
+  expiresIn: number;
+}
 
 const REMEMBER_EMAIL_KEY = 'codelive_remember_email';
 const REMEMBER_ME_KEY = 'codelive_remember_me';
@@ -68,53 +80,39 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    if (!supabase) {
-      toast.error('Authentication service not configured');
-      setIsLoading(false);
-      return;
-    }
-
     try {
       if (isRegister) {
-        const { data, error } = await supabase.auth.signUp({
+        // Register with backend API
+        const response = await api.post<AuthResponse>('/api/auth/local/register', {
           email: form.email,
           password: form.password,
-          options: {
-            data: {
-              name: form.name,
-            },
-          },
+          name: form.name,
         });
 
-        if (error) throw error;
-
-        if (data.session) {
-          document.cookie = `codelive_token=${data.session.access_token}; path=/; max-age=${60 * 60 * 24 * 7}`;
-          localStorage.setItem('codelive_token', data.session.access_token);
+        if (response.token) {
+          document.cookie = `dispotree_token=${response.token}; path=/; max-age=${60 * 60 * 24 * 7}`;
+          localStorage.setItem('dispotree_token', response.token);
           toast.success('Account created!');
           router.push('/projects');
-        } else {
-          toast.success('Check your email to confirm your account!');
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        // Login with backend API
+        const response = await api.post<AuthResponse>('/api/auth/local/login', {
           email: form.email,
           password: form.password,
         });
 
-        if (error) throw error;
-
-        if (data.session) {
+        if (response.token) {
           if (rememberMe) {
             localStorage.setItem(REMEMBER_ME_KEY, 'true');
             localStorage.setItem(REMEMBER_EMAIL_KEY, form.email);
-            document.cookie = `codelive_token=${data.session.access_token}; path=/; max-age=${60 * 60 * 24 * 30}`;
+            document.cookie = `dispotree_token=${response.token}; path=/; max-age=${60 * 60 * 24 * 30}`;
           } else {
             localStorage.removeItem(REMEMBER_ME_KEY);
             localStorage.removeItem(REMEMBER_EMAIL_KEY);
-            document.cookie = `codelive_token=${data.session.access_token}; path=/`;
+            document.cookie = `dispotree_token=${response.token}; path=/`;
           }
-          localStorage.setItem('codelive_token', data.session.access_token);
+          localStorage.setItem('dispotree_token', response.token);
           toast.success('Welcome back!');
           router.push('/projects');
         }
@@ -124,8 +122,8 @@ export default function LoginPage() {
       console.error('[Login] Auth error:', err);
       // Provide more helpful error messages
       if (err.message.includes('Load failed') || err.message.includes('fetch')) {
-        toast.error('Unable to connect to authentication service. Please check your internet connection.');
-      } else if (err.message.includes('Invalid login')) {
+        toast.error('Unable to connect to server. Please check your internet connection.');
+      } else if (err.message.includes('Invalid') || err.message.includes('credentials')) {
         toast.error('Invalid email or password');
       } else {
         toast.error(err.message || 'Authentication failed');
@@ -136,39 +134,11 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!supabase) {
-      toast.error('Authentication service not configured');
-      return;
-    }
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
+    toast.info('Social login coming soon! Please use email/password for now.');
   };
 
   const handleGitHubLogin = async () => {
-    if (!supabase) {
-      toast.error('Authentication service not configured');
-      return;
-    }
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-    } catch (error) {
-      toast.error((error as Error).message);
-    }
+    toast.info('Social login coming soon! Please use email/password for now.');
   };
 
   return (

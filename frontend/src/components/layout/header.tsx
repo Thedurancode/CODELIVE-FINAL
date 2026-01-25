@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Search, LogOut, User, Settings, MapPin, DollarSign, Loader2, Home, Users, UserCircle, Target, Phone, Mail, Bed, Bath, Square, TrendingUp, FolderKanban } from 'lucide-react';
+import { Search, LogOut, User, Settings, MapPin, DollarSign, Loader2, Home, Users, UserCircle, Target, Phone, Mail, Bed, Bath, Square, TrendingUp, FolderKanban, X, Command } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUniversalSearch, type UniversalSearchResult } from '@/hooks/use-universal-search';
 import {
@@ -56,8 +57,9 @@ export function Header() {
   const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Get current user data
   const { data: user } = useCurrentUser();
@@ -86,31 +88,49 @@ export function Header() {
   }, [searchQuery]);
 
   // Fetch universal search results
-  const { data: searchResults, isLoading: isSearching } = useUniversalSearch(debouncedQuery, 3);
+  const { data: searchResults = { projects: [], properties: [], contacts: [], buyers: [], buyboxes: [], total: 0 }, isLoading: isSearching } = useUniversalSearch(debouncedQuery, 3);
 
-  // Close suggestions when clicking outside
+  // Keyboard shortcut to open search (Cmd+K or Ctrl+K)
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+        event.preventDefault();
+        setShowSearch(true);
+      }
+      if (event.key === 'Escape') {
+        setShowSearch(false);
+        setSearchQuery('');
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Focus input when search opens
+  useEffect(() => {
+    if (showSearch && searchInputRef.current) {
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    }
+  }, [showSearch]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      setShowSuggestions(false);
+      setShowSearch(false);
+      setSearchQuery('');
       router.push(`/projects?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
   const handleResultClick = (result: UniversalSearchResult) => {
-    setShowSuggestions(false);
+    setShowSearch(false);
     setSearchQuery('');
     router.push(result.href);
+  };
+
+  const closeSearch = () => {
+    setShowSearch(false);
+    setSearchQuery('');
   };
 
   const handleLogout = async () => {
@@ -460,76 +480,215 @@ export function Header() {
         />
       </div>
 
-      {/* Center - Search bar */}
-      <div className="flex-1 flex justify-center">
-        <div ref={searchRef} className="relative hidden md:flex items-center gap-2 w-full max-w-lg">
-          <form onSubmit={handleSearch} className="relative flex items-center gap-2 w-full">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search projects..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => searchQuery && setShowSuggestions(true)}
-                className="w-full bg-secondary border pl-9 pr-3 text-foreground placeholder:text-muted-foreground focus-visible:ring-accent-600"
-              />
-            </div>
-            <Button
-              type="submit"
-              size="sm"
-              className="bg-accent-600 hover:bg-accent-700 text-white"
+      {/* Center - Empty spacer */}
+      <div className="flex-1" />
+
+      {/* Spotlight Search Modal */}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[15vh]"
+            onClick={closeSearch}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{ duration: 0.15 }}
+              className="w-full max-w-2xl mx-4"
+              onClick={(e) => e.stopPropagation()}
             >
-              Search
-            </Button>
-          </form>
+              {/* Search Container */}
+              <div className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
+                {/* Search Input */}
+                <form onSubmit={handleSearch} className="relative">
+                  <Search className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    ref={searchInputRef}
+                    placeholder="Search projects..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-16 pl-14 pr-24 text-lg bg-transparent border-0 border-b border-border/50 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    <kbd className="hidden sm:inline-flex h-6 items-center rounded border border-border/50 bg-muted/50 px-1.5 text-[10px] text-muted-foreground font-mono">
+                      ESC
+                    </kbd>
+                  </div>
+                </form>
 
-          {/* Search Suggestions Dropdown */}
-          {showSuggestions && debouncedQuery.length >= 2 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-card border rounded-lg shadow-xl z-50 overflow-hidden max-h-[70vh] overflow-y-auto">
-              {isSearching ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-5 w-5 animate-spin text-accent-500" />
-                  <span className="ml-2 text-muted-foreground text-sm">Searching...</span>
+                {/* Search Results */}
+                <div className="max-h-[50vh] overflow-y-auto">
+                  {debouncedQuery.length >= 2 ? (
+                    <>
+                      {isSearching ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                        </div>
+                      ) : hasResults ? (
+                        <div className="py-2">
+                          {/* Projects */}
+                          {searchResults.projects.length > 0 && (
+                            <>
+                              <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Projects
+                              </div>
+                              {searchResults.projects.map((result) => (
+                                <button
+                                  key={`${result.type}-${result.id}`}
+                                  type="button"
+                                  onClick={() => handleResultClick(result)}
+                                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-muted/50 rounded-lg mx-1 transition-colors text-left group"
+                                  style={{ width: 'calc(100% - 8px)' }}
+                                >
+                                  <div className="h-9 w-9 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                                    <FolderKanban className="h-4 w-4 text-purple-400" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate group-hover:text-purple-400 transition-colors">{result.title}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>
+                                  </div>
+                                  {result.meta && (
+                                    <span className={cn(
+                                      'text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0',
+                                      result.meta === 'now coding' && 'bg-green-500/20 text-green-400',
+                                      result.meta === 'in talks' && 'bg-purple-500/20 text-purple-400',
+                                      result.meta === 'needs review' && 'bg-amber-500/20 text-amber-400',
+                                      result.meta === 'completed' && 'bg-blue-500/20 text-blue-400',
+                                      result.meta === 'cancelled' && 'bg-red-500/20 text-red-400'
+                                    )}>
+                                      {result.meta}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </>
+                          )}
+
+                          {/* Contacts */}
+                          {searchResults.contacts.length > 0 && (
+                            <>
+                              <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-2">
+                                Contacts
+                              </div>
+                              {searchResults.contacts.map((result) => (
+                                <button
+                                  key={`${result.type}-${result.id}`}
+                                  type="button"
+                                  onClick={() => handleResultClick(result)}
+                                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-muted/50 rounded-lg mx-1 transition-colors text-left group"
+                                  style={{ width: 'calc(100% - 8px)' }}
+                                >
+                                  <div className="h-9 w-9 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                                    <UserCircle className="h-4 w-4 text-blue-400" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate group-hover:text-blue-400 transition-colors">{result.title}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </>
+                          )}
+
+                          {/* Buyers */}
+                          {searchResults.buyers.length > 0 && (
+                            <>
+                              <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-2">
+                                Buyers
+                              </div>
+                              {searchResults.buyers.map((result) => (
+                                <button
+                                  key={`${result.type}-${result.id}`}
+                                  type="button"
+                                  onClick={() => handleResultClick(result)}
+                                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-muted/50 rounded-lg mx-1 transition-colors text-left group"
+                                  style={{ width: 'calc(100% - 8px)' }}
+                                >
+                                  <div className="h-9 w-9 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                                    <Users className="h-4 w-4 text-purple-400" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate group-hover:text-purple-400 transition-colors">{result.title}</p>
+                                    <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12">
+                          <Search className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                          <p className="text-sm text-muted-foreground">No results found</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-8 px-4 text-center">
+                      <p className="text-sm text-muted-foreground">Type to search projects...</p>
+                      <div className="flex items-center justify-center gap-2 mt-4">
+                        <kbd className="inline-flex h-6 items-center gap-1 rounded border border-border/50 bg-muted/50 px-2 text-[10px] text-muted-foreground font-mono">
+                          <Command className="h-2.5 w-2.5" />K
+                        </kbd>
+                        <span className="text-xs text-muted-foreground/60">to search anytime</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ) : hasResults ? (
-                <div className="divide-y divide-border">
-                  {renderResultGroup(searchResults.projects, 'project')}
-                  {renderResultGroup(searchResults.properties, 'property')}
-                  {renderResultGroup(searchResults.contacts, 'contact')}
-                  {renderResultGroup(searchResults.buyers, 'buyer')}
-                  {renderResultGroup(searchResults.buyboxes, 'buybox')}
 
-                  {/* View all results */}
-                  <div className="px-4 py-3 bg-secondary/30">
+                {/* Footer */}
+                {hasResults && debouncedQuery.length >= 2 && (
+                  <div className="px-4 py-3 border-t border-border/50 bg-muted/30">
                     <button
                       type="button"
                       onClick={() => {
-                        setShowSuggestions(false);
+                        closeSearch();
                         router.push(`/projects?search=${encodeURIComponent(searchQuery.trim())}`);
                       }}
-                      className="text-accent-400 text-sm hover:text-accent-300 transition-colors"
+                      className="text-xs text-muted-foreground hover:text-purple-400 transition-colors"
                     >
-                      View all {searchResults.total} results for "{searchQuery}"
+                      View all {searchResults.total} results →
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="py-6 px-4 text-center">
-                  <Search className="h-8 w-8 text-muted mx-auto mb-2" />
-                  <p className="text-muted-foreground text-sm">No results found for "{debouncedQuery}"</p>
-                  <p className="text-muted-foreground/60 text-xs mt-1">Try different keywords or check your spelling</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Right - AI Agent, Notifications & User */}
+      {/* Right - Search, AI Agent, Notifications & User */}
       <div className="flex items-center gap-1" suppressHydrationWarning>
+        {/* Search Button */}
+        {mounted && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowSearch(true)}
+                className="h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <Search className="h-5 w-5" />
+                <span className="sr-only">Search (⌘K)</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p className="flex items-center gap-2">
+                Search
+                <kbd className="inline-flex h-5 items-center gap-0.5 rounded border border-border/50 bg-muted px-1.5 text-[10px] text-muted-foreground">
+                  <Command className="h-2.5 w-2.5" />K
+                </kbd>
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {/* AI Agent Button */}
         {mounted && (
           <Tooltip>

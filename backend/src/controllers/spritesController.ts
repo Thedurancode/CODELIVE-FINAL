@@ -619,6 +619,49 @@ export const listSessions = async (req: Request, res: Response) => {
 };
 
 /**
+ * Kill an exec session with streaming events
+ */
+export const killSession = async (req: Request, res: Response) => {
+  try {
+    const { id, sessionId } = req.params;
+    const { signal, timeout } = req.query;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const events = await spritesService.killExecSession(id, sessionId, {
+      signal: signal as string,
+      timeout: timeout as string,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        events,
+        sessionId,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
  * Get WebSocket connection info for a sprite terminal
  */
 export const getTerminalInfo = async (req: Request, res: Response) => {
@@ -958,13 +1001,13 @@ export const removeGitHubToken = async (req: Request, res: Response) => {
 // ============================================================================
 
 /**
- * Update sprite settings (e.g., autoShutdownAfterTask)
+ * Update sprite settings (e.g., autoShutdownAfterTask, shell persistence)
  */
 export const updateSpriteSettings = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const organizationId = (req as any).user?.organizationId;
-    const { autoShutdownAfterTask } = req.body;
+    const { autoShutdownAfterTask, startupCommand, lastShellDirectory } = req.body;
 
     const sprite = await ProjectSprite.findOne({
       where: { id, organizationId },
@@ -979,9 +1022,25 @@ export const updateSpriteSettings = async (req: Request, res: Response) => {
     }
 
     // Build updates object with only provided fields
-    const updates: Partial<{ autoShutdownAfterTask: boolean }> = {};
+    const updates: Partial<{
+      autoShutdownAfterTask: boolean;
+      startupCommand: string | null;
+      lastShellDirectory: string | null;
+    }> = {};
+
     if (typeof autoShutdownAfterTask === 'boolean') {
       updates.autoShutdownAfterTask = autoShutdownAfterTask;
+    }
+
+    // Shell persistence settings
+    if (startupCommand !== undefined) {
+      // Allow setting to null/empty to clear
+      updates.startupCommand = startupCommand || null;
+    }
+
+    if (lastShellDirectory !== undefined) {
+      // Allow setting to null/empty to clear
+      updates.lastShellDirectory = lastShellDirectory || null;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -998,6 +1057,1105 @@ export const updateSpriteSettings = async (req: Request, res: Response) => {
       success: true,
       data: sprite,
       message: 'Sprite settings updated successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// FILESYSTEM API
+// ============================================================================
+
+/**
+ * Read file contents from sprite filesystem
+ */
+export const readFile = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { path, workingDir } = req.query;
+
+    if (!path) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const content = await spritesService.readFile(
+      id,
+      path as string,
+      (workingDir as string) || '/home/sprite'
+    );
+
+    // Set content type and return raw bytes
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.send(content);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Read file contents as text from sprite filesystem
+ */
+export const readFileText = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { path, workingDir } = req.query;
+
+    if (!path) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const content = await spritesService.readFileText(
+      id,
+      path as string,
+      (workingDir as string) || '/home/sprite'
+    );
+
+    res.json({
+      success: true,
+      data: {
+        path,
+        content,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Write file contents to sprite filesystem
+ */
+export const writeFile = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { path, workingDir, mode, mkdir } = req.query;
+    const content = req.body;
+
+    if (!path) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.writeFile(id, path as string, content, {
+      workingDir: (workingDir as string) || '/home/sprite',
+      mode: mode as string,
+      mkdir: mkdir === 'true',
+    });
+
+    res.json({
+      success: true,
+      message: 'File written successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * List directory contents
+ */
+export const listDirectory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { path, workingDir } = req.query;
+
+    if (!path) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const entries = await spritesService.listDirectory(
+      id,
+      path as string,
+      (workingDir as string) || '/home/sprite'
+    );
+
+    res.json({
+      success: true,
+      data: {
+        path,
+        entries,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Delete file or directory
+ */
+export const deleteFile = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { path, workingDir, recursive, asRoot } = req.body;
+
+    if (!path || !workingDir) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path and workingDir are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.deleteFile(id, {
+      path,
+      workingDir,
+      recursive: recursive ?? false,
+      asRoot: asRoot ?? false,
+    });
+
+    res.json({
+      success: true,
+      message: 'File/directory deleted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Rename or move file/directory
+ */
+export const renameFile = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { source, dest, workingDir, asRoot } = req.body;
+
+    if (!source || !dest || !workingDir) {
+      return res.status(400).json({
+        success: false,
+        error: 'Source, dest, and workingDir are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.renameFile(id, {
+      source,
+      dest,
+      workingDir,
+      asRoot: asRoot ?? false,
+    });
+
+    res.json({
+      success: true,
+      message: 'File/directory renamed successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Copy file or directory
+ */
+export const copyFile = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { source, dest, workingDir, recursive, preserveAttrs, asRoot } = req.body;
+
+    if (!source || !dest || !workingDir) {
+      return res.status(400).json({
+        success: false,
+        error: 'Source, dest, and workingDir are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.copyFile(id, {
+      source,
+      dest,
+      workingDir,
+      recursive: recursive ?? false,
+      preserveAttrs: preserveAttrs ?? false,
+      asRoot: asRoot ?? false,
+    });
+
+    res.json({
+      success: true,
+      message: 'File/directory copied successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Change file permissions (chmod)
+ */
+export const chmod = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { path, workingDir, mode, recursive, asRoot } = req.body;
+
+    if (!path || !workingDir || !mode) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path, workingDir, and mode are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.chmod(id, {
+      path,
+      workingDir,
+      mode,
+      recursive: recursive ?? false,
+      asRoot: asRoot ?? false,
+    });
+
+    res.json({
+      success: true,
+      message: 'File permissions changed successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Change file ownership (chown)
+ */
+export const chown = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { path, workingDir, uid, gid, recursive, asRoot } = req.body;
+
+    if (!path || !workingDir || uid === undefined || gid === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'Path, workingDir, uid, and gid are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.chown(id, {
+      path,
+      workingDir,
+      uid,
+      gid,
+      recursive: recursive ?? false,
+      asRoot: asRoot ?? false,
+    });
+
+    res.json({
+      success: true,
+      message: 'File ownership changed successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Execute a command in a sprite (non-interactive)
+ * POST /api/sprites/:id/exec
+ */
+export const execCommand = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { command, workDir, timeout } = req.body;
+
+    if (!command) {
+      return res.status(400).json({
+        success: false,
+        error: 'Command is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const organizationId = (req as any).user?.organizationId;
+
+    // Validate sprite exists and belongs to user's org
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Check sprite is running
+    if (sprite.status !== 'running') {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not running (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.spriteName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sprite has no API name assigned',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spritesService.execCommand(
+      sprite.organizationId,
+      sprite.spriteName,
+      command,
+      { workDir, timeout }
+    );
+
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get WebSocket info for filesystem watch
+ */
+export const getFilesystemWatchInfo = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sprite is not active',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const wsInfo = await spritesService.getFilesystemWatchInfo(id);
+
+    res.json({
+      success: true,
+      data: wsInfo,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// SERVICES API
+// ============================================================================
+
+/**
+ * List all services for a sprite
+ */
+export const listServices = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const services = await spritesService.listServices(id);
+
+    res.json({
+      success: true,
+      data: services,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get a specific service
+ */
+export const getService = async (req: Request, res: Response) => {
+  try {
+    const { id, serviceId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const service = await spritesService.getService(id, serviceId);
+
+    res.json({
+      success: true,
+      data: service,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Create a new service
+ */
+export const createService = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { name, command, args, workingDir, env, autoStart, port } = req.body;
+
+    if (!name || !command) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name and command are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sprite must be running to create services',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const service = await spritesService.createService(id, {
+      name,
+      command,
+      args,
+      workingDir,
+      env,
+      autoStart,
+      port,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: service,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Start a service
+ */
+export const startService = async (req: Request, res: Response) => {
+  try {
+    const { id, serviceId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sprite must be running to start services',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const service = await spritesService.startService(id, serviceId);
+
+    res.json({
+      success: true,
+      data: service,
+      message: 'Service started successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Stop a service
+ */
+export const stopService = async (req: Request, res: Response) => {
+  try {
+    const { id, serviceId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const service = await spritesService.stopService(id, serviceId);
+
+    res.json({
+      success: true,
+      data: service,
+      message: 'Service stopped successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Restart a service
+ */
+export const restartService = async (req: Request, res: Response) => {
+  try {
+    const { id, serviceId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sprite must be running to restart services',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const service = await spritesService.restartService(id, serviceId);
+
+    res.json({
+      success: true,
+      data: service,
+      message: 'Service restarted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Delete a service
+ */
+export const deleteService = async (req: Request, res: Response) => {
+  try {
+    const { id, serviceId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.deleteService(id, serviceId);
+
+    res.json({
+      success: true,
+      message: 'Service deleted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get service logs
+ */
+export const getServiceLogs = async (req: Request, res: Response) => {
+  try {
+    const { id, serviceId } = req.params;
+    const { tail, since } = req.query;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const logs = await spritesService.getServiceLogs(id, serviceId, {
+      tail: tail ? parseInt(tail as string, 10) : undefined,
+      since: since as string,
+    });
+
+    res.json({
+      success: true,
+      data: logs,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// GIT & PULL REQUEST
+// ============================================================================
+
+/**
+ * Get branch status for a sprite
+ */
+export const getBranchStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.spriteName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sprite not initialized',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const status = await spritesService.getBranchStatus(id);
+
+    res.json({
+      success: true,
+      data: status,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Push local commits to remote
+ */
+export const pushChanges = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.githubConfigured) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub is not configured for this sprite',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spritesService.pushChanges(id);
+
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get existing pull request for sprite
+ */
+export const getPullRequest = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const pr = await spritesService.getPullRequest(id);
+
+    res.json({
+      success: true,
+      data: pr,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Create a pull request from sprite
+ */
+export const createPullRequest = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+    const { title, body, draft } = req.body;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.featureBranch) {
+      return res.status(400).json({
+        success: false,
+        error: 'No feature branch configured for this sprite',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.githubConfigured) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub is not configured for this sprite',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const pr = await spritesService.createPullRequest(id, {
+      title,
+      body,
+      draft: draft ?? false,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: pr,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

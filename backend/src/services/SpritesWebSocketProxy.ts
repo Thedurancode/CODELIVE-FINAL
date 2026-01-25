@@ -30,7 +30,30 @@ export type TerminalMessageType =
   | 'ping'
   | 'pong'
   | 'connected'
-  | 'disconnected';
+  | 'disconnected'
+  | 'port_opened' // process opened a port
+  | 'port_closed' // process closed a port
+  | 'session_info'; // session information
+
+// Port notification from Sprites API
+export interface PortNotification {
+  type: 'port_opened' | 'port_closed';
+  port: number;
+  address: string; // Proxy URL for accessing the port
+  pid: number; // Process ID that opened/closed the port
+}
+
+// Session info from Sprites API
+export interface SessionInfo {
+  type: 'session_info';
+  session_id: number;
+  command: string;
+  created: number;
+  cols: number;
+  rows: number;
+  is_owner: boolean;
+  tty: boolean;
+}
 
 // Terminal message structure
 export interface TerminalMessage {
@@ -41,6 +64,15 @@ export interface TerminalMessage {
   rows?: number;
   status?: 'connecting' | 'connected' | 'disconnected' | 'error';
   timestamp: string;
+  // Port notification fields
+  port?: number;
+  address?: string;
+  pid?: number;
+  // Session info fields
+  sessionId?: number;
+  command?: string;
+  isOwner?: boolean;
+  tty?: boolean;
 }
 
 // Active proxy connection
@@ -59,6 +91,9 @@ interface ProxyConnection {
   lastActivityAt: Date;
   status: 'connecting' | 'connected' | 'disconnected' | 'error';
   metadata?: Record<string, unknown>;
+  // tmux session tracking
+  tmuxSessionName?: string;
+  useTmux: boolean;
 }
 
 // Service statistics
@@ -177,8 +212,10 @@ class SpritesWebSocketProxy {
     const sessionId = url.searchParams.get('sessionId');
     const cols = parseInt(url.searchParams.get('cols') || '80', 10);
     const rows = parseInt(url.searchParams.get('rows') || '24', 10);
+    // tmux is enabled by default for session persistence
+    const useTmux = url.searchParams.get('tmux') !== 'false';
 
-    console.log(`[SpritesWebSocket] Parsed params - spriteId: ${spriteId}, sessionId: ${sessionId}, cols: ${cols}, rows: ${rows}, hasToken: ${!!token}`);
+    console.log(`[SpritesWebSocket] Parsed params - spriteId: ${spriteId}, sessionId: ${sessionId}, cols: ${cols}, rows: ${rows}, useTmux: ${useTmux}, hasToken: ${!!token}`);
 
     // Validate required parameters
     if (!token || !spriteId) {
@@ -232,6 +269,9 @@ class SpritesWebSocketProxy {
       return;
     }
 
+    // Generate tmux session name based on sprite
+    const tmuxSessionName = `sprite_${projectSprite.id.substring(0, 8)}`;
+
     // Create connection record
     const connection: ProxyConnection = {
       id: connectionId,
@@ -251,6 +291,8 @@ class SpritesWebSocketProxy {
         ip: req.socket.remoteAddress,
         userAgent: req.headers['user-agent'],
       },
+      tmuxSessionName,
+      useTmux,
     };
 
     this.connections.set(connectionId, connection);
@@ -296,10 +338,10 @@ class SpritesWebSocketProxy {
       const sprite = await ProjectSprite.findByPk(connection.projectSpriteId);
       if (sprite && (sprite.status === 'hibernating' || sprite.status === 'stopped')) {
         console.log(`[SpritesWebSocket] Sprite is ${sprite.status}, waking up...`);
-        this.sendToFrontend(connection, {
+        this.sendToFrontend(connection.frontendWs, {
           type: 'status',
           status: 'connecting',
-          data: `Waking up sprite (${sprite.status})...`,
+          timestamp: new Date().toISOString(),
         });
 
         // Resume the sprite to wake it up
@@ -337,7 +379,7 @@ class SpritesWebSocketProxy {
       // Track if we've received an error about checkpoint
       let checkpointErrorReceived = false;
 
-      spritesWs.on('open', () => {
+      spritesWs.on('open', async () => {
         console.log(`[SpritesWebSocket] ✅ Connected to Sprites API for ${connection.id}`);
         connection.status = 'connected';
 
@@ -349,6 +391,9 @@ class SpritesWebSocketProxy {
 
         // Update sprite access time
         this.updateSpriteAccess(connection);
+
+        // Run startup commands (cd to last directory, run startup command)
+        await this.runStartupCommands(connection, spritesWs);
       });
 
       spritesWs.on('message', (data) => {
@@ -513,6 +558,17 @@ class SpritesWebSocketProxy {
               rows: connection.rows,
             });
             connection.spritesWs.send(resizeMsg);
+
+            // Also resize tmux if using it (tmux needs its own resize command)
+            if (connection.useTmux && connection.tmuxSessionName) {
+              // Send tmux resize command after a small delay
+              setTimeout(() => {
+                if (connection.spritesWs?.readyState === WebSocket.OPEN) {
+                  // Refresh the tmux client to pick up new size
+                  connection.spritesWs.send(`tmux refresh-client -t ${connection.tmuxSessionName} 2>/dev/null\n`);
+                }
+              }, 100);
+            }
           }
           break;
 
@@ -620,10 +676,42 @@ class SpritesWebSocketProxy {
             });
             return;
           } else if (parsed.type === 'session_info') {
-            // Session info message - update connection cols/rows if provided
+            // Session info message - update connection and forward to frontend
             if (parsed.cols) connection.cols = parsed.cols;
             if (parsed.rows) connection.rows = parsed.rows;
             console.log(`[SpritesWebSocket] Session info:`, parsed);
+
+            // Store the session ID in the sprite record for later reconnection
+            const spriteSessionId = String(parsed.session_id);
+            connection.sessionId = spriteSessionId;
+            ProjectSprite.update(
+              { currentSessionId: spriteSessionId },
+              { where: { id: connection.projectSpriteId } }
+            ).catch((err) => {
+              console.warn(`[SpritesWebSocket] Failed to save session ID to sprite:`, err);
+            });
+
+            this.sendToFrontend(connection.frontendWs, {
+              type: 'session_info',
+              sessionId: parsed.session_id,
+              command: parsed.command,
+              cols: parsed.cols,
+              rows: parsed.rows,
+              isOwner: parsed.is_owner,
+              tty: parsed.tty,
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          } else if (parsed.type === 'port_opened' || parsed.type === 'port_closed') {
+            // Port notification - forward to frontend
+            console.log(`[SpritesWebSocket] Port ${parsed.type}:`, parsed);
+            this.sendToFrontend(connection.frontendWs, {
+              type: parsed.type,
+              port: parsed.port,
+              address: parsed.address,
+              pid: parsed.pid,
+              timestamp: new Date().toISOString(),
+            });
             return;
           }
           // Fall through if unknown JSON type - forward as output
@@ -746,6 +834,127 @@ class SpritesWebSocketProxy {
       );
     } catch (error) {
       console.error('[SpritesWebSocket] Failed to update sprite access:', error);
+    }
+  }
+
+  /**
+   * Initialize tmux session or run startup commands
+   *
+   * With tmux enabled:
+   * - Check if tmux session exists, if so attach to it
+   * - Otherwise create new tmux session
+   * - This keeps processes running even when terminal disconnects
+   *
+   * Without tmux:
+   * - cd to last shell directory
+   * - Run startup command if set
+   */
+  private async runStartupCommands(connection: ProxyConnection, spritesWs: WebSocket): Promise<void> {
+    try {
+      const sprite = await ProjectSprite.findByPk(connection.projectSpriteId);
+      if (!sprite) return;
+
+      // Wait a bit for the shell to be ready
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      if (connection.useTmux && connection.tmuxSessionName) {
+        // Use tmux for session persistence
+        await this.initializeTmuxSession(connection, spritesWs, sprite);
+      } else {
+        // Legacy behavior: just run startup commands
+        await this.runLegacyStartupCommands(connection, spritesWs, sprite);
+      }
+    } catch (error) {
+      console.error('[SpritesWebSocket] Failed to run startup commands:', error);
+    }
+  }
+
+  /**
+   * Initialize or attach to tmux session for persistent terminal
+   */
+  private async initializeTmuxSession(
+    connection: ProxyConnection,
+    spritesWs: WebSocket,
+    sprite: ProjectSprite
+  ): Promise<void> {
+    const sessionName = connection.tmuxSessionName!;
+    const workingDir = sprite.lastShellDirectory || sprite.workingDirectory || '~';
+
+    // Build tmux command that:
+    // 1. Checks if session exists
+    // 2. If exists: attach to it
+    // 3. If not: create new session in working directory
+    // The -A flag does this automatically: attach if exists, create if not
+    const tmuxCmd = [
+      // First ensure tmux is installed (most systems have it, sprites should too)
+      'command -v tmux >/dev/null 2>&1 || { echo "Installing tmux..."; sudo apt-get update -qq && sudo apt-get install -qq -y tmux; }',
+      // Attach or create session (-A = attach-or-create, -s = session name)
+      // -d = don't attach yet (we'll resize first), then attach
+      `tmux has-session -t ${sessionName} 2>/dev/null && tmux attach-session -t ${sessionName} || tmux new-session -s ${sessionName} -c "${workingDir}"`,
+    ].join(' && ');
+
+    console.log(`[SpritesWebSocket] Initializing tmux session '${sessionName}' for ${connection.id}`);
+
+    // Save tmux session name to database for reference
+    ProjectSprite.update(
+      { tmuxSessionName: sessionName },
+      { where: { id: connection.projectSpriteId } }
+    ).catch((err) => {
+      console.warn(`[SpritesWebSocket] Failed to save tmux session name:`, err);
+    });
+
+    if (spritesWs.readyState === WebSocket.OPEN) {
+      spritesWs.send(tmuxCmd + '\n');
+
+      // If this is a new session and there's a startup command, run it after a delay
+      if (sprite.startupCommand) {
+        // Wait for tmux to start, then check if we need to run startup
+        setTimeout(() => {
+          if (spritesWs.readyState === WebSocket.OPEN) {
+            // Only run startup command if this looks like a fresh session
+            // (tmux will show existing session content if attaching)
+            // We use a marker file to track if startup was already run
+            const startupCheck = [
+              `if [ ! -f /tmp/.tmux_startup_${sessionName} ]; then`,
+              `  touch /tmp/.tmux_startup_${sessionName}`,
+              `  ${sprite.startupCommand}`,
+              `fi`,
+            ].join(' ');
+            spritesWs.send(startupCheck + '\n');
+          }
+        }, 1000);
+      }
+    }
+  }
+
+  /**
+   * Legacy startup commands (without tmux)
+   */
+  private async runLegacyStartupCommands(
+    connection: ProxyConnection,
+    spritesWs: WebSocket,
+    sprite: ProjectSprite
+  ): Promise<void> {
+    const commands: string[] = [];
+
+    // cd to last shell directory if set
+    if (sprite.lastShellDirectory) {
+      commands.push(`cd ${sprite.lastShellDirectory} 2>/dev/null || cd ~`);
+    }
+
+    // Run startup command if set
+    if (sprite.startupCommand) {
+      commands.push(sprite.startupCommand);
+    }
+
+    if (commands.length === 0) return;
+
+    // Send each command with a newline
+    const commandStr = commands.join(' && ') + '\n';
+    console.log(`[SpritesWebSocket] Running startup commands for ${connection.id}: ${commandStr.trim()}`);
+
+    if (spritesWs.readyState === WebSocket.OPEN) {
+      spritesWs.send(commandStr);
     }
   }
 

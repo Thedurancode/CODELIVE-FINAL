@@ -950,6 +950,50 @@ export const getPublicProject = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Get projects for TV display (public endpoint, no auth required)
+ * Returns all projects with minimal info for Roku/TV display app
+ */
+export const getTVDisplayProjects = async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 200);
+
+    // Get all projects (we'll fetch without org filter since this is public)
+    const result = await projectService.getProjects({
+      page: 1,
+      limit,
+      sortBy: 'updatedAt',
+      sortOrder: 'DESC',
+    });
+
+    // Return only public-safe fields for TV display
+    const tvProjects = result.data.map((project: any) => ({
+      id: project.id,
+      name: project.title,
+      description: project.description,
+      status: project.status,
+      logoUrl: project.logoUrl,
+      updatedAt: project.updatedAt,
+      createdAt: project.createdAt,
+      clientName: project.clientName || null,
+    }));
+
+    res.json({
+      success: true,
+      data: tvProjects,
+      total: result.pagination.total,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[getTVDisplayProjects] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch projects for TV display',
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
 export const submitPublicTicket = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

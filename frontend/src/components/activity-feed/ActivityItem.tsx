@@ -41,6 +41,7 @@ import {
   UserMinus,
   ShieldCheck,
   ShieldX,
+  ExternalLink,
 } from 'lucide-react';
 
 // Icon mapping for event types
@@ -94,9 +95,16 @@ interface ActivityItemProps {
   isRead?: boolean;
   onMarkAsRead?: (id: string) => void;
   showResourceType?: boolean;
+  isLast?: boolean;
 }
 
-export function ActivityItem({ activity, isRead = false, onMarkAsRead, showResourceType = true }: ActivityItemProps) {
+export function ActivityItem({
+  activity,
+  isRead = false,
+  onMarkAsRead,
+  showResourceType = true,
+  isLast = false,
+}: ActivityItemProps) {
   const EventIcon = EVENT_ICONS[activity.eventType] || Settings;
   const ResourceIcon = RESOURCE_ICONS[activity.resource.type] || Settings;
 
@@ -116,99 +124,118 @@ export function ActivityItem({ activity, isRead = false, onMarkAsRead, showResou
   return (
     <div
       className={cn(
-        'group relative flex gap-4 p-4 transition-colors',
-        'hover:bg-secondary/50',
-        !isRead && 'bg-accent-500/5'
+        'group flex gap-3 transition-colors',
+        !isRead && 'relative'
       )}
       onClick={handleClick}
     >
-      {/* Unread indicator */}
-      {!isRead && (
-        <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-accent-500" />
-      )}
-
-      {/* Icon */}
-      <div
-        className={cn(
-          'flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full border',
-          eventColor
+      {/* Timeline connector */}
+      <div className="flex flex-col items-center">
+        <div
+          className={cn(
+            'flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full border-2 border-background',
+            eventColor
+          )}
+        >
+          <EventIcon className="h-4 w-4" />
+        </div>
+        {!isLast && (
+          <div className="w-0.5 flex-1 bg-border/50 mt-1" />
         )}
-      >
-        <EventIcon className="h-5 w-5" />
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            {/* Summary */}
-            <p className="text-sm text-foreground font-medium">
-              {activity.summary}
-            </p>
+      <div className="flex-1 min-w-0 pb-4">
+        {/* Unread indicator */}
+        {!isRead && (
+          <div className="absolute -left-1 top-3 w-2 h-2 rounded-full bg-primary animate-pulse" />
+        )}
 
-            {/* Actor and timestamp */}
-            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-              <span className="font-medium">{activity.actor.name}</span>
-              <span>-</span>
-              <time title={fullDate}>{timeAgo}</time>
+        <div className="p-3 rounded-lg bg-background/50 border border-border/50 hover:bg-background/80 hover:border-border transition-all">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              {/* Summary */}
+              <p className="text-sm text-foreground font-medium line-clamp-2 group-hover:text-primary transition-colors">
+                {activity.summary}
+              </p>
+
+              {/* Metadata row */}
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap text-[11px]">
+                {/* Resource type badge */}
+                {showResourceType && (
+                  <Badge
+                    variant="outline"
+                    className={cn('text-[10px] px-1.5 py-0 border-0', resourceColor)}
+                  >
+                    <ResourceIcon className="h-3 w-3 mr-1" />
+                    {RESOURCE_TYPE_LABELS[activity.resource.type]}
+                  </Badge>
+                )}
+
+                {/* Actor */}
+                <div className="flex items-center gap-1">
+                  <div className="h-3.5 w-3.5 rounded-full bg-secondary flex items-center justify-center">
+                    <User className="h-2 w-2 text-muted-foreground" />
+                  </div>
+                  <span className="text-muted-foreground">{activity.actor.name}</span>
+                </div>
+
+                <span className="text-muted-foreground/50">·</span>
+
+                {/* Timestamp */}
+                <time className="text-muted-foreground" title={fullDate}>
+                  {timeAgo}
+                </time>
+
+                {/* Importance badge */}
+                {activity.importance !== 'normal' && (
+                  <>
+                    <span className="text-muted-foreground/50">·</span>
+                    <Badge
+                      variant="outline"
+                      className={cn('text-[10px] px-1.5 py-0', importanceColor)}
+                    >
+                      {activity.importance}
+                    </Badge>
+                  </>
+                )}
+              </div>
+
+              {/* Additional details preview */}
+              {activity.details && Object.keys(activity.details).length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2 text-[11px] text-muted-foreground">
+                  {activity.details.price && (
+                    <span className="px-1.5 py-0.5 rounded bg-muted/50">
+                      ${activity.details.price.toLocaleString()}
+                    </span>
+                  )}
+                  {activity.details.status && (
+                    <span className="px-1.5 py-0.5 rounded bg-muted/50">
+                      {activity.details.status}
+                    </span>
+                  )}
+                  {activity.details.assigneeName && (
+                    <span className="px-1.5 py-0.5 rounded bg-muted/50">
+                      → {activity.details.assigneeName}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Resource link */}
+              {activity.resource.url && (
+                <Link
+                  href={activity.resource.url}
+                  className="inline-flex items-center gap-1 mt-2 text-[11px] text-primary hover:underline transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span>{activity.resource.name || `View ${activity.resource.type}`}</span>
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
             </div>
           </div>
-
-          {/* Badges */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {showResourceType && (
-              <Badge
-                variant="outline"
-                className={cn('text-xs', resourceColor)}
-              >
-                <ResourceIcon className="h-3 w-3 mr-1" />
-                {RESOURCE_TYPE_LABELS[activity.resource.type]}
-              </Badge>
-            )}
-            {activity.importance !== 'normal' && (
-              <Badge
-                variant="outline"
-                className={cn('text-xs', importanceColor)}
-              >
-                {activity.importance}
-              </Badge>
-            )}
-          </div>
         </div>
-
-        {/* Resource link */}
-        {activity.resource.url && (
-          <Link
-            href={activity.resource.url}
-            className="inline-flex items-center gap-1 mt-2 text-xs text-accent-400 hover:text-accent-300 transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ResourceIcon className="h-3 w-3" />
-            <span>{activity.resource.name || `View ${activity.resource.type}`}</span>
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        )}
-
-        {/* Additional details preview */}
-        {activity.details && Object.keys(activity.details).length > 0 && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            {activity.details.price && (
-              <span className="mr-3">
-                Price: ${activity.details.price.toLocaleString()}
-              </span>
-            )}
-            {activity.details.status && (
-              <span className="mr-3">
-                Status: {activity.details.status}
-              </span>
-            )}
-            {activity.details.assigneeName && (
-              <span>
-                Assigned to: {activity.details.assigneeName}
-              </span>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

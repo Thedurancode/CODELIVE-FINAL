@@ -101,6 +101,25 @@ router.get('/public/:id', publicLimiter, projectController.getPublicProject);
  */
 router.post('/public/:id/ticket', publicLimiter, projectController.submitPublicTicket);
 
+/**
+ * @swagger
+ * /api/projects/tv-display:
+ *   get:
+ *     summary: Get projects for TV display (no auth required)
+ *     description: Public endpoint for Roku/TV display app - returns all projects with minimal info
+ *     tags: [Projects]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *     responses:
+ *       200:
+ *         description: List of projects for TV display
+ */
+router.get('/tv-display', publicLimiter, projectController.getTVDisplayProjects);
+
 // ============================================================================
 // AUTHENTICATED ROUTES
 // ============================================================================

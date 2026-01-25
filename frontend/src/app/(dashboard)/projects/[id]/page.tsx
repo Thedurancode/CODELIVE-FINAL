@@ -60,6 +60,13 @@ import {
   Trash2 as TrashIcon,
   Mail,
   MailCheck,
+  Activity,
+  FileText,
+  GitCommit,
+  GitPullRequest,
+  MessageSquare,
+  ListChecks,
+  FolderTree,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -74,7 +81,10 @@ import { ProjectTasksPanel } from '@/components/projects/ProjectTasksPanel';
 import { GitHubRepoPanel } from '@/components/projects/GitHubRepoPanel';
 import { StartCodingTaskDialog } from '@/components/projects/StartCodingTaskDialog';
 import { CodingTasksList } from '@/components/projects/CodingTasksList';
-import { SpriteLaunchButton, SpritePanel } from '@/components/sprites';
+import { ProjectActivityFeed } from '@/components/projects/ProjectActivityFeed';
+import { SpriteLaunchButton, SpritePanel, SpriteTaskQueuePanel, SpriteFileBrowser } from '@/components/sprites';
+import { SpriteChatPanel } from '@/components/sprites/SpriteChatPanel';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   active: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -379,6 +389,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <SpriteLaunchButton
               projectId={project.id}
               projectTitle={project.title}
+              githubUrl={project.githubUrl}
             />
           )}
           {project.githubUrl && (
@@ -491,15 +502,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2">
-          <Tabs defaultValue={project.githubUrl ? 'github' : 'tasks'} className="space-y-4">
+          <Tabs defaultValue={project.githubUrl ? 'github' : 'notes'} className="space-y-4">
             <TabsList className="bg-secondary border">
               {project.githubUrl && (
-                <>
-                  <TabsTrigger value="github" className="data-[state=active]:bg-secondary">
-                    <Github className="h-4 w-4 mr-2" />
-                    Repository
-                  </TabsTrigger>
-                </>
+                <TabsTrigger value="github" className="data-[state=active]:bg-secondary">
+                  <Github className="h-4 w-4 mr-2" />
+                  Repository
+                </TabsTrigger>
+              )}
+              {project.githubUrl && (
+                <TabsTrigger value="agent" className="data-[state=active]:bg-secondary">
+                  <Bot className="h-4 w-4 mr-2" />
+                  Agent
+                </TabsTrigger>
               )}
               <TabsTrigger value="notes" className="data-[state=active]:bg-secondary">
                 <StickyNote className="h-4 w-4 mr-2" />
@@ -513,7 +528,68 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
             {project.githubUrl && (
               <TabsContent value="github">
-                <GitHubRepoPanel githubUrl={project.githubUrl} />
+                <GitHubRepoPanel githubUrl={project.githubUrl} projectId={project.id} />
+              </TabsContent>
+            )}
+
+            {project.githubUrl && (
+              <TabsContent value="agent">
+                <Tabs defaultValue="agent-status" className="space-y-4">
+                  <TabsList className="bg-muted/50 border border-border/50">
+                    <TabsTrigger value="agent-status" className="data-[state=active]:bg-background/80">
+                      <Bot className="h-4 w-4 mr-2" />
+                      Agent
+                    </TabsTrigger>
+                    <TabsTrigger value="chat" className="data-[state=active]:bg-background/80">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Chat
+                    </TabsTrigger>
+                    <TabsTrigger value="tasks" className="data-[state=active]:bg-background/80">
+                      <ListChecks className="h-4 w-4 mr-2" />
+                      Tasks
+                    </TabsTrigger>
+                    <TabsTrigger value="files" className="data-[state=active]:bg-background/80">
+                      <FolderTree className="h-4 w-4 mr-2" />
+                      Files
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="agent-status">
+                    <SpritePanel
+                      projectId={project.id}
+                      projectTitle={project.title}
+                    />
+                  </TabsContent>
+                  <TabsContent value="chat">
+                    <Card className="bg-card border">
+                      <CardContent className="p-0">
+                        <SpriteChatPanel
+                          projectId={project.id}
+                          className="h-[500px]"
+                        />
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  <TabsContent value="tasks">
+                    <Card className="bg-card border">
+                      <CardContent className="p-0">
+                        <SpriteTaskQueuePanel
+                          projectId={project.id}
+                          className="h-[500px]"
+                        />
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  <TabsContent value="files">
+                    <Card className="bg-card border">
+                      <CardContent className="p-0">
+                        <SpriteFileBrowser
+                          projectId={project.id}
+                          className="h-[500px]"
+                        />
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
             )}
 
@@ -541,186 +617,155 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </Tabs>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Quick Stats */}
-          <Card className="bg-card border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-medium text-foreground">Quick Stats</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                  <p className="text-2xl font-bold text-foreground">{project.noteCount || 0}</p>
-                  <p className="text-xs text-muted-foreground">Notes</p>
-                </div>
-                {project.githubUrl && (
-                  <>
-                    <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-green-400">{recentIssues?.length || 0}</p>
-                      <p className="text-xs text-muted-foreground">Open Tickets</p>
-                    </div>
-                    <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-red-400">{closedIssues?.length || 0}</p>
-                      <p className="text-xs text-muted-foreground">Closed Tickets</p>
-                    </div>
-                    <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-blue-400">{commits?.length || 0}</p>
-                      <p className="text-xs text-muted-foreground">Commits</p>
-                    </div>
-                    <div className="text-center p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-2xl font-bold text-purple-400">{pullRequests?.length || 0}</p>
-                      <p className="text-xs text-muted-foreground">Open PRs</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Sprite Panel */}
-          {project.githubUrl && (
-            <SpritePanel
-              projectId={project.id}
-              projectTitle={project.title}
-            />
-          )}
-
-          {/* Recent Tickets */}
-          {project.githubUrl && (
-            <Card className="bg-card border">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-medium text-foreground flex items-center gap-2">
-                    <span className="text-2xl font-bold text-green-400">{recentIssues?.length || 0}</span>
-                    Open Tickets
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => setIsNewIssueDialogOpen(true)}
-                  >
-                    <CirclePlus className="h-3 w-3 mr-1" />
-                    New
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {recentIssues && recentIssues.length > 0 ? (
-                  <div className="space-y-2">
-                    {recentIssues.slice(0, 5).map((issue) => (
-                      <button
-                        key={issue.id}
-                        onClick={() => setSelectedIssue(issue)}
-                        className="block w-full text-left p-3 rounded hover:bg-secondary/80 transition-colors group"
-                      >
-                        <p className="text-lg font-medium truncate group-hover:text-accent-400">
-                          {issue.title}
-                        </p>
-                        {issue.body && (
-                          <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                            {issue.body}
-                          </p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      </button>
-                    ))}
+        {/* Sidebar - OS Style */}
+        <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden shadow-xl">
+          <ScrollArea className="h-[calc(100vh-16rem)]">
+            <div className="p-4 space-y-4">
+              {/* Quick Stats Section */}
+              <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Activity className="h-5 w-5 text-primary" />
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No open tickets
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Project Details */}
-          <Card className="bg-card border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-medium text-foreground">Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {project.description && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Description</p>
-                  <p className="text-sm text-foreground">{project.description}</p>
+                  <div>
+                    <p className="font-medium">Quick Stats</p>
+                    <p className="text-xs text-muted-foreground">Project overview</p>
+                  </div>
                 </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Start Date
-                  </p>
-                  <p className="text-sm text-foreground">{formatDate(project.startDate)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Target End
-                  </p>
-                  <p className="text-sm text-foreground">{formatDate(project.targetEndDate)}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-lg bg-background/50 border border-border/50 text-center">
+                    <p className="text-2xl font-bold text-foreground">{project.noteCount || 0}</p>
+                    <p className="text-[10px] text-muted-foreground">Notes</p>
+                  </div>
+                  {project.githubUrl && (
+                    <>
+                      <div className="p-3 rounded-lg bg-background/50 border border-border/50 text-center">
+                        <p className="text-2xl font-bold text-green-400">{recentIssues?.length || 0}</p>
+                        <p className="text-[10px] text-muted-foreground">Open Issues</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-background/50 border border-border/50 text-center">
+                        <p className="text-2xl font-bold text-blue-400">{commits?.length || 0}</p>
+                        <p className="text-[10px] text-muted-foreground">Commits</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-background/50 border border-border/50 text-center">
+                        <p className="text-2xl font-bold text-purple-400">{pullRequests?.length || 0}</p>
+                        <p className="text-[10px] text-muted-foreground">Open PRs</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {project.actualEndDate && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Completed On
-                  </p>
-                  <p className="text-sm text-foreground">{formatDate(project.actualEndDate)}</p>
-                </div>
-              )}
-
-              <div>
-                <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  Created
-                </p>
-                <p className="text-sm text-foreground">{formatDate(project.createdAt)}</p>
+              {/* Activity Feed Section */}
+              <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
+                <ProjectActivityFeed
+                  projectId={id}
+                  githubUrl={project.githubUrl}
+                  noteCount={project.noteCount}
+                />
               </div>
 
-              {project.githubUrl && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                    <Github className="h-3.5 w-3.5" />
-                    Repository
-                  </p>
-                  <a
-                    href={project.githubUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-accent-400 hover:underline flex items-center gap-1"
-                  >
-                    {project.githubUrl.replace('https://github.com/', '')}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
+              {/* Project Details Section */}
+              <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Project Details</p>
+                    <p className="text-xs text-muted-foreground">Timeline and info</p>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="space-y-3">
+                  {project.description && (
+                    <div className="p-3 rounded-lg bg-background/50 border border-border/50">
+                      <p className="text-xs text-muted-foreground mb-1">Description</p>
+                      <p className="text-sm text-foreground line-clamp-3">{project.description}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-3 rounded-lg bg-background/50 border border-border/50">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                        <Calendar className="h-3 w-3" />
+                        Start
+                      </p>
+                      <p className="text-sm font-medium">{formatDate(project.startDate)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-background/50 border border-border/50">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                        <Calendar className="h-3 w-3" />
+                        Target End
+                      </p>
+                      <p className="text-sm font-medium">{formatDate(project.targetEndDate)}</p>
+                    </div>
+                  </div>
+
+                  {project.actualEndDate && (
+                    <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                      <p className="text-xs text-green-400 flex items-center gap-1 mb-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Completed
+                      </p>
+                      <p className="text-sm font-medium text-green-400">{formatDate(project.actualEndDate)}</p>
+                    </div>
+                  )}
+
+                  <div className="p-3 rounded-lg bg-background/50 border border-border/50">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                      <Clock className="h-3 w-3" />
+                      Created
+                    </p>
+                    <p className="text-sm font-medium">{formatDate(project.createdAt)}</p>
+                  </div>
+
+                  {project.githubUrl && (
+                    <a
+                      href={project.githubUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block p-3 rounded-lg bg-background/50 border border-border/50 hover:bg-background/80 hover:border-primary/30 transition-all group"
+                    >
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                        <Github className="h-3 w-3" />
+                        Repository
+                      </p>
+                      <p className="text-sm font-medium text-primary group-hover:underline flex items-center gap-1">
+                        {project.githubUrl.replace('https://github.com/', '')}
+                        <ExternalLink className="h-3 w-3 opacity-50" />
+                      </p>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
         </div>
       </div>
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog - OS Style */}
       {mounted && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="bg-card border max-w-xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">Edit Project</DialogTitle>
+          <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-xl p-0 overflow-hidden shadow-2xl">
+            <DialogHeader className="px-6 pt-6 pb-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                  <Edit2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl">Edit Project</DialogTitle>
+                  <p className="text-sm text-muted-foreground">Update project settings</p>
+                </div>
+              </div>
             </DialogHeader>
-            <ProjectForm
-              project={project}
-              onSubmit={handleUpdate}
-              onCancel={() => setIsEditDialogOpen(false)}
-              isLoading={updateProject.isPending}
-            />
+            <div className="px-6 pb-6">
+              <ProjectForm
+                project={project}
+                onSubmit={handleUpdate}
+                onCancel={() => setIsEditDialogOpen(false)}
+                isLoading={updateProject.isPending}
+              />
+            </div>
           </DialogContent>
         </Dialog>
       )}
@@ -741,41 +786,53 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         />
       )}
 
-      {/* New Issue Dialog */}
+      {/* New Issue Dialog - OS Style */}
       <Dialog open={isNewIssueDialogOpen} onOpenChange={setIsNewIssueDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Create New Issue</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="issue-title">Title</Label>
-              <Input
-                id="issue-title"
-                placeholder="Issue title"
-                value={issueTitle}
-                onChange={(e) => setIssueTitle(e.target.value)}
-              />
+        <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-lg p-0 overflow-hidden shadow-2xl">
+          <DialogHeader className="px-6 pt-6 pb-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                <CirclePlus className="h-5 w-5 text-green-500" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Create Issue</DialogTitle>
+                <p className="text-sm text-muted-foreground">Add a new GitHub issue</p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="issue-body">Description (optional)</Label>
-              <Textarea
-                id="issue-body"
-                placeholder="Describe the issue..."
-                value={issueBody}
-                onChange={(e) => setIssueBody(e.target.value)}
-                rows={5}
-              />
+          </DialogHeader>
+          <div className="px-6 py-4 space-y-4">
+            <div className="p-4 rounded-xl bg-muted/50 border border-border/50 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="issue-title" className="text-muted-foreground text-sm">Title *</Label>
+                <Input
+                  id="issue-title"
+                  placeholder="Enter issue title..."
+                  value={issueTitle}
+                  onChange={(e) => setIssueTitle(e.target.value)}
+                  className="bg-background/50 border-border/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="issue-body" className="text-muted-foreground text-sm">Description</Label>
+                <Textarea
+                  id="issue-body"
+                  placeholder="Describe the issue..."
+                  value={issueBody}
+                  onChange={(e) => setIssueBody(e.target.value)}
+                  rows={4}
+                  className="bg-background/50 border-border/50 resize-none"
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsNewIssueDialogOpen(false)}>
+          <div className="px-6 pb-6 flex gap-3">
+            <Button variant="outline" onClick={() => setIsNewIssueDialogOpen(false)} className="flex-1 border-border/50">
               Cancel
             </Button>
             <Button
               onClick={handleCreateIssue}
               disabled={createIssue.isPending || !issueTitle.trim()}
-              className="relative overflow-hidden bg-green-500/10 backdrop-blur-sm border border-green-500/30 text-green-400 hover:bg-green-500/20 hover:text-green-300 hover:border-green-400/50 transition-all duration-300 shadow-[0_0_15px_rgba(34,197,94,0.15)] hover:shadow-[0_0_20px_rgba(34,197,94,0.25)]"
+              className="flex-1 bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30 hover:text-green-300"
             >
               {createIssue.isPending ? (
                 <>
@@ -789,34 +846,38 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </>
               )}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Issue Detail Dialog */}
+      {/* Issue Detail Dialog - OS Style */}
       <Dialog open={!!selectedIssue} onOpenChange={(open) => !open && setSelectedIssue(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-2xl p-0 overflow-hidden shadow-2xl">
           {selectedIssue && (
             <>
-              <DialogHeader>
-                <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="shrink-0 text-green-400 border-green-400/50">
-                    <CircleDot className="h-3 w-3 mr-1" />
-                    Open
-                  </Badge>
-                  <DialogTitle className="text-xl">
-                    {selectedIssue.title}
-                  </DialogTitle>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-muted-foreground pt-2">
-                  <span className="font-mono">#{selectedIssue.number}</span>
-                  <span>•</span>
-                  <span>Opened by {selectedIssue.user?.login || 'Unknown'}</span>
-                  <span>•</span>
-                  <span>{new Date(selectedIssue.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              <DialogHeader className="px-6 pt-6 pb-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <CircleDot className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <DialogTitle className="text-xl truncate">{selectedIssue.title}</DialogTitle>
+                      <Badge variant="outline" className="shrink-0 text-green-400 border-green-400/50 text-xs">
+                        Open
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                      <span className="font-mono">#{selectedIssue.number}</span>
+                      <span>·</span>
+                      <span>by {selectedIssue.user?.login || 'Unknown'}</span>
+                      <span>·</span>
+                      <span>{new Date(selectedIssue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  </div>
                 </div>
                 {selectedIssue.labels && selectedIssue.labels.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-2">
+                  <div className="flex flex-wrap gap-1 mt-3">
                     {selectedIssue.labels.map((label) => (
                       <Badge
                         key={label.name}
@@ -833,26 +894,28 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                 )}
               </DialogHeader>
-              <div className="py-4">
-                {selectedIssue.body ? (
-                  <div className="prose prose-sm prose-invert max-w-none">
-                    <p className="whitespace-pre-wrap text-foreground">{selectedIssue.body}</p>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground italic">No description provided.</p>
-                )}
+              <div className="px-6 py-4">
+                <div className="p-4 rounded-xl bg-muted/50 border border-border/50 max-h-[300px] overflow-y-auto">
+                  {selectedIssue.body ? (
+                    <div className="prose prose-sm prose-invert max-w-none">
+                      <p className="whitespace-pre-wrap text-foreground text-sm">{selectedIssue.body}</p>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground italic text-sm">No description provided.</p>
+                  )}
+                </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setSelectedIssue(null)}>
+              <div className="px-6 pb-6 flex gap-3">
+                <Button variant="outline" onClick={() => setSelectedIssue(null)} className="flex-1 border-border/50">
                   Close
                 </Button>
-                <Button asChild>
+                <Button asChild className="flex-1">
                   <a href={selectedIssue.url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="mr-2 h-4 w-4" />
                     View on GitHub
                   </a>
                 </Button>
-              </DialogFooter>
+              </div>
             </>
           )}
         </DialogContent>

@@ -11,6 +11,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Sprite, SpriteStatus } from '@/types/sprite';
 
+// Open port info from Sprites API
+interface OpenPort {
+  port: number;
+  address: string; // Proxy URL for accessing the port
+  pid: number;
+  openedAt: string;
+}
+
 // Active sprite info for quick access
 interface ActiveSpriteInfo {
   id: string;
@@ -33,6 +41,9 @@ interface SpriteState {
   // Active sprites map (projectId -> sprite info)
   activeSprites: Record<string, ActiveSpriteInfo>;
 
+  // Open ports per sprite (spriteId -> ports)
+  openPorts: Record<string, OpenPort[]>;
+
   // Terminal dialog state
   terminalOpen: boolean;
   currentSpriteId: string | null;
@@ -50,6 +61,11 @@ interface SpriteState {
   updateSpriteStatus: (projectId: string, status: SpriteStatus) => void;
   removeActiveSprite: (projectId: string) => void;
   clearActiveSprites: () => void;
+
+  // Port tracking actions
+  addOpenPort: (spriteId: string, port: OpenPort) => void;
+  removeOpenPort: (spriteId: string, port: number) => void;
+  clearOpenPorts: (spriteId: string) => void;
 
   // Terminal actions
   openTerminal: (spriteId: string, projectId: string) => void;
@@ -69,6 +85,7 @@ export const useSpriteStore = create<SpriteState>()(
     (set, get) => ({
       // Initial state
       activeSprites: {},
+      openPorts: {},
       terminalOpen: false,
       currentSpriteId: null,
       currentProjectId: null,
@@ -125,6 +142,41 @@ export const useSpriteStore = create<SpriteState>()(
 
       // Clear all active sprites
       clearActiveSprites: () => set({ activeSprites: {} }),
+
+      // Add an open port for a sprite
+      addOpenPort: (spriteId, port) =>
+        set((state) => {
+          const existing = state.openPorts[spriteId] || [];
+          // Don't add duplicate ports
+          if (existing.some((p) => p.port === port.port)) {
+            return state;
+          }
+          return {
+            openPorts: {
+              ...state.openPorts,
+              [spriteId]: [...existing, port],
+            },
+          };
+        }),
+
+      // Remove a closed port
+      removeOpenPort: (spriteId, port) =>
+        set((state) => {
+          const existing = state.openPorts[spriteId] || [];
+          return {
+            openPorts: {
+              ...state.openPorts,
+              [spriteId]: existing.filter((p) => p.port !== port),
+            },
+          };
+        }),
+
+      // Clear all ports for a sprite (when disconnecting)
+      clearOpenPorts: (spriteId) =>
+        set((state) => {
+          const { [spriteId]: _, ...rest } = state.openPorts;
+          return { openPorts: rest };
+        }),
 
       // Open terminal for a sprite
       openTerminal: (spriteId, projectId) =>
@@ -205,3 +257,11 @@ export const useTerminalDimensions = () => {
 
 export const useRecentSessions = () =>
   useSpriteStore((state) => state.recentSessions);
+
+// Stable empty array reference to avoid infinite re-renders
+const EMPTY_PORTS: OpenPort[] = [];
+
+export const useOpenPorts = (spriteId: string | null | undefined) =>
+  useSpriteStore((state) => (spriteId ? state.openPorts[spriteId] ?? EMPTY_PORTS : EMPTY_PORTS));
+
+export type { OpenPort };

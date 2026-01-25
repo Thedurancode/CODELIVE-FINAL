@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTerminalDimensions } from '@/stores/sprite-store';
+import { useTerminalDimensions, useSpriteStore } from '@/stores/sprite-store';
 
 // WebSocket message types
 export type SpriteWsMessageType =
@@ -18,7 +18,17 @@ export type SpriteWsMessageType =
   | 'ping'
   | 'pong'
   | 'connected'
-  | 'disconnected';
+  | 'disconnected'
+  | 'port_opened'
+  | 'port_closed'
+  | 'session_info';
+
+// Port notification from Sprites API
+export interface PortNotification {
+  port: number;
+  address: string; // Proxy URL
+  pid: number;
+}
 
 export interface SpriteWsMessage {
   type: SpriteWsMessageType;
@@ -27,6 +37,15 @@ export interface SpriteWsMessage {
   cols?: number;
   rows?: number;
   status?: 'connecting' | 'connected' | 'disconnected' | 'error';
+  // Port notification fields
+  port?: number;
+  address?: string;
+  pid?: number;
+  // Session info fields
+  sessionId?: number;
+  command?: string;
+  isOwner?: boolean;
+  tty?: boolean;
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -39,6 +58,8 @@ interface UseSpriteWebSocketOptions {
   onOutput?: (data: string) => void;
   onError?: (error: string) => void;
   onStatusChange?: (status: ConnectionStatus) => void;
+  onPortOpened?: (notification: PortNotification) => void;
+  onPortClosed?: (notification: PortNotification) => void;
   autoConnect?: boolean;
   reconnectAttempts?: number;
   reconnectDelay?: number;
@@ -69,10 +90,17 @@ export function useSpriteWebSocket(
     onOutput,
     onError,
     onStatusChange,
+    onPortOpened,
+    onPortClosed,
     autoConnect = true,
     reconnectAttempts = DEFAULT_RECONNECT_ATTEMPTS,
     reconnectDelay = DEFAULT_RECONNECT_DELAY,
   } = options;
+
+  // Store actions for port tracking
+  const addOpenPort = useSpriteStore((state) => state.addOpenPort);
+  const removeOpenPort = useSpriteStore((state) => state.removeOpenPort);
+  const clearOpenPorts = useSpriteStore((state) => state.clearOpenPorts);
 
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [error, setError] = useState<string | null>(null);
@@ -208,6 +236,33 @@ export function useSpriteWebSocket(
             // Connection is alive
             break;
 
+          case 'port_opened':
+            if (message.port && message.address && spriteId) {
+              console.log('[SpriteWebSocket] Port opened:', message.port, message.address);
+              const portInfo = {
+                port: message.port,
+                address: message.address,
+                pid: message.pid || 0,
+                openedAt: new Date().toISOString(),
+              };
+              addOpenPort(spriteId, portInfo);
+              onPortOpened?.({ port: message.port, address: message.address, pid: message.pid || 0 });
+            }
+            break;
+
+          case 'port_closed':
+            if (message.port && spriteId) {
+              console.log('[SpriteWebSocket] Port closed:', message.port);
+              removeOpenPort(spriteId, message.port);
+              onPortClosed?.({ port: message.port, address: message.address || '', pid: message.pid || 0 });
+            }
+            break;
+
+          case 'session_info':
+            console.log('[SpriteWebSocket] Session info:', message);
+            // Session info can be used for display, but no action needed
+            break;
+
           default:
             console.log('[SpriteWebSocket] Unknown message type:', message.type);
             break;
@@ -219,7 +274,7 @@ export function useSpriteWebSocket(
         }
       }
     },
-    [onOutput, onError, updateStatus, startPingInterval, stopPingInterval]
+    [onOutput, onError, onPortOpened, onPortClosed, updateStatus, startPingInterval, stopPingInterval, spriteId, addOpenPort, removeOpenPort]
   );
 
   // Attempt reconnection
@@ -314,13 +369,18 @@ export function useSpriteWebSocket(
 
     stopPingInterval();
 
+    // Clear open ports for this sprite
+    if (spriteId) {
+      clearOpenPorts(spriteId);
+    }
+
     if (wsRef.current) {
       wsRef.current.close(1000, 'User disconnected');
       wsRef.current = null;
     }
 
     updateStatus('disconnected');
-  }, [updateStatus, stopPingInterval]);
+  }, [updateStatus, stopPingInterval, spriteId, clearOpenPorts]);
 
   // Send data to terminal
   const send = useCallback((data: string) => {

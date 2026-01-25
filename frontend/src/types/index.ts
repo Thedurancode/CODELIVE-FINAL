@@ -811,7 +811,7 @@ export interface TaskStats {
 }
 
 // Project Management Types
-export type ProjectStatus = 'in_talks' | 'now_coding' | 'needs_review' | 'completed' | 'cancelled';
+export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived' | 'cancelled';
 
 export interface Project {
   id: string;
@@ -833,6 +833,7 @@ export interface Project {
   // Computed fields
   isOverdue?: boolean;
   daysUntilDue?: number | null;
+  noteCount?: number;
   // Populated relations
   createdBy?: { id: string; name?: string; email?: string };
   contacts?: ProjectContact[];

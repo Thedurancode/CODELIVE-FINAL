@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { Bot, Play, Square, Terminal, RotateCcw, ChevronDown, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { SpriteLaunchDialog } from './SpriteLaunchDialog';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -42,6 +43,7 @@ import type { SpriteCheckpoint } from '@/types/sprite';
 interface SpriteLaunchButtonProps {
   projectId: string;
   projectTitle?: string;
+  githubUrl?: string | null;
   compact?: boolean;
   className?: string;
 }
@@ -49,10 +51,12 @@ interface SpriteLaunchButtonProps {
 export function SpriteLaunchButton({
   projectId,
   projectTitle,
+  githubUrl,
   compact = false,
   className,
 }: SpriteLaunchButtonProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isLaunchDialogOpen, setIsLaunchDialogOpen] = useState(false);
 
   const { data: sprite, isLoading, error: spriteError, isError, isFetching } = useSpriteByProject(projectId);
 
@@ -90,6 +94,8 @@ export function SpriteLaunchButton({
   const isTransitioning = hasSprite
     ? ['creating', 'initializing', 'checkpointing', 'restoring'].includes(sprite.status)
     : false;
+  const isRestoring = hasSprite ? sprite.status === 'restoring' : false;
+  const isCheckpointing = hasSprite ? sprite.status === 'checkpointing' : false;
 
   const handleLaunch = async () => {
     console.log('[SpriteLaunchButton] handleLaunch called', { hasSprite, isActive, canResume, projectId });
@@ -113,13 +119,9 @@ export function SpriteLaunchButton({
         toast.success('Coding agent resumed');
         openTerminal(sprite!.id, projectId);
       } else if (!hasSprite) {
-        // Create new sprite
-        console.log('[SpriteLaunchButton] Creating new sprite');
-        toast.loading('Creating coding agent...');
-        const newSprite = await createSprite.mutateAsync({ projectId });
-        toast.dismiss();
-        toast.success('Coding agent created');
-        openTerminal(newSprite.id, projectId);
+        // Open launch dialog for branch selection
+        console.log('[SpriteLaunchButton] Opening launch dialog');
+        setIsLaunchDialogOpen(true);
       }
     } catch (error) {
       console.error('[SpriteLaunchButton] Error:', error);
@@ -238,7 +240,9 @@ export function SpriteLaunchButton({
             {hasSprite && isActive && 'Open Terminal'}
             {hasSprite && canResume && 'Resume Coding Agent'}
             {hasSprite && isInError && 'Recreate Coding Agent (checkpoint lost)'}
-            {hasSprite && isTransitioning && sprite?.status}
+            {hasSprite && isRestoring && 'Restoring from checkpoint...'}
+            {hasSprite && isCheckpointing && 'Saving checkpoint...'}
+            {hasSprite && isTransitioning && !isRestoring && !isCheckpointing && `Status: ${sprite?.status}`}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -274,7 +278,9 @@ export function SpriteLaunchButton({
           {hasSprite && isActive && 'Open Terminal'}
           {hasSprite && canResume && 'Resume'}
           {hasSprite && isInError && 'Recreate'}
-          {hasSprite && isTransitioning && 'Starting...'}
+          {hasSprite && isRestoring && 'Restoring...'}
+          {hasSprite && isCheckpointing && 'Saving...'}
+          {hasSprite && isTransitioning && !isRestoring && !isCheckpointing && 'Starting...'}
         </span>
         {hasSprite && !isInError && <SpriteStatusDot status={sprite!.status} />}
       </Button>
@@ -392,6 +398,15 @@ export function SpriteLaunchButton({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
+
+      {/* Launch Dialog for Branch Selection */}
+      <SpriteLaunchDialog
+        open={isLaunchDialogOpen}
+        onOpenChange={setIsLaunchDialogOpen}
+        projectId={projectId}
+        projectTitle={projectTitle}
+        githubUrl={githubUrl ?? null}
+      />
     </div>
   );
 }

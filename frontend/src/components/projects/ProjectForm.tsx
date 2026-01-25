@@ -13,11 +13,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Plus, Loader2, Github, Globe, Upload, ImageIcon, Trash2 } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { X, Plus, Loader2, Github, Globe, Upload, ImageIcon, FileText, Calendar, Tag, Users, Link2, Activity } from 'lucide-react';
 import type { Project, ProjectStatus } from '@/types';
 import { GitHubRepoPicker } from './GitHubRepoPicker';
 import { TeamMemberSelector } from './TeamMemberSelector';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 const PROJECT_STATUSES: { value: ProjectStatus; label: string }[] = [
   { value: 'active', label: 'Active' },
@@ -179,218 +181,275 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Logo */}
-      <div>
-        <Label className="text-muted-foreground text-sm flex items-center gap-2 mb-2">
-          <ImageIcon className="h-4 w-4" />
-          Project Logo
-        </Label>
-        <div className="flex items-center gap-4">
-          {logoPreview ? (
-            <div className="relative">
-              <img
-                src={logoPreview}
-                alt="Project logo preview"
-                className="h-16 w-16 rounded-lg object-cover border border-border"
-              />
-              <button
-                type="button"
-                onClick={handleRemoveLogo}
-                className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600"
-              >
-                <X className="h-3 w-3" />
-              </button>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <ScrollArea className="h-[500px] pr-4">
+        <div className="space-y-4">
+          {/* Project Identity Section */}
+          <div className="p-4 rounded-xl bg-muted/50 border border-border/50 space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Project Identity</p>
+                <p className="text-xs text-muted-foreground">Logo, name, and description</p>
+              </div>
             </div>
-          ) : (
-            <div
-              onClick={() => logoInputRef.current?.click()}
-              className="h-16 w-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-accent-400 hover:bg-secondary/50 transition-colors"
-            >
-              <Upload className="h-6 w-6 text-muted-foreground" />
-            </div>
-          )}
-          <div className="flex-1">
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleLogoSelect}
-              className="hidden"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => logoInputRef.current?.click()}
-              className="border"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {logoPreview ? 'Change' : 'Upload'}
-            </Button>
-            <p className="text-xs text-muted-foreground mt-1">
-              PNG, JPG up to 5MB. Recommended: 256x256px
-            </p>
-          </div>
-        </div>
-      </div>
 
-      {/* Title */}
-      <div>
-        <Label className="text-muted-foreground text-sm">Title *</Label>
-        <Input
-          placeholder="Project title..."
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="mt-1 bg-secondary border text-foreground"
-          required
-        />
-      </div>
-
-      {/* Description */}
-      <div>
-        <Label className="text-muted-foreground text-sm">Description</Label>
-        <Textarea
-          placeholder="Describe the project..."
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="mt-1 bg-secondary border text-foreground min-h-24"
-        />
-      </div>
-
-      {/* Team Members */}
-      <TeamMemberSelector
-        selectedIds={selectedMemberIds}
-        onChange={setSelectedMemberIds}
-        label="Team Members"
-      />
-
-      {/* GitHub Repository */}
-      <div>
-        <Label className="text-muted-foreground text-sm flex items-center gap-2 mb-2">
-          <Github className="h-4 w-4" />
-          GitHub Repository
-        </Label>
-        <GitHubRepoPicker
-          value={githubUrl}
-          onChange={setGithubUrl}
-          projectName={title}
-        />
-      </div>
-
-      {/* Deployment URL */}
-      <div>
-        <Label className="text-muted-foreground text-sm flex items-center gap-2">
-          <Globe className="h-4 w-4" />
-          Deployment URL
-        </Label>
-        <Input
-          type="url"
-          placeholder="https://myproject.vercel.app"
-          value={deploymentUrl}
-          onChange={(e) => setDeploymentUrl(e.target.value)}
-          className="mt-1 bg-secondary border text-foreground"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Live preview or production URL for this project
-        </p>
-      </div>
-
-      {/* Status */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-muted-foreground text-sm">Status</Label>
-          <Select value={status} onValueChange={(v) => setStatus(v as ProjectStatus)}>
-            <SelectTrigger className="mt-1 bg-secondary border text-foreground">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent className="bg-secondary border">
-              {PROJECT_STATUSES.map((s) => (
-                <SelectItem key={s.value} value={s.value} className="text-foreground">
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Dates */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label className="text-muted-foreground text-sm">Start Date</Label>
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="mt-1 bg-secondary border text-foreground"
-          />
-        </div>
-        <div>
-          <Label className="text-muted-foreground text-sm">Target End Date</Label>
-          <Input
-            type="date"
-            value={targetEndDate}
-            onChange={(e) => setTargetEndDate(e.target.value)}
-            className="mt-1 bg-secondary border text-foreground"
-          />
-        </div>
-      </div>
-
-      {/* Tags */}
-      <div>
-        <Label className="text-muted-foreground text-sm">Tags</Label>
-        <div className="flex gap-2 mt-1">
-          <Input
-            placeholder="Add a tag..."
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-            className="bg-secondary border text-foreground"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={addTag}
-            className="border"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            {tags.map((tag) => (
-              <Badge
-                key={tag}
-                variant="secondary"
-                className="bg-accent-500/20 text-accent-400"
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  className="ml-1 hover:text-red-400"
+            {/* Logo */}
+            <div className="flex items-center gap-4">
+              {logoPreview ? (
+                <div className="relative">
+                  <img
+                    src={logoPreview}
+                    alt="Project logo preview"
+                    className="h-16 w-16 rounded-xl object-cover border border-border/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => logoInputRef.current?.click()}
+                  className="h-16 w-16 rounded-xl border-2 border-dashed border-border/50 flex items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex-1">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoSelect}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => logoInputRef.current?.click()}
+                  className="border-border/50"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {logoPreview ? 'Change' : 'Upload'}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  PNG, JPG up to 5MB
+                </p>
+              </div>
+            </div>
 
-      {/* Actions */}
-      <div className="flex gap-4 pt-4 border-t border">
+            {/* Title */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Project Name *</Label>
+              <Input
+                placeholder="Enter project name..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="bg-background/50 border-border/50"
+                required
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Description</Label>
+              <Textarea
+                placeholder="Describe the project..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="bg-background/50 border-border/50 min-h-20 resize-none"
+              />
+            </div>
+          </div>
+
+          {/* Team Section */}
+          <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <Users className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <p className="font-medium">Team</p>
+                <p className="text-xs text-muted-foreground">Assign team members</p>
+              </div>
+            </div>
+            <TeamMemberSelector
+              selectedIds={selectedMemberIds}
+              onChange={setSelectedMemberIds}
+            />
+          </div>
+
+          {/* Integrations Section */}
+          <div className="p-4 rounded-xl bg-muted/50 border border-border/50 space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                <Link2 className="h-5 w-5 text-purple-500" />
+              </div>
+              <div>
+                <p className="font-medium">Integrations</p>
+                <p className="text-xs text-muted-foreground">GitHub and deployment</p>
+              </div>
+            </div>
+
+            {/* GitHub Repository */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                <Github className="h-4 w-4" />
+                GitHub Repository
+              </Label>
+              <GitHubRepoPicker
+                value={githubUrl}
+                onChange={setGithubUrl}
+                projectName={title}
+              />
+            </div>
+
+            {/* Deployment URL */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                Deployment URL
+              </Label>
+              <Input
+                type="url"
+                placeholder="https://myproject.vercel.app"
+                value={deploymentUrl}
+                onChange={(e) => setDeploymentUrl(e.target.value)}
+                className="bg-background/50 border-border/50"
+              />
+            </div>
+          </div>
+
+          {/* Status & Timeline Section */}
+          <div className="p-4 rounded-xl bg-muted/50 border border-border/50 space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Activity className="h-5 w-5 text-amber-500" />
+              </div>
+              <div>
+                <p className="font-medium">Status & Timeline</p>
+                <p className="text-xs text-muted-foreground">Project status and dates</p>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-sm">Status</Label>
+              <Select value={status} onValueChange={(v) => setStatus(v as ProjectStatus)}>
+                <SelectTrigger className="bg-background/50 border-border/50">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROJECT_STATUSES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Dates */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Start Date
+                </Label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-background/50 border-border/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Target End
+                </Label>
+                <Input
+                  type="date"
+                  value={targetEndDate}
+                  onChange={(e) => setTargetEndDate(e.target.value)}
+                  className="bg-background/50 border-border/50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tags Section */}
+          <div className="p-4 rounded-xl bg-muted/50 border border-border/50 space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Tag className="h-5 w-5 text-green-500" />
+              </div>
+              <div>
+                <p className="font-medium">Tags</p>
+                <p className="text-xs text-muted-foreground">Categorize your project</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add a tag..."
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
+                className="bg-background/50 border-border/50"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={addTag}
+                className="border-border/50 shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                  <Badge
+                    key={tag}
+                    variant="secondary"
+                    className="bg-primary/10 text-primary border border-primary/20 px-3 py-1"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      className="ml-2 hover:text-red-400 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </ScrollArea>
+
+      {/* Actions - Fixed at bottom */}
+      <div className="flex gap-3 pt-4 border-t border-border/50">
         <Button
           type="button"
           variant="outline"
-          className="flex-1 border text-foreground"
+          className="flex-1 border-border/50"
           onClick={onCancel}
           disabled={isLoading}
         >
@@ -398,7 +457,7 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
         </Button>
         <Button
           type="submit"
-          className="flex-1 bg-accent-600 hover:bg-accent-700 text-white"
+          className="flex-1"
           disabled={isLoading || isUploadingLogo || !title.trim()}
         >
           {isLoading || isUploadingLogo ? (

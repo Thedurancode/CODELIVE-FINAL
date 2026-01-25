@@ -66,6 +66,17 @@ interface ProjectSpriteAttributes {
   lastAccessedAt: Date | null;
   lastAccessedById: string | null;
 
+  // Runtime tracking
+  totalRuntimeSeconds: number;
+  sessionCount: number;
+  lastStartedAt: Date | null;
+  currentSessionId: string | null;
+
+  // Shell session persistence
+  lastShellDirectory: string | null; // Last working directory in the shell
+  startupCommand: string | null; // Command to run on terminal connect (e.g., "npm run dev")
+  tmuxSessionName: string | null; // Name of the tmux session for persistent terminal
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -93,6 +104,13 @@ interface ProjectSpriteCreationAttributes
     | 'createdById'
     | 'lastAccessedAt'
     | 'lastAccessedById'
+    | 'totalRuntimeSeconds'
+    | 'sessionCount'
+    | 'lastStartedAt'
+    | 'currentSessionId'
+    | 'lastShellDirectory'
+    | 'startupCommand'
+    | 'tmuxSessionName'
     | 'createdAt'
     | 'updatedAt'
   > {}
@@ -130,6 +148,14 @@ class ProjectSprite
   declare createdById: string | null;
   declare lastAccessedAt: Date | null;
   declare lastAccessedById: string | null;
+
+  declare totalRuntimeSeconds: number;
+  declare sessionCount: number;
+  declare lastStartedAt: Date | null;
+  declare currentSessionId: string | null;
+  declare lastShellDirectory: string | null;
+  declare startupCommand: string | null;
+  declare tmuxSessionName: string | null;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -170,7 +196,7 @@ class ProjectSprite
     return this.findAll({
       where: {
         organizationId,
-        status: ['running', 'hibernating', 'initializing'],
+        status: ['running', 'initializing', 'restoring'],
       },
       order: [['lastAccessedAt', 'DESC']],
     });
@@ -190,10 +216,11 @@ class ProjectSprite
   }
 
   /**
-   * Check if sprite is active (running or can be quickly resumed)
+   * Check if sprite is active (actually running and accepting commands)
+   * Hibernating sprites are NOT active - they need to be resumed first
    */
   isActive(): boolean {
-    return ['running', 'hibernating', 'initializing'].includes(this.status);
+    return ['running', 'initializing', 'restoring'].includes(this.status);
   }
 
   /**
@@ -208,6 +235,42 @@ class ProjectSprite
    */
   getSpriteUrl(): string | null {
     return this.urlSettings?.url || null;
+  }
+
+  /**
+   * Get total runtime formatted as human-readable string
+   */
+  getFormattedRuntime(): string {
+    const seconds = this.totalRuntimeSeconds || 0;
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+    if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+
+  /**
+   * Get current session runtime (if active)
+   * Returns seconds since last started, or 0 if not active
+   */
+  getCurrentSessionRuntime(): number {
+    if (!this.lastStartedAt || !this.currentSessionId) {
+      return 0;
+    }
+    return Math.floor((Date.now() - this.lastStartedAt.getTime()) / 1000);
+  }
+
+  /**
+   * Get total runtime including current active session
+   */
+  getTotalRuntimeWithCurrent(): number {
+    return this.totalRuntimeSeconds + this.getCurrentSessionRuntime();
   }
 
   /**
@@ -399,6 +462,50 @@ ProjectSprite.init(
       },
       onDelete: 'SET NULL',
       comment: 'User who last accessed this sprite',
+    },
+    totalRuntimeSeconds: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'total_runtime_seconds',
+      comment: 'Total accumulated runtime in seconds',
+    },
+    sessionCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'session_count',
+      comment: 'Total number of sessions',
+    },
+    lastStartedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'last_started_at',
+      comment: 'When the sprite was last started',
+    },
+    currentSessionId: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'current_session_id',
+      comment: 'Currently active terminal session ID from Sprites.dev',
+    },
+    lastShellDirectory: {
+      type: DataTypes.STRING(512),
+      allowNull: true,
+      field: 'last_shell_directory',
+      comment: 'Last working directory in the shell session',
+    },
+    startupCommand: {
+      type: DataTypes.STRING(1024),
+      allowNull: true,
+      field: 'startup_command',
+      comment: 'Command to run when terminal connects (e.g., npm run dev)',
+    },
+    tmuxSessionName: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'tmux_session_name',
+      comment: 'Name of the tmux session for persistent terminal',
     },
     createdAt: {
       type: DataTypes.DATE,

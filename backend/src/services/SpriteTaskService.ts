@@ -907,6 +907,50 @@ Co-Authored-By: Dispotree Sprite <sprite@dispotree.com>`.trim();
 
     return null;
   }
+
+  /**
+   * Get the git diff for a task's branch
+   * Returns structured diff data for display
+   */
+  async getTaskDiff(taskId: string): Promise<{
+    files: Array<{
+      path: string;
+      status: 'added' | 'modified' | 'deleted' | 'renamed';
+      additions: number;
+      deletions: number;
+    }>;
+    branchName: string | null;
+    baseBranch: string;
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+  }> {
+    const task = await SpriteTask.findByPk(taskId);
+    if (!task || !task.branchName || !task.spriteId) {
+      return {
+        files: [],
+        branchName: task?.branchName || null,
+        baseBranch: 'main',
+        additions: 0,
+        deletions: 0,
+        changedFiles: 0,
+      };
+    }
+
+    // TODO: Execute git diff via sprite WebSocket
+    // For now, return basic info
+    // Future: Send command to sprite to run `git diff main...{branchName} --stat`
+    // and parse the output
+
+    return {
+      files: [],
+      branchName: task.branchName,
+      baseBranch: 'main',
+      additions: 0,
+      deletions: 0,
+      changedFiles: 0,
+    };
+  }
 }
 
 export const spriteTaskService = new SpriteTaskService();

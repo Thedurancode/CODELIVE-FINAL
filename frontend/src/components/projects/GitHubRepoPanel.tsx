@@ -34,6 +34,8 @@ import {
   GitMerge,
   CircleDot,
   MessageSquare,
+  CircleAlert,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   useGitHubContents,
@@ -42,16 +44,20 @@ import {
   useGitHubReadme,
   useGitHubFileContent,
   useGitHubPullRequests,
+  useGitHubIssues,
   parseGitHubUrl,
   type GitHubContentItem,
   type GitHubCommit,
   type GitHubPullRequest,
+  type GitHubIssue,
 } from '@/hooks/use-github-repo';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ProcessIssueButton } from '@/components/sprites/ProcessIssueButton';
 
 interface GitHubRepoPanelProps {
   githubUrl: string;
+  projectId?: string;
 }
 
 // File icon based on extension
@@ -605,8 +611,167 @@ function PullRequestsList({ owner, repo }: { owner: string; repo: string }) {
   );
 }
 
+// Issues List Component
+function IssuesList({ owner, repo, projectId }: { owner: string; repo: string; projectId?: string }) {
+  const [issueState, setIssueState] = useState<'open' | 'closed' | 'all'>('open');
+  const { data: issues, isLoading } = useGitHubIssues(owner, repo, {
+    state: issueState,
+    perPage: 30,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 px-1">
+        <Button
+          variant={issueState === 'open' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setIssueState('open')}
+          className="h-7"
+        >
+          <CircleAlert className="h-3.5 w-3.5 mr-1.5 text-green-400" />
+          Open
+        </Button>
+        <Button
+          variant={issueState === 'closed' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setIssueState('closed')}
+          className="h-7"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-purple-400" />
+          Closed
+        </Button>
+        <Button
+          variant={issueState === 'all' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => setIssueState('all')}
+          className="h-7"
+        >
+          All
+        </Button>
+      </div>
+
+      <ScrollArea className="h-[420px]">
+        {issues?.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <CircleAlert className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>No {issueState === 'all' ? '' : issueState} issues</p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {issues?.map((issue) => (
+              <div
+                key={issue.id}
+                className="p-3 hover:bg-secondary/80 rounded border border-transparent hover:border-border transition-colors group"
+              >
+                <div className="flex items-start gap-3">
+                  {/* Issue Icon */}
+                  <div className="shrink-0 mt-0.5">
+                    {issue.state === 'closed' ? (
+                      <CheckCircle2 className="h-5 w-5 text-purple-400" />
+                    ) : (
+                      <CircleAlert className="h-5 w-5 text-green-400" />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={issue.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium truncate hover:underline"
+                      >
+                        {issue.title}
+                      </a>
+                    </div>
+
+                    {/* Labels */}
+                    {issue.labels.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {issue.labels.map((label) => (
+                          <Badge
+                            key={label.name}
+                            variant="outline"
+                            className="text-xs px-1.5 py-0"
+                            style={{
+                              borderColor: `#${label.color}`,
+                              color: `#${label.color}`,
+                            }}
+                          >
+                            {label.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium text-foreground/80">#{issue.number}</span>
+                        <span>opened</span>
+                        <Clock className="h-3 w-3" />
+                        <span>{formatRelativeDate(issue.createdAt)}</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        by
+                        {issue.user.avatar_url && (
+                          <img
+                            src={issue.user.avatar_url}
+                            alt={issue.user.login}
+                            className="h-4 w-4 rounded-full"
+                          />
+                        )}
+                        <span className="font-medium">{issue.user.login}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Convert to Task Button */}
+                  {projectId && issue.state === 'open' && (
+                    <div className="shrink-0">
+                      <ProcessIssueButton
+                        projectId={projectId}
+                        issueNumber={issue.number}
+                        issueTitle={issue.title}
+                        size="sm"
+                        variant="outline"
+                        showLabel
+                      />
+                    </div>
+                  )}
+
+                  {/* External link */}
+                  <a
+                    href={issue.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Button variant="ghost" size="sm" className="h-7 px-2">
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+    </div>
+  );
+}
+
 // Main Component
-export function GitHubRepoPanel({ githubUrl }: GitHubRepoPanelProps) {
+export function GitHubRepoPanel({ githubUrl, projectId }: GitHubRepoPanelProps) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>('main');
 
@@ -675,8 +840,12 @@ export function GitHubRepoPanel({ githubUrl }: GitHubRepoPanelProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="commits" className="w-full">
+        <Tabs defaultValue="issues" className="w-full">
           <TabsList className="mb-4">
+            <TabsTrigger value="issues" className="flex items-center gap-2">
+              <CircleAlert className="h-4 w-4" />
+              Issues
+            </TabsTrigger>
             <TabsTrigger value="commits" className="flex items-center gap-2">
               <GitCommit className="h-4 w-4" />
               Commits
@@ -687,13 +856,17 @@ export function GitHubRepoPanel({ githubUrl }: GitHubRepoPanelProps) {
             </TabsTrigger>
             <TabsTrigger value="pulls" className="flex items-center gap-2">
               <GitPullRequest className="h-4 w-4" />
-              Pull Requests
+              PRs
             </TabsTrigger>
             <TabsTrigger value="readme" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               README
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="issues">
+            <IssuesList owner={owner} repo={repo} projectId={projectId} />
+          </TabsContent>
 
           <TabsContent value="commits">
             <CommitsList owner={owner} repo={repo} branch={selectedBranch} />

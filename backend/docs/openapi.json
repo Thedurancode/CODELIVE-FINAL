@@ -3203,6 +3203,118 @@
         }
       }
     },
+    "/api/auth/local/register": {
+      "post": {
+        "summary": "Register a new user (local auth)",
+        "description": "Create a new user account with email and password using local database",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password",
+                  "name"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "company": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully"
+          },
+          "400": {
+            "description": "Invalid input or email already exists"
+          }
+        }
+      }
+    },
+    "/api/auth/local/login": {
+      "post": {
+        "summary": "Login with email and password (local auth)",
+        "description": "Authenticate user using local database",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/api/auth/local/me": {
+      "get": {
+        "summary": "Get current user profile (local auth)",
+        "description": "Returns the authenticated user's profile using local JWT",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        }
+      }
+    },
     "/api/listings": {
       "get": {
         "summary": "Get all properties",
@@ -25380,6 +25492,30 @@
         }
       }
     },
+    "/api/projects/tv-display": {
+      "get": {
+        "summary": "Get projects for TV display (no auth required)",
+        "description": "Public endpoint for Roku/TV display app - returns all projects with minimal info",
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of projects for TV display"
+          }
+        }
+      }
+    },
     "/api/projects": {
       "get": {
         "summary": "Get all projects",
@@ -30144,6 +30280,172 @@
         }
       }
     },
+    "/api/sprites/{id}/chat/stream": {
+      "post": {
+        "summary": "Stream chat with Claude Code in a sprite",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "prompt"
+                ],
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "description": "User message to send to Claude"
+                  },
+                  "conversationId": {
+                    "type": "string",
+                    "description": "Existing conversation ID to continue"
+                  },
+                  "workDir": {
+                    "type": "string",
+                    "description": "Working directory for the command"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events stream of chat responses",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/chat/conversations": {
+      "get": {
+        "summary": "List chat conversations for a sprite",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of conversations"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/chat/conversations/{sessionId}": {
+      "get": {
+        "summary": "Get conversation history",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Conversation session ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversation messages"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a conversation",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Conversation session ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversation deleted"
+          }
+        }
+      }
+    },
     "/api/sprites/config": {
       "get": {
         "summary": "Get Sprites configuration status",
@@ -30793,6 +31095,100 @@
         }
       }
     },
+    "/api/sprites/{id}/sessions/{sessionId}/kill": {
+      "post": {
+        "summary": "Kill an exec session",
+        "description": "Kill a running exec session. Returns streaming NDJSON with kill progress events:\n- `signal`: When signal is sent to process\n- `timeout`: When timeout occurs and SIGKILL is sent\n- `exited`: Process exited cleanly\n- `killed`: Process was killed\n- `error`: Error or warning occurred\n- `complete`: Kill operation complete with exit code\n",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "signal",
+            "schema": {
+              "type": "string",
+              "default": "SIGTERM"
+            },
+            "description": "Signal to send (e.g., SIGTERM, SIGKILL)"
+          },
+          {
+            "in": "query",
+            "name": "timeout",
+            "schema": {
+              "type": "string",
+              "default": "10s"
+            },
+            "description": "Timeout waiting for process to exit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session killed - returns streaming events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "signal",
+                          "timeout",
+                          "exited",
+                          "killed",
+                          "error",
+                          "complete"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "signal": {
+                        "type": "string"
+                      },
+                      "pid": {
+                        "type": "integer"
+                      },
+                      "exit_code": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sprite or session not found"
+          }
+        }
+      }
+    },
     "/api/sprites/{id}/terminal": {
       "get": {
         "summary": "Get WebSocket connection info for terminal",
@@ -30973,6 +31369,858 @@
           },
           "404": {
             "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/read": {
+      "get": {
+        "summary": "Read file contents (raw bytes)",
+        "description": "Read file contents from the sprite filesystem. Returns raw file bytes.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path to the file to read"
+          },
+          {
+            "in": "query",
+            "name": "workingDir",
+            "schema": {
+              "type": "string",
+              "default": "/home/sprite"
+            },
+            "description": "Working directory for resolving relative paths"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File contents (raw bytes)",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path is required"
+          },
+          "404": {
+            "description": "Sprite or file not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/read-text": {
+      "get": {
+        "summary": "Read file contents as text",
+        "description": "Read file contents from the sprite filesystem as UTF-8 text.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path to the file to read"
+          },
+          {
+            "in": "query",
+            "name": "workingDir",
+            "schema": {
+              "type": "string",
+              "default": "/home/sprite"
+            },
+            "description": "Working directory for resolving relative paths"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File contents as text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path is required"
+          },
+          "404": {
+            "description": "Sprite or file not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/write": {
+      "put": {
+        "summary": "Write file contents",
+        "description": "Write file contents to the sprite filesystem. Request body contains raw file bytes.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path to the file to write"
+          },
+          {
+            "in": "query",
+            "name": "workingDir",
+            "schema": {
+              "type": "string",
+              "default": "/home/sprite"
+            },
+            "description": "Working directory for resolving relative paths"
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "schema": {
+              "type": "string"
+            },
+            "description": "File permissions in octal (e.g., '0644')"
+          },
+          {
+            "in": "query",
+            "name": "mkdir",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Create parent directories if they don't exist"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File written successfully"
+          },
+          "400": {
+            "description": "Path is required"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/list": {
+      "get": {
+        "summary": "List directory contents",
+        "description": "List the contents of a directory on the sprite filesystem.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Path to the directory to list"
+          },
+          {
+            "in": "query",
+            "name": "workingDir",
+            "schema": {
+              "type": "string",
+              "default": "/home/sprite"
+            },
+            "description": "Working directory for resolving relative paths"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Directory listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "entries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "isDir": {
+                                "type": "boolean"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "mode": {
+                                "type": "string"
+                              },
+                              "modTime": {
+                                "type": "string"
+                              },
+                              "uid": {
+                                "type": "number"
+                              },
+                              "gid": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path is required"
+          },
+          "404": {
+            "description": "Sprite or directory not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/delete": {
+      "delete": {
+        "summary": "Delete file or directory",
+        "description": "Delete a file or directory from the sprite filesystem.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "workingDir",
+                  "recursive"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Path to delete"
+                  },
+                  "workingDir": {
+                    "type": "string",
+                    "description": "Working directory for resolving relative paths"
+                  },
+                  "recursive": {
+                    "type": "boolean",
+                    "description": "Delete directories recursively"
+                  },
+                  "asRoot": {
+                    "type": "boolean",
+                    "description": "Execute as root user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File/directory deleted successfully"
+          },
+          "400": {
+            "description": "Path and workingDir are required"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/rename": {
+      "post": {
+        "summary": "Rename or move file/directory",
+        "description": "Rename or move a file or directory on the sprite filesystem.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "dest",
+                  "workingDir"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Source path"
+                  },
+                  "dest": {
+                    "type": "string",
+                    "description": "Destination path"
+                  },
+                  "workingDir": {
+                    "type": "string",
+                    "description": "Working directory for resolving relative paths"
+                  },
+                  "asRoot": {
+                    "type": "boolean",
+                    "description": "Execute as root user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File/directory renamed successfully"
+          },
+          "400": {
+            "description": "Source, dest, and workingDir are required"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/copy": {
+      "post": {
+        "summary": "Copy file or directory",
+        "description": "Copy a file or directory on the sprite filesystem.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "source",
+                  "dest",
+                  "workingDir"
+                ],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "description": "Source path"
+                  },
+                  "dest": {
+                    "type": "string",
+                    "description": "Destination path"
+                  },
+                  "workingDir": {
+                    "type": "string",
+                    "description": "Working directory for resolving relative paths"
+                  },
+                  "recursive": {
+                    "type": "boolean",
+                    "description": "Copy directories recursively"
+                  },
+                  "preserveAttrs": {
+                    "type": "boolean",
+                    "description": "Preserve file attributes"
+                  },
+                  "asRoot": {
+                    "type": "boolean",
+                    "description": "Execute as root user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File/directory copied successfully"
+          },
+          "400": {
+            "description": "Source, dest, and workingDir are required"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/chmod": {
+      "post": {
+        "summary": "Change file permissions",
+        "description": "Change file or directory permissions on the sprite filesystem.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "workingDir",
+                  "mode"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Path to the file/directory"
+                  },
+                  "workingDir": {
+                    "type": "string",
+                    "description": "Working directory for resolving relative paths"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "description": "File permissions in octal (e.g., '0755')"
+                  },
+                  "recursive": {
+                    "type": "boolean",
+                    "description": "Apply recursively to directories"
+                  },
+                  "asRoot": {
+                    "type": "boolean",
+                    "description": "Execute as root user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Permissions changed successfully"
+          },
+          "400": {
+            "description": "Path, workingDir, and mode are required"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/chown": {
+      "post": {
+        "summary": "Change file ownership",
+        "description": "Change file or directory ownership on the sprite filesystem.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "workingDir",
+                  "uid",
+                  "gid"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Path to the file/directory"
+                  },
+                  "workingDir": {
+                    "type": "string",
+                    "description": "Working directory for resolving relative paths"
+                  },
+                  "uid": {
+                    "type": "integer",
+                    "description": "User ID"
+                  },
+                  "gid": {
+                    "type": "integer",
+                    "description": "Group ID"
+                  },
+                  "recursive": {
+                    "type": "boolean",
+                    "description": "Apply recursively to directories"
+                  },
+                  "asRoot": {
+                    "type": "boolean",
+                    "description": "Execute as root user"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ownership changed successfully"
+          },
+          "400": {
+            "description": "Path, workingDir, uid, and gid are required"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/fs/watch": {
+      "get": {
+        "summary": "Get WebSocket info for filesystem watch",
+        "description": "Get WebSocket connection info to watch for filesystem changes in real-time.",
+        "tags": [
+          "Sprites - Filesystem"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WebSocket connection info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "wsUrl": {
+                          "type": "string",
+                          "description": "WebSocket URL for filesystem watch"
+                        },
+                        "token": {
+                          "type": "string",
+                          "description": "Authentication token"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Sprite not active"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/exec": {
+      "post": {
+        "summary": "Execute a command in a sprite",
+        "description": "Execute a non-interactive command in the sprite environment. Useful for running Claude commands, scripts, or any shell command without opening a terminal WebSocket.",
+        "tags": [
+          "Sprites - Exec"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "command"
+                ],
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "description": "The command to execute",
+                    "example": "claude --version"
+                  },
+                  "workDir": {
+                    "type": "string",
+                    "description": "Working directory for command execution",
+                    "example": "/home/user/project"
+                  },
+                  "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in milliseconds (default 60000)",
+                    "example": 30000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command executed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "output": {
+                          "type": "string",
+                          "description": "Command output (stdout + stderr)"
+                        },
+                        "exitCode": {
+                          "type": "integer",
+                          "description": "Exit code of the command"
+                        },
+                        "sessionId": {
+                          "type": "string",
+                          "description": "Session ID (if provided by API)"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Command is required or sprite is not running"
+          },
+          "404": {
+            "description": "Sprite not found"
+          },
+          "500": {
+            "description": "Command execution failed"
           }
         }
       }
