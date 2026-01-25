@@ -77,6 +77,8 @@ import spriteTasksRoutes from './routes/spriteTasksRoutes';
 import githubWebhookRoutes from './routes/githubWebhookRoutes';
 import redditRoutes from './routes/redditRoutes';
 import clientPortalRoutes from './routes/clientPortalRoutes';
+import publicApiRoutes from './routes/publicApiRoutes';
+import apiKeyRoutes from './routes/apiKeyRoutes';
 // Voice calling module (Twilio + OpenAI Realtime)
 import { twilioRoutes as voiceTwilioRoutes, callRoutes as voiceCallRoutes, handleTwilioConnection, closeAllSessions as closeVoiceSessions } from './voice';
 import { syncDatabase, sequelize } from './models';
@@ -267,6 +269,8 @@ app.use('/api/sprites', spritesRoutes);
 app.use('/api/sprite-tasks', spriteTasksRoutes);
 app.use('/api/reddit', redditRoutes);
 app.use('/api/client', clientPortalRoutes);
+app.use('/api/api-keys', apiKeyRoutes); // API key management (JWT auth)
+app.use('/api/v1', publicApiRoutes); // Public API (API key auth)
 app.use('/api', documentRoutes);
 
 // OpenAI-compatible endpoints (for OpenWebUI, LangChain, etc.)
