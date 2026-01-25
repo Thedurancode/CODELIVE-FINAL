@@ -181,3 +181,75 @@ export const GITHUB_STATUS_LABELS: Record<SpriteTaskStatus, string> = {
   failed: 'sprite:failed',
   cancelled: 'sprite:cancelled',
 };
+
+// ============================================================================
+// SMART ISSUE PARSING TYPES
+// ============================================================================
+
+// Parsed subtask from checklist
+export interface ParsedSubtask {
+  title: string;
+  completed: boolean;
+  order: number;
+}
+
+// Code block from issue body
+export interface CodeBlock {
+  language: string | null;
+  code: string;
+  context?: string;
+}
+
+// Technical context extracted from issue
+export interface TechnicalContext {
+  codeBlocks: CodeBlock[];
+  mentionedTechnologies: string[];
+  dependencies: string[];
+}
+
+// Related issue reference
+export interface RelatedIssue {
+  type: 'blocks' | 'blocked_by' | 'related' | 'duplicate';
+  issueNumber: number;
+}
+
+// Task complexity estimate
+export type TaskComplexity = 'trivial' | 'simple' | 'moderate' | 'complex';
+
+// Full parsed issue result
+export interface ParsedIssue {
+  title: string;
+  description: string;
+  subtasks: ParsedSubtask[];
+  targetFiles: string[];
+  acceptanceCriteria: string[];
+  priority: SpriteTaskPriority;
+  technicalContext: TechnicalContext;
+  relatedIssues: RelatedIssue[];
+  estimatedComplexity: TaskComplexity;
+  prompt: string;
+}
+
+// Parsed GitHub issue (includes metadata)
+export interface ParsedGitHubIssue extends ParsedIssue {
+  issueNumber: number;
+  issueUrl: string;
+  issueState: 'open' | 'closed';
+  issueLabels: string[];
+}
+
+// Complexity colors for UI
+export const TASK_COMPLEXITY_COLORS: Record<TaskComplexity, string> = {
+  trivial: 'bg-green-500',
+  simple: 'bg-blue-500',
+  moderate: 'bg-yellow-500',
+  complex: 'bg-red-500',
+};
+
+// Complexity labels for UI
+export const TASK_COMPLEXITY_LABELS: Record<TaskComplexity, string> = {
+  trivial: 'Trivial',
+  simple: 'Simple',
+  moderate: 'Moderate',
+  complex: 'Complex',
+};

@@ -13,6 +13,12 @@ export { SpriteStatusBadge, SpriteStatusDot } from './SpriteStatusBadge';
 export { SpritePanel } from './SpritePanel';
 export { SpriteChatPanel } from './SpriteChatPanel';
 export { SpriteServicesPanel } from './SpriteServicesPanel';
+export { SpriteMcpPanel } from './SpriteMcpPanel';
+export { McpRegistryBrowser } from './McpRegistryBrowser';
+export { McpInstalledServersList } from './McpInstalledServersList';
+export { McpServerConfigDialog } from './McpServerConfigDialog';
+export { McpServerUpdateBadge } from './McpServerUpdateBadge';
+export { McpUpdateDialog } from './McpUpdateDialog';
 
 // File Browser components
 export { SpriteFileBrowser } from './SpriteFileBrowser';
@@ -32,3 +38,4 @@ export { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 export { BatchTaskDialog } from './BatchTaskDialog';
 export { TaskSplitSuggestion, type SubtaskSuggestion } from './TaskSplitSuggestion';
 export { TaskCostEstimate, calculateCostEstimate, getCostTier, MODEL_PRICING } from './TaskCostEstimate';
+export { ParsedIssuePreview } from './ParsedIssuePreview';

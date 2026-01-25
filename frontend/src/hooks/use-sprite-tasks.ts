@@ -447,3 +447,53 @@ export function usePollTaskWithActivity(
     },
   };
 }
+
+// ============================================================================
+// SMART ISSUE PARSING HOOKS
+// ============================================================================
+
+import type { ParsedIssue, ParsedGitHubIssue } from '@/types/spriteTask';
+
+/**
+ * Parse issue text into structured task data (local parsing, no API call needed)
+ */
+export function useParseIssue() {
+  return useMutation({
+    mutationFn: async (data: { title: string; body?: string; labels?: string[] }) => {
+      const result = await api.post<ParsedIssue>('/api/sprite-tasks/parse', data);
+      return result;
+    },
+  });
+}
+
+/**
+ * Fetch and parse a GitHub issue by number
+ */
+export function useParseGitHubIssue() {
+  return useMutation({
+    mutationFn: async (data: { projectId: string; issueNumber: number; spriteId?: string }) => {
+      const result = await api.post<ParsedGitHubIssue>('/api/sprite-tasks/parse-github-issue', data);
+      return result;
+    },
+  });
+}
+
+/**
+ * Hook to parse a GitHub issue with caching (for preview before task creation)
+ */
+export function useParsedGitHubIssue(
+  projectId: string | null | undefined,
+  issueNumber: number | null | undefined,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: ['parsed-issue', projectId, issueNumber],
+    queryFn: () =>
+      api.post<ParsedGitHubIssue>('/api/sprite-tasks/parse-github-issue', {
+        projectId,
+        issueNumber,
+      }),
+    enabled: (options?.enabled ?? true) && !!projectId && !!issueNumber,
+    staleTime: 60000, // 1 minute - issue content doesn't change often
+  });
+}

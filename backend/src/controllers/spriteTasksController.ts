@@ -7,6 +7,7 @@
 import { Request, Response } from 'express';
 import { spriteTaskService } from '../services/SpriteTaskService';
 import { githubIssueSyncService } from '../services/GitHubIssueSyncService';
+import { issueParserService } from '../services/IssueParserService';
 import SpriteTask from '../models/SpriteTask';
 
 /**
@@ -538,6 +539,86 @@ export const syncTask = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Parse a GitHub issue into structured task data (preview before creating)
+ */
+export const parseIssue = async (req: Request, res: Response) => {
+  try {
+    const { title, body, labels } = req.body;
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        error: 'title is required',
+      });
+    }
+
+    const parsed = issueParserService.parseIssue(
+      title,
+      body || null,
+      labels || []
+    );
+
+    res.json({ success: true, data: parsed });
+  } catch (error) {
+    console.error('[spriteTasksController] parseIssue error:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Fetch and parse a GitHub issue by number
+ */
+export const parseGitHubIssue = async (req: Request, res: Response) => {
+  try {
+    const { projectId, issueNumber, spriteId } = req.body;
+
+    if (!projectId || !issueNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'projectId and issueNumber are required',
+      });
+    }
+
+    // Fetch the issue from GitHub via SpriteTaskService
+    const issue = await spriteTaskService.fetchGitHubIssue({
+      projectId,
+      issueNumber: parseInt(issueNumber, 10),
+      spriteId,
+    });
+
+    if (!issue) {
+      return res.status(404).json({
+        success: false,
+        error: 'GitHub issue not found',
+      });
+    }
+
+    // Parse the issue
+    const parsed = issueParserService.parseGitHubIssue(issue);
+
+    res.json({
+      success: true,
+      data: {
+        ...parsed,
+        issueNumber: issue.number,
+        issueUrl: issue.html_url,
+        issueState: issue.state,
+        issueLabels: issue.labels?.map((l: any) => l.name) || [],
+      },
+    });
+  } catch (error) {
+    console.error('[spriteTasksController] parseGitHubIssue error:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+};
+
 export default {
   createTask,
   getTasks,
@@ -557,4 +638,6 @@ export default {
   getSyncStatus,
   getTaskActivity,
   syncTask,
+  parseIssue,
+  parseGitHubIssue,
 };

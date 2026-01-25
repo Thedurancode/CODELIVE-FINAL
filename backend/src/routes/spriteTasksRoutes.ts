@@ -654,4 +654,129 @@ router.get('/:id/activity', spriteTasksController.getTaskActivity);
  */
 router.post('/:id/sync', spriteTasksController.syncTask);
 
+// ============================================================================
+// SMART ISSUE PARSING
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprite-tasks/parse:
+ *   post:
+ *     summary: Parse issue text into structured task data
+ *     description: |
+ *       Parses GitHub issue content to extract:
+ *       - Subtasks from checklists
+ *       - Target files from path references
+ *       - Acceptance criteria from relevant sections
+ *       - Priority from labels
+ *       - Technical context from code blocks
+ *       - Generated Claude prompt
+ *
+ *       Use this to preview parsed data before creating a task.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 description: Issue title
+ *               body:
+ *                 type: string
+ *                 description: Issue body (markdown)
+ *               labels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Issue labels for priority detection
+ *     responses:
+ *       200:
+ *         description: Parsed issue data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 title:
+ *                   type: string
+ *                 description:
+ *                   type: string
+ *                 subtasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       title:
+ *                         type: string
+ *                       completed:
+ *                         type: boolean
+ *                       order:
+ *                         type: integer
+ *                 targetFiles:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 acceptanceCriteria:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 priority:
+ *                   type: string
+ *                   enum: [low, medium, high, urgent]
+ *                 estimatedComplexity:
+ *                   type: string
+ *                   enum: [trivial, simple, moderate, complex]
+ *                 prompt:
+ *                   type: string
+ *                   description: Generated Claude prompt
+ */
+router.post('/parse', spriteTasksController.parseIssue);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/parse-github-issue:
+ *   post:
+ *     summary: Fetch and parse a GitHub issue by number
+ *     description: |
+ *       Fetches an issue from GitHub and parses it into structured task data.
+ *       Returns parsed data plus original issue metadata.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - projectId
+ *               - issueNumber
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Project with linked GitHub repo
+ *               issueNumber:
+ *                 type: integer
+ *                 description: GitHub issue number
+ *               spriteId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional sprite to use for fetching
+ *     responses:
+ *       200:
+ *         description: Parsed issue data with GitHub metadata
+ *       404:
+ *         description: Issue not found
+ */
+router.post('/parse-github-issue', spriteTasksController.parseGitHubIssue);
+
 export default router;
