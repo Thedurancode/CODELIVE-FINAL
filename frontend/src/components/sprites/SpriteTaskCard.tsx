@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   ChevronDown,
@@ -19,8 +19,15 @@ import {
   XCircle,
   RotateCcw,
   Play,
+  RefreshCw,
+  MessageSquare,
+  CheckCircle2,
+  AlertCircle,
+  History,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +36,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import type { SpriteTask, SpriteTaskStatus, SpriteTaskPriority } from '@/types/spriteTask';
 import {
   SPRITE_TASK_STATUS_COLORS,
@@ -43,7 +51,11 @@ import {
   useCancelSpriteTask,
   useRetrySpriteTask,
   useProcessSpriteTask,
+  useTaskSyncStatus,
+  useTaskActivity,
+  useSyncTask,
 } from '@/hooks/use-sprite-tasks';
+import type { TaskActivityEntry } from '@/types/spriteTask';
 import { useTaskDiff } from '@/hooks/use-task-diff';
 import { TaskDiffViewer } from './TaskDiffViewer';
 
@@ -75,6 +87,46 @@ function getStatusIcon(status: SpriteTaskStatus) {
   }
 }
 
+// Activity entry component for the timeline
+function ActivityEntry({ entry }: { entry: TaskActivityEntry }) {
+  const getIcon = () => {
+    switch (entry.type) {
+      case 'status_change':
+        return <RefreshCw className="h-3 w-3 text-indigo-500" />;
+      case 'comment':
+        return <MessageSquare className="h-3 w-3 text-blue-400" />;
+      case 'pr_created':
+        return <GitPullRequest className="h-3 w-3 text-purple-500" />;
+      case 'error':
+        return <AlertCircle className="h-3 w-3 text-red-500" />;
+      default:
+        return <Clock className="h-3 w-3 text-muted-foreground" />;
+    }
+  };
+
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <div className="mt-0.5 shrink-0">{getIcon()}</div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          {entry.actor && (
+            <span className="font-medium text-foreground flex items-center gap-1">
+              <User className="h-2.5 w-2.5" />
+              {entry.actor}
+            </span>
+          )}
+          <span className="text-muted-foreground">
+            {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
+          </span>
+        </div>
+        <p className="text-muted-foreground line-clamp-2 mt-0.5">
+          {entry.message}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function SpriteTaskCard({
   task,
   spriteId,
@@ -82,10 +134,30 @@ export function SpriteTaskCard({
   className,
 }: SpriteTaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const hasAutoSynced = useRef(false);
 
   const cancelMutation = useCancelSpriteTask();
   const retryMutation = useRetrySpriteTask();
   const processMutation = useProcessSpriteTask();
+  const syncMutation = useSyncTask();
+
+  // Auto-sync with GitHub when card is expanded for the first time
+  useEffect(() => {
+    if (isExpanded && task.githubIssueNumber && !hasAutoSynced.current && !syncMutation.isPending) {
+      hasAutoSynced.current = true;
+      // Silently sync in background without showing toast
+      syncMutation.mutate(task.id);
+    }
+  }, [isExpanded, task.githubIssueNumber, task.id, syncMutation]);
+
+  // Fetch sync status when task has a GitHub issue
+  const { data: syncStatus } = useTaskSyncStatus(task.githubIssueNumber ? task.id : null);
+
+  // Fetch activity when expanded and has a GitHub issue
+  const { data: activity, isLoading: activityLoading } = useTaskActivity(
+    isExpanded && task.githubIssueNumber ? task.id : null,
+    { enabled: isExpanded && !!task.githubIssueNumber }
+  );
 
   // Fetch diff when task has a branch and is expanded
   const { data: diffData } = useTaskDiff(
@@ -109,6 +181,27 @@ export function SpriteTaskCard({
     processMutation.mutate({
       taskId: task.id,
       spriteId: spriteId ?? undefined,
+    });
+  };
+
+  const handleSync = () => {
+    syncMutation.mutate(task.id, {
+      onSuccess: (result) => {
+        if (result.newComments > 0 || result.issueUpdated || result.labelsUpdated) {
+          toast.success('Synced with GitHub', {
+            description: result.newComments > 0
+              ? `${result.newComments} new comment${result.newComments !== 1 ? 's' : ''} synced`
+              : 'Issue data updated',
+          });
+        } else {
+          toast.info('Already in sync');
+        }
+      },
+      onError: (error) => {
+        toast.error('Sync failed', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        });
+      },
     });
   };
 
@@ -159,18 +252,41 @@ export function SpriteTaskCard({
                   {SPRITE_TASK_PRIORITY_LABELS[task.priority]}
                 </Badge>
 
-                {/* GitHub Issue Link */}
+                {/* GitHub Issue Link with Sync Status */}
                 {task.githubIssueUrl && (
-                  <a
-                    href={task.githubIssueUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                      #{task.githubIssueNumber}
-                    </Badge>
-                  </a>
+                  <div className="flex items-center gap-1">
+                    <a
+                      href={task.githubIssueUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                        #{task.githubIssueNumber}
+                      </Badge>
+                    </a>
+                    {/* Sync status indicator */}
+                    {syncStatus && (
+                      <div className="flex items-center gap-1">
+                        {syncStatus.commentCount > 0 && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs px-1 py-0 text-muted-foreground"
+                            title={`${syncStatus.commentCount} comment${syncStatus.commentCount !== 1 ? 's' : ''}`}
+                          >
+                            <MessageSquare className="h-3 w-3 mr-0.5" />
+                            {syncStatus.commentCount}
+                          </Badge>
+                        )}
+                        {syncStatus.lastSynced && (
+                          <CheckCircle2
+                            className="h-3 w-3 text-green-500"
+                            title={`Synced ${formatDistanceToNow(new Date(syncStatus.lastSynced), { addSuffix: true })}`}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -283,6 +399,33 @@ export function SpriteTaskCard({
               </p>
             )}
 
+            {/* Activity Timeline */}
+            {task.githubIssueNumber && (
+              <div className="pt-2">
+                <h5 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <History className="h-3.5 w-3.5" />
+                  Activity
+                  {activityLoading && <Loader2 className="h-3 w-3 animate-spin ml-1" />}
+                </h5>
+                {activity && activity.length > 0 ? (
+                  <ScrollArea className="h-[150px]">
+                    <div className="space-y-2 pr-2">
+                      {activity.slice(0, 10).map((entry, idx) => (
+                        <ActivityEntry key={`${entry.type}-${entry.timestamp}-${idx}`} entry={entry} />
+                      ))}
+                      {activity.length > 10 && (
+                        <p className="text-xs text-muted-foreground text-center py-1">
+                          +{activity.length - 10} more events
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                ) : !activityLoading ? (
+                  <p className="text-xs text-muted-foreground">No activity yet</p>
+                ) : null}
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex items-center gap-2 pt-2 border-t">
               {/* Process button for pending tasks */}
@@ -332,6 +475,24 @@ export function SpriteTaskCard({
                     <RotateCcw className="h-4 w-4 mr-1" />
                   )}
                   Retry
+                </Button>
+              )}
+
+              {/* Sync with GitHub button */}
+              {task.githubIssueNumber && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSync}
+                  disabled={syncMutation.isPending}
+                  title="Sync with GitHub issue"
+                >
+                  {syncMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                  )}
+                  Sync
                 </Button>
               )}
             </div>

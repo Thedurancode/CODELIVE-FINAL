@@ -136,3 +136,48 @@ export function canRetryTask(status: SpriteTaskStatus): boolean {
 export function isTaskComplete(status: SpriteTaskStatus): boolean {
   return ['completed', 'pr_created'].includes(status);
 }
+
+// ============================================================================
+// GITHUB ISSUE SYNC TYPES
+// ============================================================================
+
+// Activity entry types
+export type TaskActivityType = 'status_change' | 'comment' | 'pr_created' | 'error';
+
+// Activity timeline entry
+export interface TaskActivityEntry {
+  type: TaskActivityType;
+  timestamp: string;
+  message: string;
+  actor?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// Sync status for a task
+export interface TaskSyncStatus {
+  hasLinkedIssue: boolean;
+  lastSynced: string | null;
+  issueNumber: number | null;
+  issueUrl: string | null;
+  commentCount: number;
+  currentLabels: string[];
+}
+
+// Sync result
+export interface TaskSyncResult {
+  issueUpdated: boolean;
+  newComments: number;
+  labelsUpdated: boolean;
+  issueClosed: boolean;
+}
+
+// Status label mapping (for display)
+export const GITHUB_STATUS_LABELS: Record<SpriteTaskStatus, string> = {
+  pending: 'sprite:queued',
+  assigned: 'sprite:assigned',
+  in_progress: 'sprite:in-progress',
+  pr_created: 'sprite:pr-ready',
+  completed: 'sprite:completed',
+  failed: 'sprite:failed',
+  cancelled: 'sprite:cancelled',
+};

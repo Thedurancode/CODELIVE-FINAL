@@ -22,6 +22,7 @@ import {
   Bot,
   User,
   Zap,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,7 +40,9 @@ type ActivityEventType =
   | 'task_completed'
   | 'task_failed'
   | 'task_cancelled'
-  | 'task_retried';
+  | 'task_retried'
+  | 'github_comment'
+  | 'status_change';
 
 interface ActivityEvent {
   id: string;
@@ -69,6 +72,8 @@ const EVENT_ICONS: Record<ActivityEventType, React.ElementType> = {
   task_failed: XCircle,
   task_cancelled: Pause,
   task_retried: RefreshCw,
+  github_comment: MessageSquare,
+  status_change: RefreshCw,
 };
 
 // Event color mapping
@@ -83,6 +88,8 @@ const EVENT_COLORS: Record<ActivityEventType, string> = {
   task_failed: 'text-red-500 bg-red-500/10',
   task_cancelled: 'text-gray-400 bg-gray-400/10',
   task_retried: 'text-orange-500 bg-orange-500/10',
+  github_comment: 'text-blue-400 bg-blue-400/10',
+  status_change: 'text-indigo-500 bg-indigo-500/10',
 };
 
 // Event labels
@@ -97,6 +104,8 @@ const EVENT_LABELS: Record<ActivityEventType, string> = {
   task_failed: 'Failed',
   task_cancelled: 'Cancelled',
   task_retried: 'Retrying',
+  github_comment: 'GitHub Comment',
+  status_change: 'Status Change',
 };
 
 // Convert task status changes to activity events

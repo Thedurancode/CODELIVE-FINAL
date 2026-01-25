@@ -129,6 +129,7 @@ import { complianceWebSocketService } from './services/ComplianceWebSocketServic
 import { spritesService } from './services/SpritesService';
 import { spritesWebSocketProxy } from './services/SpritesWebSocketProxy';
 import { tvRemoteWebSocketService } from './services/TVRemoteWebSocketService';
+import { githubSyncWebSocketService } from './services/GitHubSyncWebSocketService';
 import { teamCommunicationService } from './services/TeamCommunicationService';
 import { complianceTriggerService } from './services/ComplianceTriggerService';
 import { calendarIntegrationService } from './services/agent/CalendarIntegrationService';
@@ -898,6 +899,14 @@ const startServer = async () => {
       logger.info('TV Remote WebSocket Service initialized', { path: '/ws/tv-remote' });
     } catch (tvRemoteError) {
       logger.warn('TV Remote WebSocket Service initialization failed', {}, tvRemoteError);
+    }
+
+    // Initialize GitHub Sync WebSocket Service (real-time sync notifications)
+    try {
+      githubSyncWebSocketService.initialize(server);
+      logger.info('GitHub Sync WebSocket Service initialized', { path: '/ws/github-sync' });
+    } catch (githubSyncError) {
+      logger.warn('GitHub Sync WebSocket Service initialization failed', {}, githubSyncError);
     }
 
     // Seed default follow-up chains

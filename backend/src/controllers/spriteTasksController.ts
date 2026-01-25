@@ -6,6 +6,7 @@
 
 import { Request, Response } from 'express';
 import { spriteTaskService } from '../services/SpriteTaskService';
+import { githubIssueSyncService } from '../services/GitHubIssueSyncService';
 import SpriteTask from '../models/SpriteTask';
 
 /**
@@ -439,6 +440,104 @@ export const getTaskDiff = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Get sync status for a task
+ */
+export const getSyncStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const task = await SpriteTask.findByPk(id);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Task not found',
+      });
+    }
+
+    const syncStatus = await githubIssueSyncService.getSyncStatus(id);
+    res.json({ success: true, data: syncStatus });
+  } catch (error) {
+    console.error('[spriteTasksController] getSyncStatus error:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Get activity timeline for a task
+ */
+export const getTaskActivity = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const task = await SpriteTask.findByPk(id);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Task not found',
+      });
+    }
+
+    const activity = await githubIssueSyncService.getTaskActivity(id);
+    res.json({ success: true, data: activity });
+  } catch (error) {
+    console.error('[spriteTasksController] getTaskActivity error:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Force sync a task with its GitHub issue
+ */
+export const syncTask = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const task = await SpriteTask.findByPk(id);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Task not found',
+      });
+    }
+
+    if (!task.githubIssueNumber) {
+      return res.status(400).json({
+        success: false,
+        error: 'Task is not linked to a GitHub issue',
+      });
+    }
+
+    // Poll for changes (this syncs issue content and comments)
+    const pollResult = await githubIssueSyncService.pollIssueChanges(id);
+
+    // Update labels to match current task status
+    await githubIssueSyncService.updateIssueLabels(id, task.status);
+
+    res.json({
+      success: true,
+      data: {
+        issueUpdated: pollResult.issueUpdated,
+        newComments: pollResult.newComments,
+        labelsUpdated: true,
+        issueClosed: pollResult.issueClosed,
+      },
+    });
+  } catch (error) {
+    console.error('[spriteTasksController] syncTask error:', error);
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+};
+
 export default {
   createTask,
   getTasks,
@@ -455,4 +554,7 @@ export default {
   processIssue,
   createFromIssue,
   getTaskDiff,
+  getSyncStatus,
+  getTaskActivity,
+  syncTask,
 };

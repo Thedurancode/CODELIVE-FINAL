@@ -12,6 +12,9 @@ import type {
   SpriteTaskQueueStats,
   CreateSpriteTaskOptions,
   SpriteTaskPriority,
+  TaskSyncStatus,
+  TaskActivityEntry,
+  TaskSyncResult,
 } from '@/types/spriteTask';
 
 // Query keys
@@ -23,6 +26,8 @@ export const spriteTaskKeys = {
   detail: (id: string) => [...spriteTaskKeys.details(), id] as const,
   byProject: (projectId: string) => [...spriteTaskKeys.all, 'project', projectId] as const,
   stats: (projectId?: string) => [...spriteTaskKeys.all, 'stats', projectId] as const,
+  syncStatus: (id: string) => [...spriteTaskKeys.all, 'sync-status', id] as const,
+  activity: (id: string) => [...spriteTaskKeys.all, 'activity', id] as const,
 };
 
 // ============================================================================
@@ -368,4 +373,77 @@ export function usePollSpriteTask(taskId: string | null | undefined, enabled: bo
       return false;
     },
   });
+}
+
+// ============================================================================
+// GITHUB ISSUE SYNC HOOKS
+// ============================================================================
+
+/**
+ * Get sync status for a task (linked issue info, comment count, labels)
+ */
+export function useTaskSyncStatus(taskId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteTaskKeys.syncStatus(taskId ?? ''),
+    queryFn: () => api.get<TaskSyncStatus>(`/api/sprite-tasks/${taskId}/sync-status`),
+    enabled: !!taskId,
+    staleTime: 30000, // 30 seconds
+  });
+}
+
+/**
+ * Get activity timeline for a task (merged status changes + GitHub comments)
+ */
+export function useTaskActivity(taskId: string | null | undefined, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: spriteTaskKeys.activity(taskId ?? ''),
+    queryFn: () => api.get<TaskActivityEntry[]>(`/api/sprite-tasks/${taskId}/activity`),
+    enabled: (options?.enabled ?? true) && !!taskId,
+    staleTime: 10000, // 10 seconds
+  });
+}
+
+/**
+ * Force sync a task with its GitHub issue
+ */
+export function useSyncTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const result = await api.post<TaskSyncResult>(`/api/sprite-tasks/${taskId}/sync`);
+      return result;
+    },
+    onSuccess: (_, taskId) => {
+      // Invalidate related queries to refresh data
+      queryClient.invalidateQueries({ queryKey: spriteTaskKeys.detail(taskId) });
+      queryClient.invalidateQueries({ queryKey: spriteTaskKeys.syncStatus(taskId) });
+      queryClient.invalidateQueries({ queryKey: spriteTaskKeys.activity(taskId) });
+    },
+  });
+}
+
+/**
+ * Poll task activity during active processing (combines task status + activity)
+ */
+export function usePollTaskWithActivity(
+  taskId: string | null | undefined,
+  enabled: boolean = true
+) {
+  const taskQuery = usePollSpriteTask(taskId, enabled);
+  const activityQuery = useTaskActivity(taskId, { enabled: enabled && !!taskId });
+
+  // Also refresh activity when task is actively processing
+  const shouldPoll = taskQuery.data && ['assigned', 'in_progress'].includes(taskQuery.data.status);
+
+  return {
+    task: taskQuery.data,
+    activity: activityQuery.data ?? [],
+    isLoading: taskQuery.isLoading || activityQuery.isLoading,
+    isPolling: shouldPoll,
+    refetch: () => {
+      taskQuery.refetch();
+      activityQuery.refetch();
+    },
+  };
 }

@@ -20,6 +20,7 @@ import {
   Activity,
   Keyboard,
   Layers,
+  Radio,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ import {
   useSpriteTaskStats,
 } from '@/hooks/use-sprite-tasks';
 import { useSpriteByProject } from '@/hooks/use-sprites';
+import { useProjectSyncEvents } from '@/hooks/use-github-sync-websocket';
 import { SpriteTaskCard } from './SpriteTaskCard';
 import { SpriteTaskProgress } from './SpriteTaskProgress';
 import { CreateSpriteTaskDialog } from './CreateSpriteTaskDialog';
@@ -69,6 +71,9 @@ export function SpriteTaskQueuePanel({
   // Get the sprite for this project (if any)
   const { data: sprite } = useSpriteByProject(projectId);
   const spriteId = sprite?.id;
+
+  // Subscribe to real-time GitHub sync events
+  const { isConnected: syncConnected } = useProjectSyncEvents(projectId);
 
   const {
     data: stats,
@@ -218,6 +223,17 @@ export function SpriteTaskQueuePanel({
                   {stats.total}
                 </Badge>
               )}
+              {/* Real-time sync indicator */}
+              <div
+                className={cn(
+                  'flex items-center gap-1 text-xs',
+                  syncConnected ? 'text-green-500' : 'text-muted-foreground'
+                )}
+                title={syncConnected ? 'Real-time sync active' : 'Real-time sync disconnected'}
+              >
+                <Radio className={cn('h-3 w-3', syncConnected && 'animate-pulse')} />
+                <span className="hidden sm:inline">{syncConnected ? 'Live' : 'Offline'}</span>
+              </div>
             </CardTitle>
             <div className="flex items-center gap-2">
               <Button

@@ -17,6 +17,8 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { spriteTaskService } from '../services/SpriteTaskService';
+import { githubIssueSyncService } from '../services/GitHubIssueSyncService';
+import { githubSyncWebSocketService } from '../services/GitHubSyncWebSocketService';
 
 const router = Router();
 
@@ -83,7 +85,9 @@ function verifyGitHubSignature(req: Request): boolean {
  *       Supported events:
  *       - **issues.labeled**: When an issue is labeled with "CodeLive" (configurable via SPRITE_TRIGGER_LABEL),
  *         the issue is automatically picked up by an available sprite for implementation.
+ *       - **issues.edited**: When an issue title/body is edited, linked tasks are updated instantly.
  *       - **issues.closed**: When an issue is closed, any associated task is marked complete.
+ *       - **issue_comment.created/edited**: When someone comments on an issue, the comment is synced to linked tasks.
  *       - **pull_request.closed**: When a PR is merged, associated tasks are marked complete.
  *
  *       Setup:
@@ -91,7 +95,7 @@ function verifyGitHubSignature(req: Request): boolean {
  *       2. URL: https://your-domain.com/api/webhooks/github
  *       3. Content type: application/json
  *       4. Secret: Set GITHUB_WEBHOOK_SECRET env var
- *       5. Events: Issues, Pull requests
+ *       5. Events: Issues, Issue comments, Pull requests
  *     tags: [GitHub Webhooks]
  *     requestBody:
  *       required: true
@@ -125,6 +129,62 @@ router.post('/', webhookLimiter, async (req: Request, res: Response) => {
   try {
     switch (event) {
       case 'issues': {
+        const { action, issue, repository } = req.body;
+
+        // Handle issue edits - sync title/body changes to linked tasks
+        if (action === 'edited') {
+          console.log(`📝 Issue #${issue.number} edited in ${repository.full_name}`);
+
+          // Find tasks linked to this issue
+          const SpriteTask = await import('../models/SpriteTask').then((m) => m.default);
+          const tasks = await SpriteTask.findAll({
+            where: { githubIssueNumber: issue.number },
+          });
+
+          let syncedCount = 0;
+          for (const task of tasks) {
+            try {
+              // Update task title/description if they changed
+              const updates: Record<string, unknown> = {};
+              if (task.title !== issue.title) {
+                updates.title = issue.title;
+              }
+              if (task.description !== issue.body) {
+                updates.description = issue.body;
+              }
+
+              if (Object.keys(updates).length > 0) {
+                await task.update(updates);
+                syncedCount++;
+                console.log(`✅ Task ${task.id} synced with issue #${issue.number} edits`);
+
+                // Broadcast WebSocket event
+                githubSyncWebSocketService.broadcastSyncEvent({
+                  eventType: 'issue_edited',
+                  projectId: task.projectId,
+                  taskId: task.id,
+                  issueNumber: issue.number,
+                  repository: repository.full_name,
+                  data: {
+                    title: issue.title,
+                    body: issue.body,
+                    updatedFields: Object.keys(updates),
+                  },
+                });
+              }
+            } catch (err) {
+              console.error(`Failed to sync task ${task.id}:`, err);
+            }
+          }
+
+          return res.json({
+            success: true,
+            message: `Issue #${issue.number} edit processed`,
+            syncedTasks: syncedCount,
+          });
+        }
+
+        // Handle labeled/closed actions via existing service
         const task = await spriteTaskService.handleGitHubIssueWebhook(req.body);
 
         if (task) {
@@ -143,6 +203,69 @@ router.post('/', webhookLimiter, async (req: Request, res: Response) => {
             req.body.action === 'labeled'
               ? `Label "${req.body.label?.name}" is not the trigger label`
               : `Action "${req.body.action}" not handled`,
+        });
+      }
+
+      case 'issue_comment': {
+        const { action, issue, comment, repository } = req.body;
+
+        // Only process new or edited comments (not deleted)
+        if (action !== 'created' && action !== 'edited') {
+          return res.json({
+            success: true,
+            message: `Comment action "${action}" not handled`,
+          });
+        }
+
+        // Skip bot comments to avoid infinite loops
+        if (comment.user?.type === 'Bot' || comment.body?.includes('<!-- sprite-bot -->')) {
+          return res.json({
+            success: true,
+            message: 'Bot comment ignored',
+          });
+        }
+
+        console.log(`💬 Issue #${issue.number} received comment in ${repository.full_name}`);
+
+        // Find tasks linked to this issue and trigger sync
+        const SpriteTask = await import('../models/SpriteTask').then((m) => m.default);
+        const tasks = await SpriteTask.findAll({
+          where: { githubIssueNumber: issue.number },
+        });
+
+        let syncedCount = 0;
+        for (const task of tasks) {
+          try {
+            // Sync comments from GitHub to task activity
+            await githubIssueSyncService.syncIssueComments(task.id);
+            syncedCount++;
+            console.log(`✅ Task ${task.id} comments synced from issue #${issue.number}`);
+
+            // Broadcast WebSocket event
+            githubSyncWebSocketService.broadcastSyncEvent({
+              eventType: 'issue_comment',
+              projectId: task.projectId,
+              taskId: task.id,
+              issueNumber: issue.number,
+              repository: repository.full_name,
+              data: {
+                action,
+                commentId: comment.id,
+                author: comment.user?.login,
+                body: comment.body?.substring(0, 200), // Truncate for preview
+                createdAt: comment.created_at,
+              },
+            });
+          } catch (err) {
+            console.error(`Failed to sync comments for task ${task.id}:`, err);
+          }
+        }
+
+        return res.json({
+          success: true,
+          message: `Issue #${issue.number} comment synced`,
+          syncedTasks: syncedCount,
+          commentAction: action,
         });
       }
 
@@ -167,6 +290,23 @@ router.post('/', webhookLimiter, async (req: Request, res: Response) => {
               if (task.status === 'pr_created') {
                 await spriteTaskService.completeTask(task.id);
                 console.log(`✅ Task ${task.id} completed (issue #${issueNumber})`);
+
+                // Broadcast WebSocket event
+                githubSyncWebSocketService.broadcastSyncEvent({
+                  eventType: 'pr_merged',
+                  projectId: task.projectId,
+                  taskId: task.id,
+                  issueNumber,
+                  repository: repository.full_name,
+                  data: {
+                    prNumber: pr.number,
+                    prTitle: pr.title,
+                    prUrl: pr.html_url,
+                    mergedBy: pr.merged_by?.login,
+                    mergedAt: pr.merged_at,
+                    newStatus: 'completed',
+                  },
+                });
               }
             }
           }

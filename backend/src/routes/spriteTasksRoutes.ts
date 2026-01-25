@@ -520,4 +520,138 @@ router.post('/process-issue', spriteTasksController.processIssue);
  */
 router.get('/:id/diff', spriteTasksController.getTaskDiff);
 
+// ============================================================================
+// GITHUB ISSUE SYNC
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/sync-status:
+ *   get:
+ *     summary: Get GitHub issue sync status for a task
+ *     description: |
+ *       Returns the current sync status between the task and its linked GitHub issue.
+ *       Includes comment count, current labels, and last sync time.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Sync status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 hasLinkedIssue:
+ *                   type: boolean
+ *                 lastSynced:
+ *                   type: string
+ *                   format: date-time
+ *                 issueNumber:
+ *                   type: integer
+ *                 issueUrl:
+ *                   type: string
+ *                 commentCount:
+ *                   type: integer
+ *                 currentLabels:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id/sync-status', spriteTasksController.getSyncStatus);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/activity:
+ *   get:
+ *     summary: Get activity timeline for a task
+ *     description: |
+ *       Returns a merged timeline of task status changes and GitHub issue comments.
+ *       Useful for showing a unified activity view.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Activity timeline
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   type:
+ *                     type: string
+ *                     enum: [status_change, comment, pr_created, error]
+ *                   timestamp:
+ *                     type: string
+ *                     format: date-time
+ *                   message:
+ *                     type: string
+ *                   actor:
+ *                     type: string
+ *                   metadata:
+ *                     type: object
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id/activity', spriteTasksController.getTaskActivity);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/sync:
+ *   post:
+ *     summary: Force sync a task with its GitHub issue
+ *     description: |
+ *       Manually triggers a bidirectional sync:
+ *       - Pulls latest issue title/body changes from GitHub
+ *       - Pulls new comments from GitHub
+ *       - Updates issue labels based on task status
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Sync completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 issueUpdated:
+ *                   type: boolean
+ *                 newComments:
+ *                   type: integer
+ *                 labelsUpdated:
+ *                   type: boolean
+ *       404:
+ *         description: Task not found
+ */
+router.post('/:id/sync', spriteTasksController.syncTask);
+
 export default router;
