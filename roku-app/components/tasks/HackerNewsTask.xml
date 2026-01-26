@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Hacker News Task Component
+    ==========================
+    Background task to fetch top stories from Hacker News.
+-->
+<component name="HackerNewsTask" extends="Task">
+    <interface>
+        <field id="stories" type="array" />
+        <field id="error" type="string" />
+    </interface>
+
+    <script type="text/brightscript" uri="HackerNewsTask.brs" />
+</component>

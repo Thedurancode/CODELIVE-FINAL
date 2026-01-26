@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Projects Slide Component
+    ========================
+    Displays projects in various layouts: overview (kanban), top3, or single column.
+-->
+<component name="ProjectsSlide" extends="Group">
+    <interface>
+        <field id="slideType" type="string" value="overview" />
+        <field id="projects" type="array" onChange="onProjectsChange" />
+    </interface>
+
+    <children>
+        <!-- Kanban Board Layout (4 columns) -->
+        <LayoutGroup id="kanbanLayout"
+                    layoutDirection="horiz"
+                    itemSpacings="[20]"
+                    translation="[40, 120]"
+                    visible="true">
+
+            <!-- Active / In Talks Column -->
+            <Group id="activeColumn">
+                <Rectangle width="440" height="880" color="#18181b" cornerRadius="12" />
+                <Group translation="[20, 20]">
+                    <Rectangle width="400" height="50" color="#22c55e" opacity="0.2" cornerRadius="8" />
+                    <Label id="activeLabel"
+                           text="In Talks"
+                           font="font:MediumBoldSystemFont"
+                           color="#22c55e"
+                           translation="[15, 12]" />
+                    <Label id="activeCount"
+                           text="0"
+                           font="font:SmallBoldSystemFont"
+                           color="#22c55e"
+                           horizAlign="right"
+                           translation="[340, 15]"
+                           width="50" />
+                </Group>
+                <MarkupGrid id="activeGrid"
+                           translation="[20, 90]"
+                           itemSize="[400, 120]"
+                           itemSpacing="[0, 10]"
+                           numColumns="1"
+                           numRows="6"
+                           itemComponentName="ProjectCard" />
+            </Group>
+
+            <!-- On Hold Column -->
+            <Group id="onHoldColumn">
+                <Rectangle width="440" height="880" color="#18181b" cornerRadius="12" />
+                <Group translation="[20, 20]">
+                    <Rectangle width="400" height="50" color="#eab308" opacity="0.2" cornerRadius="8" />
+                    <Label id="onHoldLabel"
+                           text="On Hold"
+                           font="font:MediumBoldSystemFont"
+                           color="#eab308"
+                           translation="[15, 12]" />
+                    <Label id="onHoldCount"
+                           text="0"
+                           font="font:SmallBoldSystemFont"
+                           color="#eab308"
+                           horizAlign="right"
+                           translation="[340, 15]"
+                           width="50" />
+                </Group>
+                <MarkupGrid id="onHoldGrid"
+                           translation="[20, 90]"
+                           itemSize="[400, 120]"
+                           itemSpacing="[0, 10]"
+                           numColumns="1"
+                           numRows="6"
+                           itemComponentName="ProjectCard" />
+            </Group>
+
+            <!-- Completed Column -->
+            <Group id="completedColumn">
+                <Rectangle width="440" height="880" color="#18181b" cornerRadius="12" />
+                <Group translation="[20, 20]">
+                    <Rectangle width="400" height="50" color="#3b82f6" opacity="0.2" cornerRadius="8" />
+                    <Label id="completedLabel"
+                           text="Completed"
+                           font="font:MediumBoldSystemFont"
+                           color="#3b82f6"
+                           translation="[15, 12]" />
+                    <Label id="completedCount"
+                           text="0"
+                           font="font:SmallBoldSystemFont"
+                           color="#3b82f6"
+                           horizAlign="right"
+                           translation="[340, 15]"
+                           width="50" />
+                </Group>
+                <MarkupGrid id="completedGrid"
+                           translation="[20, 90]"
+                           itemSize="[400, 120]"
+                           itemSpacing="[0, 10]"
+                           numColumns="1"
+                           numRows="6"
+                           itemComponentName="ProjectCard" />
+            </Group>
+
+            <!-- Archived Column -->
+            <Group id="archivedColumn">
+                <Rectangle width="440" height="880" color="#18181b" cornerRadius="12" />
+                <Group translation="[20, 20]">
+                    <Rectangle width="400" height="50" color="#71717a" opacity="0.2" cornerRadius="8" />
+                    <Label id="archivedLabel"
+                           text="Archived"
+                           font="font:MediumBoldSystemFont"
+                           color="#71717a"
+                           translation="[15, 12]" />
+                    <Label id="archivedCount"
+                           text="0"
+                           font="font:SmallBoldSystemFont"
+                           color="#71717a"
+                           horizAlign="right"
+                           translation="[340, 15]"
+                           width="50" />
+                </Group>
+                <MarkupGrid id="archivedGrid"
+                           translation="[20, 90]"
+                           itemSize="[400, 120]"
+                           itemSpacing="[0, 10]"
+                           numColumns="1"
+                           numRows="6"
+                           itemComponentName="ProjectCard" />
+            </Group>
+        </LayoutGroup>
+
+        <!-- Top 3 Layout -->
+        <LayoutGroup id="top3Layout"
+                    layoutDirection="horiz"
+                    itemSpacings="[40]"
+                    horizAlignment="center"
+                    translation="[160, 200]"
+                    visible="false">
+            <ProjectCardLarge id="top3Card1" />
+            <ProjectCardLarge id="top3Card2" />
+            <ProjectCardLarge id="top3Card3" />
+        </LayoutGroup>
+
+        <!-- Single Column Layout -->
+        <Group id="singleColumnLayout" translation="[560, 120]" visible="false">
+            <Rectangle width="800" height="880" color="#18181b" cornerRadius="12" />
+            <Group translation="[20, 20]">
+                <Rectangle id="singleColumnHeader" width="760" height="50" color="#22c55e" opacity="0.2" cornerRadius="8" />
+                <Label id="singleColumnLabel"
+                       text="Projects"
+                       font="font:MediumBoldSystemFont"
+                       color="#22c55e"
+                       translation="[15, 12]" />
+                <Label id="singleColumnCount"
+                       text="0"
+                       font="font:SmallBoldSystemFont"
+                       color="#22c55e"
+                       horizAlign="right"
+                       translation="[690, 15]"
+                       width="50" />
+            </Group>
+            <MarkupGrid id="singleColumnGrid"
+                       translation="[20, 90]"
+                       itemSize="[760, 100]"
+                       itemSpacing="[0, 10]"
+                       numColumns="1"
+                       numRows="7"
+                       itemComponentName="ProjectCard" />
+        </Group>
+    </children>
+
+    <script type="text/brightscript" uri="ProjectsSlide.brs" />
+</component>

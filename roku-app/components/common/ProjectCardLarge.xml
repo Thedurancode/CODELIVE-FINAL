@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Large Project Card Component
+    ============================
+    Displays a featured project in the Top 3 view.
+-->
+<component name="ProjectCardLarge" extends="Group">
+    <interface>
+        <field id="project" type="assocarray" onChange="onProjectChange" />
+    </interface>
+
+    <children>
+        <!-- Card background -->
+        <Rectangle id="cardBg"
+                  width="500"
+                  height="600"
+                  color="#18181b"
+                  cornerRadius="16" />
+
+        <!-- Status indicator -->
+        <Rectangle id="statusBadge"
+                  width="120"
+                  height="30"
+                  color="#22c55e"
+                  cornerRadius="15"
+                  translation="[30, 30]" />
+        <Label id="statusLabel"
+               text="Active"
+               font="font:SmallBoldSystemFont"
+               color="#ffffff"
+               horizAlign="center"
+               translation="[30, 35]"
+               width="120" />
+
+        <!-- Project icon placeholder -->
+        <Rectangle id="iconBg"
+                  width="100"
+                  height="100"
+                  color="#27272a"
+                  cornerRadius="12"
+                  translation="[200, 100]" />
+        <Label id="iconLetter"
+               text="P"
+               font="font:LargeBoldSystemFont"
+               color="#a12d32"
+               horizAlign="center"
+               translation="[200, 125]"
+               width="100" />
+
+        <!-- Project name -->
+        <Label id="projectName"
+               text="Project Name"
+               font="font:LargeBoldSystemFont"
+               color="#ffffff"
+               horizAlign="center"
+               translation="[30, 230]"
+               width="440"
+               maxLines="2"
+               wrap="true" />
+
+        <!-- Description -->
+        <Label id="description"
+               text="Project description goes here..."
+               font="font:MediumSystemFont"
+               color="#a1a1aa"
+               horizAlign="center"
+               translation="[30, 320]"
+               width="440"
+               maxLines="4"
+               wrap="true" />
+
+        <!-- Stats row -->
+        <LayoutGroup id="statsRow"
+                    layoutDirection="horiz"
+                    itemSpacings="[30]"
+                    horizAlignment="center"
+                    translation="[100, 480]">
+
+            <!-- Client -->
+            <Group>
+                <Label text="Client"
+                       font="font:SmallSystemFont"
+                       color="#71717a"
+                       horizAlign="center"
+                       width="100" />
+                <Label id="clientName"
+                       text="—"
+                       font="font:SmallBoldSystemFont"
+                       color="#ffffff"
+                       horizAlign="center"
+                       translation="[0, 25]"
+                       width="100" />
+            </Group>
+
+            <!-- Updated -->
+            <Group>
+                <Label text="Updated"
+                       font="font:SmallSystemFont"
+                       color="#71717a"
+                       horizAlign="center"
+                       width="100" />
+                <Label id="updatedAt"
+                       text="—"
+                       font="font:SmallBoldSystemFont"
+                       color="#ffffff"
+                       horizAlign="center"
+                       translation="[0, 25]"
+                       width="100" />
+            </Group>
+        </LayoutGroup>
+    </children>
+
+    <script type="text/brightscript" uri="ProjectCardLarge.brs" />
+</component>

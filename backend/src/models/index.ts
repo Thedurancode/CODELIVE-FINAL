@@ -183,6 +183,10 @@ import CodingTask from './CodingTask';
 import ProjectSprite from './ProjectSprite';
 import SpriteTask from './SpriteTask';
 import SpriteSession from './SpriteSession';
+import SpriteMcpServer from './SpriteMcpServer';
+
+// Deploy Hook Models
+import DeployHook from './DeployHook';
 
 // API Key Models
 import ApiKey from './ApiKey';
@@ -1461,6 +1465,28 @@ SpriteSession.belongsTo(MarketplaceUser, {
   as: 'endedBy',
 });
 
+// ProjectSprite -> SpriteMcpServer (one-to-many)
+ProjectSprite.hasMany(SpriteMcpServer, {
+  foreignKey: 'spriteId',
+  as: 'mcpServers',
+  onDelete: 'CASCADE',
+});
+SpriteMcpServer.belongsTo(ProjectSprite, {
+  foreignKey: 'spriteId',
+  as: 'sprite',
+});
+
+// Organization -> SpriteMcpServer (one-to-many)
+Organization.hasMany(SpriteMcpServer, {
+  foreignKey: 'organizationId',
+  as: 'mcpServers',
+  onDelete: 'CASCADE',
+});
+SpriteMcpServer.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
 // MarketplaceUser -> CodingTask (one-to-many, creator)
 MarketplaceUser.hasMany(CodingTask, {
   foreignKey: 'createdById',
@@ -1468,6 +1494,43 @@ MarketplaceUser.hasMany(CodingTask, {
   onDelete: 'SET NULL',
 });
 CodingTask.belongsTo(MarketplaceUser, {
+  foreignKey: 'createdById',
+  as: 'createdBy',
+});
+
+// ============================================================================
+// DEPLOY HOOK ASSOCIATIONS
+// ============================================================================
+
+// Project -> DeployHook (one-to-many)
+Project.hasMany(DeployHook, {
+  foreignKey: 'projectId',
+  as: 'deployHooks',
+  onDelete: 'CASCADE',
+});
+DeployHook.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// Organization -> DeployHook (one-to-many)
+Organization.hasMany(DeployHook, {
+  foreignKey: 'organizationId',
+  as: 'deployHooks',
+  onDelete: 'CASCADE',
+});
+DeployHook.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
+// MarketplaceUser -> DeployHook (one-to-many, creator)
+MarketplaceUser.hasMany(DeployHook, {
+  foreignKey: 'createdById',
+  as: 'createdDeployHooks',
+  onDelete: 'SET NULL',
+});
+DeployHook.belongsTo(MarketplaceUser, {
   foreignKey: 'createdById',
   as: 'createdBy',
 });
@@ -1642,6 +1705,7 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         ProjectSprite,
         SpriteTask,
         SpriteSession,
+        SpriteMcpServer,
         // Client Portal Models
         ProjectClient,
       ];
@@ -1824,6 +1888,9 @@ export {
   ProjectSprite,
   SpriteTask,
   SpriteSession,
+  SpriteMcpServer,
+  // Deploy Hook Models
+  DeployHook,
 };
 
 export default {
@@ -1965,6 +2032,9 @@ export default {
   ProjectSprite,
   SpriteTask,
   SpriteSession,
+  SpriteMcpServer,
+  // Deploy Hook Models
+  DeployHook,
   // API Key Models
   ApiKey,
   syncDatabase,

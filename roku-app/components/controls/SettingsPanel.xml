@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Settings Panel Component
+    ========================
+    Slide-out panel for configuring slideshow settings.
+-->
+<component name="SettingsPanel" extends="Group" initialFocus="slideList">
+    <interface>
+        <field id="settings" type="assocarray" onChange="onSettingsChange" />
+        <field id="onSave" type="assocarray" alwaysNotify="true" />
+    </interface>
+
+    <children>
+        <!-- Panel background -->
+        <Rectangle id="panelBg"
+                  width="600"
+                  height="1080"
+                  color="#18181b"
+                  opacity="0.98" />
+
+        <!-- Header -->
+        <Group translation="[30, 40]">
+            <Label text="Slideshow Settings"
+                   font="font:LargeBoldSystemFont"
+                   color="#ffffff" />
+            <Label text="Press Back to close"
+                   font="font:SmallSystemFont"
+                   color="#71717a"
+                   translation="[0, 40]" />
+        </Group>
+
+        <!-- Auto-play toggle -->
+        <Group id="autoPlayGroup" translation="[30, 130]">
+            <Rectangle width="540" height="60" color="#27272a" cornerRadius="8" />
+            <Label text="Auto-play slideshow"
+                   font="font:MediumSystemFont"
+                   color="#ffffff"
+                   translation="[20, 17]" />
+            <Rectangle id="toggleBg"
+                      width="60"
+                      height="30"
+                      color="#3f3f46"
+                      cornerRadius="15"
+                      translation="[450, 15]" />
+            <Rectangle id="toggleKnob"
+                      width="26"
+                      height="26"
+                      color="#ffffff"
+                      cornerRadius="13"
+                      translation="[454, 17]" />
+        </Group>
+
+        <!-- Slides list header -->
+        <Label text="Slides"
+               font="font:MediumBoldSystemFont"
+               color="#ffffff"
+               translation="[30, 220]" />
+
+        <!-- Slides list -->
+        <MarkupGrid id="slideList"
+                   translation="[30, 260]"
+                   itemSize="[540, 70]"
+                   itemSpacing="[0, 10]"
+                   numColumns="1"
+                   numRows="8"
+                   itemComponentName="SlideListItem"
+                   drawFocusFeedback="true"
+                   focusBitmapBlendColor="#a12d32" />
+
+        <!-- Add slide button -->
+        <Group id="addSlideBtn" translation="[30, 900]">
+            <Rectangle width="540" height="50" color="#27272a" cornerRadius="8" />
+            <Label text="+ Add Slide"
+                   font="font:MediumSystemFont"
+                   color="#a12d32"
+                   horizAlign="center"
+                   translation="[0, 12]"
+                   width="540" />
+        </Group>
+
+        <!-- Instructions -->
+        <Label text="Use arrows to reorder, OK to toggle"
+               font="font:SmallSystemFont"
+               color="#71717a"
+               translation="[30, 970]" />
+    </children>
+
+    <script type="text/brightscript" uri="SettingsPanel.brs" />
+</component>

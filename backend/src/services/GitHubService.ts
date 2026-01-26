@@ -76,6 +76,18 @@ interface IssueOptions {
   page?: number;
 }
 
+interface GitHubIssueComment {
+  id: number;
+  body: string;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    login: string;
+    avatar_url: string;
+  };
+}
+
 type CollaboratorPermission = 'pull' | 'push' | 'admin' | 'maintain' | 'triage';
 
 interface GitHubInvitation {
@@ -333,6 +345,126 @@ class GitHubService {
         labels: options.labels,
         assignees: options.assignees,
       }),
+    });
+  }
+
+  /**
+   * Get a single issue
+   */
+  async getIssue(owner: string, repo: string, issueNumber: number): Promise<GitHubIssue> {
+    return this.request<GitHubIssue>(`/repos/${owner}/${repo}/issues/${issueNumber}`);
+  }
+
+  /**
+   * Update an issue (title, body, state, labels, assignees)
+   */
+  async updateIssue(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    options: {
+      title?: string;
+      body?: string;
+      state?: 'open' | 'closed';
+      labels?: string[];
+      assignees?: string[];
+    }
+  ): Promise<GitHubIssue> {
+    return this.request<GitHubIssue>(`/repos/${owner}/${repo}/issues/${issueNumber}`, {
+      method: 'PATCH',
+      body: JSON.stringify(options),
+    });
+  }
+
+  /**
+   * Add labels to an issue
+   */
+  async addIssueLabels(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    labels: string[]
+  ): Promise<Array<{ name: string; color: string }>> {
+    return this.request(`/repos/${owner}/${repo}/issues/${issueNumber}/labels`, {
+      method: 'POST',
+      body: JSON.stringify({ labels }),
+    });
+  }
+
+  /**
+   * Remove a label from an issue
+   */
+  async removeIssueLabel(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    label: string
+  ): Promise<void> {
+    await this.request(`/repos/${owner}/${repo}/issues/${issueNumber}/labels/${encodeURIComponent(label)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Get comments on an issue
+   */
+  async getIssueComments(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    options: { perPage?: number; page?: number; since?: string } = {}
+  ): Promise<GitHubIssueComment[]> {
+    const params = new URLSearchParams();
+    if (options.perPage) params.append('per_page', String(options.perPage));
+    if (options.page) params.append('page', String(options.page));
+    if (options.since) params.append('since', options.since);
+
+    const query = params.toString();
+    return this.request<GitHubIssueComment[]>(
+      `/repos/${owner}/${repo}/issues/${issueNumber}/comments${query ? `?${query}` : ''}`
+    );
+  }
+
+  /**
+   * Create a comment on an issue
+   */
+  async createIssueComment(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    body: string
+  ): Promise<GitHubIssueComment> {
+    return this.request<GitHubIssueComment>(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  }
+
+  /**
+   * Update an existing issue comment
+   */
+  async updateIssueComment(
+    owner: string,
+    repo: string,
+    commentId: number,
+    body: string
+  ): Promise<GitHubIssueComment> {
+    return this.request<GitHubIssueComment>(`/repos/${owner}/${repo}/issues/comments/${commentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    });
+  }
+
+  /**
+   * Delete an issue comment
+   */
+  async deleteIssueComment(
+    owner: string,
+    repo: string,
+    commentId: number
+  ): Promise<void> {
+    await this.request(`/repos/${owner}/${repo}/issues/comments/${commentId}`, {
+      method: 'DELETE',
     });
   }
 

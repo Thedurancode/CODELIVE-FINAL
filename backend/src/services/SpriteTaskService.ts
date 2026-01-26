@@ -19,6 +19,8 @@ import SpriteTask, { SpriteTaskStatus, SpriteTaskPriority, SpriteTaskSource } fr
 import ProjectSprite from '../models/ProjectSprite';
 import Project from '../models/Project';
 import { spritesService } from './SpritesService';
+import { githubIssueSyncService } from './GitHubIssueSyncService';
+import { deployHookService } from './DeployHookService';
 
 /**
  * GitHub Issue data (source of truth)
@@ -401,6 +403,9 @@ class SpriteTaskService {
       statusMessage: 'Cancelled by user',
     });
 
+    // Sync to GitHub issue
+    await githubIssueSyncService.postStatusChange(taskId, 'cancelled', 'Task was cancelled by user');
+
     return task;
   }
 
@@ -427,6 +432,9 @@ class SpriteTaskService {
       completedAt: null,
       queuedAt: new Date(),
     });
+
+    // Sync to GitHub issue
+    await githubIssueSyncService.postStatusChange(taskId, 'pending', 'Task has been re-queued for another attempt');
 
     return task;
   }
@@ -468,6 +476,13 @@ class SpriteTaskService {
       assignedById,
     });
 
+    // Sync to GitHub issue
+    await githubIssueSyncService.postStatusChange(
+      taskId,
+      'assigned',
+      `Task assigned to sprite \`${sprite.spriteName}\`\nBranch: \`${branchName}\``
+    );
+
     console.log(`✅ Task assigned: ${task.title} -> ${sprite.spriteName}`);
     return task;
   }
@@ -506,6 +521,13 @@ class SpriteTaskService {
       statusMessage: 'Working on task...',
       startedAt: new Date(),
     });
+
+    // Sync to GitHub issue
+    await githubIssueSyncService.postStatusChange(
+      taskId,
+      'in_progress',
+      `🔄 Sprite is now working on this task\nBranch: \`${task.branchName}\``
+    );
 
     console.log(`🚀 Task started: ${task.title}`);
     return task;
@@ -659,9 +681,23 @@ Co-Authored-By: Dispotree Sprite <sprite@dispotree.com>`.trim();
         pullRequestNumber: prNumber,
       });
 
+      // Sync to GitHub issue
+      await githubIssueSyncService.postStatusChange(
+        taskId,
+        'pr_created',
+        `🎉 Pull request created!\n\n**PR:** ${prUrl}\n\nReview and merge to complete this task.`
+      );
+
       console.log(`🔀 PR created for task: ${task.title} -> ${prUrl}`);
       return task;
     } catch (error) {
+      // Sync failure to GitHub issue
+      await githubIssueSyncService.postStatusChange(
+        taskId,
+        'failed',
+        `❌ Failed to create pull request\n\nError: ${(error as Error).message}`
+      );
+
       await task.update({
         status: 'failed',
         errorMessage: `Failed to create PR: ${(error as Error).message}`,
@@ -682,6 +718,29 @@ Co-Authored-By: Dispotree Sprite <sprite@dispotree.com>`.trim();
       statusMessage: 'Task completed',
       completedAt: new Date(),
     });
+
+    // Sync to GitHub issue
+    const completionMessage = task.pullRequestUrl
+      ? `✅ Task completed!\n\nPull request: ${task.pullRequestUrl}`
+      : '✅ Task completed!';
+    await githubIssueSyncService.postStatusChange(taskId, 'completed', completionMessage);
+
+    // Trigger deploy hooks for task completion
+    try {
+      const deployResults = await deployHookService.onTaskCompleted({
+        projectId: task.projectId,
+        taskId: task.id,
+        taskTitle: task.title,
+        branchName: task.branchName || undefined,
+      });
+      if (deployResults.length > 0) {
+        const successful = deployResults.filter(r => r.success).length;
+        console.log(`🚀 Triggered ${successful}/${deployResults.length} deploy hooks for task: ${task.title}`);
+      }
+    } catch (deployError) {
+      // Don't fail task completion if deploy hooks fail
+      console.error(`Deploy hook trigger failed for task ${task.id}:`, deployError);
+    }
 
     // Free up the sprite and optionally shut it down
     if (task.spriteId) {

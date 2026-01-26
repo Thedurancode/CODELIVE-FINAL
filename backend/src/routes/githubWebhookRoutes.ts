@@ -19,6 +19,7 @@ import rateLimit from 'express-rate-limit';
 import { spriteTaskService } from '../services/SpriteTaskService';
 import { githubIssueSyncService } from '../services/GitHubIssueSyncService';
 import { githubSyncWebSocketService } from '../services/GitHubSyncWebSocketService';
+import { deployHookService } from '../services/DeployHookService';
 
 const router = Router();
 
@@ -290,6 +291,24 @@ router.post('/', webhookLimiter, async (req: Request, res: Response) => {
               if (task.status === 'pr_created') {
                 await spriteTaskService.completeTask(task.id);
                 console.log(`✅ Task ${task.id} completed (issue #${issueNumber})`);
+
+                // Trigger deploy hooks for PR merged (in addition to task_completed)
+                try {
+                  const deployResults = await deployHookService.onPRMerged({
+                    projectId: task.projectId,
+                    taskId: task.id,
+                    taskTitle: task.title,
+                    branchName: pr.head?.ref || task.branchName,
+                    commitSha: pr.merge_commit_sha,
+                    prNumber: pr.number,
+                  });
+                  if (deployResults.length > 0) {
+                    const successful = deployResults.filter(r => r.success).length;
+                    console.log(`🚀 Triggered ${successful}/${deployResults.length} PR merge deploy hooks`);
+                  }
+                } catch (deployError) {
+                  console.error('Deploy hook trigger failed for PR merge:', deployError);
+                }
 
                 // Broadcast WebSocket event
                 githubSyncWebSocketService.broadcastSyncEvent({

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Project Card Component
+    ======================
+    Displays a single project in the kanban board.
+-->
+<component name="ProjectCard" extends="Group">
+    <interface>
+        <field id="itemContent" type="node" onChange="onContentChange" />
+    </interface>
+
+    <children>
+        <!-- Card background -->
+        <Rectangle id="cardBg"
+                  width="400"
+                  height="110"
+                  color="#27272a"
+                  cornerRadius="8" />
+
+        <!-- Project name -->
+        <Label id="projectName"
+               text="Project Name"
+               font="font:SmallBoldSystemFont"
+               color="#ffffff"
+               translation="[15, 12]"
+               width="370"
+               maxLines="1" />
+
+        <!-- Description -->
+        <Label id="description"
+               text="Project description..."
+               font="font:SmallSystemFont"
+               color="#a1a1aa"
+               translation="[15, 38]"
+               width="370"
+               maxLines="2"
+               wrap="true" />
+
+        <!-- Client name -->
+        <Label id="clientName"
+               text=""
+               font="font:SmallSystemFont"
+               color="#71717a"
+               translation="[15, 85]" />
+
+        <!-- Updated time -->
+        <Label id="updatedAt"
+               text=""
+               font="font:SmallSystemFont"
+               color="#71717a"
+               horizAlign="right"
+               translation="[250, 85]"
+               width="135" />
+    </children>
+
+    <script type="text/brightscript" uri="ProjectCard.brs" />
+</component>

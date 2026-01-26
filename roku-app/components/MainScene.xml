@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene">
+    <interface>
+        <field id="config" type="assocarray" />
+    </interface>
+
+    <children>
+        <!-- Background -->
+        <Rectangle id="background"
+                   width="1920"
+                   height="1080"
+                   color="#09090b" />
+
+        <!-- Simple test content -->
+        <Label id="title"
+               text="CodeLive TV"
+               font="font:LargeBoldSystemFont"
+               color="#a12d32"
+               translation="[760, 400]"
+               width="400"
+               horizAlign="center" />
+
+        <Label id="subtitle"
+               text="Loading..."
+               font="font:MediumSystemFont"
+               color="#ffffff"
+               translation="[760, 500]"
+               width="400"
+               horizAlign="center" />
+
+        <Label id="status"
+               text="Connecting to API..."
+               font="font:SmallSystemFont"
+               color="#71717a"
+               translation="[760, 560]"
+               width="400"
+               horizAlign="center" />
+    </children>
+
+    <script type="text/brightscript" uri="MainScene.brs" />
+</component>

@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import { Dock } from '@/components/layout/dock';
 import { Header } from '@/components/layout/header';
 import { PageTransition } from '@/components/layout/page-transition';
-import { MessengerWidget } from '@/components/messenger';
 import { SpriteTerminalDialog } from '@/components/sprites';
 import { AgentProvider } from '@/contexts/agent-context';
 import { initializePushNotifications } from '@/lib/push-notifications';
@@ -31,9 +30,6 @@ export default function DashboardLayout({
 
         {/* macOS-style Dock Navigation */}
         <Dock />
-
-        {/* Floating Team Chat Widget */}
-        <MessengerWidget />
 
         {/* Global Sprite Terminal Dialog */}
         <SpriteTerminalDialog />

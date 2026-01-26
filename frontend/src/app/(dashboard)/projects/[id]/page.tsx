@@ -67,6 +67,7 @@ import {
   MessageSquare,
   ListChecks,
   FolderTree,
+  Plug,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -82,8 +83,9 @@ import { GitHubRepoPanel } from '@/components/projects/GitHubRepoPanel';
 import { StartCodingTaskDialog } from '@/components/projects/StartCodingTaskDialog';
 import { CodingTasksList } from '@/components/projects/CodingTasksList';
 import { ProjectActivityFeed } from '@/components/projects/ProjectActivityFeed';
-import { SpriteLaunchButton, SpritePanel, SpriteTaskQueuePanel, SpriteFileBrowser } from '@/components/sprites';
+import { SpriteLaunchButton, SpritePanel, SpriteTaskQueuePanel, SpriteFileBrowser, SpriteMcpPanel } from '@/components/sprites';
 import { SpriteChatPanel } from '@/components/sprites/SpriteChatPanel';
+import { useSpriteByProject } from '@/hooks/use-sprites';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
@@ -179,6 +181,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { data: projectClients, refetch: refetchClients } = useProjectClients(id);
   const generateInvite = useGenerateInvite();
   const revokeClientAccess = useRevokeClientAccess();
+
+  // Sprite hook for MCP panel
+  const { data: sprite } = useSpriteByProject(id);
 
   const handleUpdate = async (projectData: Partial<Project>) => {
     try {
@@ -552,6 +557,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       <FolderTree className="h-4 w-4 mr-2" />
                       Files
                     </TabsTrigger>
+                    <TabsTrigger value="mcp" className="data-[state=active]:bg-background/80">
+                      <Plug className="h-4 w-4 mr-2" />
+                      MCP
+                    </TabsTrigger>
                   </TabsList>
                   <TabsContent value="agent-status">
                     <SpritePanel
@@ -584,6 +593,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       <CardContent className="p-0">
                         <SpriteFileBrowser
                           projectId={project.id}
+                          className="h-[500px]"
+                        />
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  <TabsContent value="mcp">
+                    <Card className="bg-card border">
+                      <CardContent className="p-0">
+                        <SpriteMcpPanel
+                          spriteId={sprite?.id}
                           className="h-[500px]"
                         />
                       </CardContent>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Hacker News Slide Component
+    ===========================
+    Displays top stories from Hacker News.
+-->
+<component name="HackerNewsSlide" extends="Group">
+    <interface>
+        <field id="stories" type="array" />
+    </interface>
+
+    <children>
+        <!-- Header -->
+        <Group id="header" translation="[40, 120]">
+            <Rectangle width="40" height="40" color="#ff6600" cornerRadius="4" />
+            <Label text="Y"
+                   font="font:LargeBoldSystemFont"
+                   color="#ffffff"
+                   translation="[12, 2]" />
+            <Label text="Hacker News"
+                   font="font:LargeBoldSystemFont"
+                   color="#ff6600"
+                   translation="[55, 5]" />
+            <Label text="Top Stories"
+                   font="font:SmallSystemFont"
+                   color="#a1a1aa"
+                   translation="[55, 40]" />
+        </Group>
+
+        <!-- Stories list -->
+        <MarkupGrid id="storiesGrid"
+                   translation="[40, 200]"
+                   itemSize="[1840, 90]"
+                   itemSpacing="[0, 10]"
+                   numColumns="1"
+                   numRows="8"
+                   itemComponentName="HackerNewsStory" />
+
+        <!-- Loading overlay -->
+        <Group id="loadingOverlay" visible="true">
+            <Rectangle width="1920" height="1080" color="#09090b" opacity="0.9" />
+            <BusySpinner id="spinner"
+                        translation="[910, 490]"
+                        poster="pkg:/images/spinner.png" />
+            <Label text="Loading Hacker News..."
+                   font="font:MediumSystemFont"
+                   color="#a1a1aa"
+                   horizAlign="center"
+                   translation="[760, 560]"
+                   width="400" />
+        </Group>
+    </children>
+
+    <script type="text/brightscript" uri="HackerNewsSlide.brs" />
+</component>

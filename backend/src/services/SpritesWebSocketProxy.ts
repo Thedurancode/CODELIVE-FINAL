@@ -330,8 +330,11 @@ class SpritesWebSocketProxy {
   /**
    * Connect to the Sprites exec WebSocket API
    */
-  private async connectToSpritesApi(connection: ProxyConnection, retryWithoutCheckpoint = false): Promise<void> {
-    console.log(`[SpritesWebSocket] Connecting to Sprites API for ${connection.id}... (retryWithoutCheckpoint: ${retryWithoutCheckpoint})`);
+  private async connectToSpritesApi(connection: ProxyConnection, retryWithoutCheckpoint = false, retryCount = 0): Promise<void> {
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY_MS = 2000;
+
+    console.log(`[SpritesWebSocket] Connecting to Sprites API for ${connection.id}... (retryWithoutCheckpoint: ${retryWithoutCheckpoint}, attempt: ${retryCount + 1}/${MAX_RETRIES + 1})`);
 
     try {
       // First, check if sprite needs to be woken up
@@ -375,6 +378,24 @@ class SpritesWebSocketProxy {
       });
 
       connection.spritesWs = spritesWs;
+
+      // Helper to retry on 503 errors (sprite warming up)
+      const retryOnServiceUnavailable = async (errorMessage: string): Promise<boolean> => {
+        if (retryCount < MAX_RETRIES && errorMessage.includes('503')) {
+          console.log(`[SpritesWebSocket] Got 503 (sprite warming up), retrying in ${RETRY_DELAY_MS}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          this.sendToFrontend(connection.frontendWs, {
+            type: 'status',
+            data: `Sprite is warming up... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`,
+            status: 'connecting',
+            timestamp: new Date().toISOString(),
+          });
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          // Initiate retry and return true to indicate we're handling it
+          this.connectToSpritesApi(connection, retryWithoutCheckpoint, retryCount + 1);
+          return true;
+        }
+        return false;
+      };
 
       // Track if we've received an error about checkpoint
       let checkpointErrorReceived = false;
@@ -458,7 +479,7 @@ class SpritesWebSocketProxy {
         });
       });
 
-      spritesWs.on('error', (error) => {
+      spritesWs.on('error', async (error) => {
         const errorStr = String(error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`[SpritesWebSocket] Sprites API WebSocket error (${connection.id}):`, errorMessage, error);
@@ -466,6 +487,11 @@ class SpritesWebSocketProxy {
         // Check for checkpoint-related errors
         if (errorStr.includes('checkpoint') || errorStr.includes('restore')) {
           checkpointErrorReceived = true;
+        }
+
+        // Try to retry on 503 (sprite still warming up)
+        if (await retryOnServiceUnavailable(errorMessage)) {
+          return; // Retry handled
         }
 
         connection.status = 'error';

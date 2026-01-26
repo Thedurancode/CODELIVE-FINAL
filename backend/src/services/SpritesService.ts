@@ -908,6 +908,19 @@ class SpritesService {
     // Store the previous auth setting so we can restore it on resume
     const previousAuth = sprite.urlSettings?.auth || 'sprite';
 
+    // Stop all running MCP servers first
+    // Import dynamically to avoid circular dependency
+    try {
+      const { spriteMcpService } = await import('./SpriteMcpService');
+      const stoppedCount = await spriteMcpService.stopAllServers(sprite.id);
+      if (stoppedCount > 0) {
+        console.log(`[SpritesService] Stopped ${stoppedCount} MCP servers on sprite ${sprite.id}`);
+      }
+    } catch (error) {
+      // Don't fail the stop if MCP server stop fails
+      console.error(`[SpritesService] Error stopping MCP servers:`, error);
+    }
+
     // Update status to show we're stopping
     await sprite.update({
       status: 'checkpointing',
@@ -1052,6 +1065,22 @@ class SpritesService {
         auth: previousAuth || sprite.urlSettings?.auth || 'sprite',
       },
     });
+
+    // Auto-start MCP servers that were configured to auto-start
+    // Import dynamically to avoid circular dependency
+    const { spriteMcpService } = await import('./SpriteMcpService');
+    try {
+      const autoStartResult = await spriteMcpService.startAutoStartServers(sprite.id);
+      if (autoStartResult.started.length > 0) {
+        console.log(`[SpritesService] Auto-started ${autoStartResult.started.length} MCP servers on sprite ${sprite.id}`);
+      }
+      if (autoStartResult.failed.length > 0) {
+        console.warn(`[SpritesService] Failed to auto-start ${autoStartResult.failed.length} MCP servers:`, autoStartResult.failed);
+      }
+    } catch (error) {
+      // Don't fail the resume if MCP auto-start fails
+      console.error(`[SpritesService] Error auto-starting MCP servers:`, error);
+    }
 
     return sprite.reload();
   }

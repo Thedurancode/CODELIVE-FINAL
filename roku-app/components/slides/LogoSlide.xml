@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Logo Slide Component
+    ====================
+    Full-screen animated logo display.
+-->
+<component name="LogoSlide" extends="Group">
+    <interface>
+        <field id="logoUrl" type="string" value="pkg:/images/logo-large.png" />
+    </interface>
+
+    <children>
+        <!-- Background with gradient effect -->
+        <Rectangle id="bgGradient"
+                  width="1920"
+                  height="1080"
+                  color="#09090b" />
+
+        <!-- Radial glow effect -->
+        <Poster id="glowEffect"
+               uri="pkg:/images/glow.png"
+               width="800"
+               height="800"
+               translation="[560, 140]"
+               opacity="0.3" />
+
+        <!-- Main logo -->
+        <Poster id="mainLogo"
+               uri="pkg:/images/logo-large.png"
+               width="400"
+               height="400"
+               translation="[760, 340]" />
+
+        <!-- Company name -->
+        <Label id="companyName"
+               text="CodeLive"
+               font="font:LargeBoldSystemFont"
+               color="#ffffff"
+               horizAlign="center"
+               translation="[660, 760]"
+               width="600" />
+
+        <!-- Tagline -->
+        <Label id="tagline"
+               text="AI-Powered Development Platform"
+               font="font:MediumSystemFont"
+               color="#a1a1aa"
+               horizAlign="center"
+               translation="[560, 820]"
+               width="800" />
+
+        <!-- Animated elements (pulsing dots) -->
+        <LayoutGroup id="dots"
+                    layoutDirection="horiz"
+                    itemSpacings="[20]"
+                    translation="[910, 880]">
+            <Rectangle id="dot1" width="12" height="12" color="#a12d32" cornerRadius="6" />
+            <Rectangle id="dot2" width="12" height="12" color="#a12d32" cornerRadius="6" opacity="0.6" />
+            <Rectangle id="dot3" width="12" height="12" color="#a12d32" cornerRadius="6" opacity="0.3" />
+        </LayoutGroup>
+    </children>
+
+    <script type="text/brightscript" uri="LogoSlide.brs" />
+</component>

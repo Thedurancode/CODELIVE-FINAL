@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Hacker News Story Component
+    ===========================
+    Displays a single HN story.
+-->
+<component name="HackerNewsStory" extends="Group">
+    <interface>
+        <field id="itemContent" type="node" onChange="onContentChange" />
+    </interface>
+
+    <children>
+        <!-- Card background -->
+        <Rectangle id="cardBg"
+                  width="1840"
+                  height="80"
+                  color="#18181b"
+                  cornerRadius="8" />
+
+        <!-- Rank number -->
+        <Label id="rank"
+               text="1."
+               font="font:MediumBoldSystemFont"
+               color="#ff6600"
+               translation="[20, 25]"
+               width="50" />
+
+        <!-- Title -->
+        <Label id="title"
+               text="Story title..."
+               font="font:MediumSystemFont"
+               color="#ffffff"
+               translation="[70, 15]"
+               width="1500"
+               maxLines="1" />
+
+        <!-- Meta info -->
+        <Label id="meta"
+               text="100 points • by user • 50 comments"
+               font="font:SmallSystemFont"
+               color="#71717a"
+               translation="[70, 48]" />
+
+        <!-- Domain -->
+        <Label id="domain"
+               text="(example.com)"
+               font="font:SmallSystemFont"
+               color="#ff6600"
+               horizAlign="right"
+               translation="[1600, 30]"
+               width="220" />
+    </children>
+
+    <script type="text/brightscript" uri="HackerNewsStory.brs" />
+</component>

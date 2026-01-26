@@ -58,6 +58,7 @@ import {
 import type { TaskActivityEntry } from '@/types/spriteTask';
 import { useTaskDiff } from '@/hooks/use-task-diff';
 import { TaskDiffViewer } from './TaskDiffViewer';
+import { DeployStatusBadge } from './DeployStatusBadge';
 
 interface SpriteTaskCardProps {
   task: SpriteTask;
@@ -251,6 +252,12 @@ export function SpriteTaskCard({
                 >
                   {SPRITE_TASK_PRIORITY_LABELS[task.priority]}
                 </Badge>
+
+                {/* Deploy Status (for completed tasks) */}
+                <DeployStatusBadge
+                  projectId={task.projectId}
+                  taskStatus={task.status}
+                />
 
                 {/* GitHub Issue Link with Sync Status */}
                 {task.githubIssueUrl && (

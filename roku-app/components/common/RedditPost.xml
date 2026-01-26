@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Reddit Post Component
+    =====================
+    Displays a single Reddit post.
+-->
+<component name="RedditPost" extends="Group">
+    <interface>
+        <field id="post" type="assocarray" onChange="onPostChange" />
+    </interface>
+
+    <children>
+        <!-- Card background -->
+        <Rectangle id="cardBg"
+                  width="900"
+                  height="180"
+                  color="#18181b"
+                  cornerRadius="12" />
+
+        <!-- Upvote indicator -->
+        <Group translation="[20, 20]">
+            <Rectangle width="60" height="140" color="#27272a" cornerRadius="8" />
+            <Label text="▲"
+                   font="font:SmallSystemFont"
+                   color="#ff4500"
+                   horizAlign="center"
+                   translation="[0, 15]"
+                   width="60" />
+            <Label id="score"
+                   text="0"
+                   font="font:SmallBoldSystemFont"
+                   color="#ffffff"
+                   horizAlign="center"
+                   translation="[0, 55]"
+                   width="60" />
+            <Label text="▼"
+                   font="font:SmallSystemFont"
+                   color="#71717a"
+                   horizAlign="center"
+                   translation="[0, 95]"
+                   width="60" />
+        </Group>
+
+        <!-- Content -->
+        <Group translation="[100, 20]">
+            <!-- Subreddit and author -->
+            <Label id="meta"
+                   text="r/programming • u/user"
+                   font="font:SmallSystemFont"
+                   color="#71717a" />
+
+            <!-- Title -->
+            <Label id="title"
+                   text="Post title goes here..."
+                   font="font:MediumBoldSystemFont"
+                   color="#ffffff"
+                   translation="[0, 28]"
+                   width="770"
+                   maxLines="2"
+                   wrap="true" />
+
+            <!-- Comments -->
+            <Label id="comments"
+                   text="💬 0 comments"
+                   font="font:SmallSystemFont"
+                   color="#71717a"
+                   translation="[0, 120]" />
+        </Group>
+    </children>
+
+    <script type="text/brightscript" uri="RedditPost.brs" />
+</component>

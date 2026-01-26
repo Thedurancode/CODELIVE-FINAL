@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Video Slide Component
+    =====================
+    Plays MP4 video content with optional looping.
+-->
+<component name="VideoSlide" extends="Group">
+    <interface>
+        <field id="videoUrl" type="string" onChange="onVideoUrlChange" />
+        <field id="loop" type="boolean" value="true" />
+        <field id="muted" type="boolean" value="false" />
+    </interface>
+
+    <children>
+        <!-- Video player -->
+        <Video id="videoPlayer"
+              width="1920"
+              height="1080"
+              translation="[0, 0]"
+              enableUI="false"
+              loop="true" />
+
+        <!-- Loading overlay -->
+        <Group id="loadingOverlay" visible="true">
+            <Rectangle width="1920" height="1080" color="#09090b" opacity="0.8" />
+            <BusySpinner id="spinner"
+                        translation="[910, 490]"
+                        poster="pkg:/images/spinner.png" />
+            <Label text="Loading video..."
+                   font="font:MediumSystemFont"
+                   color="#a1a1aa"
+                   horizAlign="center"
+                   translation="[760, 560]"
+                   width="400" />
+        </Group>
+
+        <!-- Error overlay -->
+        <Group id="errorOverlay" visible="false">
+            <Rectangle width="1920" height="1080" color="#09090b" />
+            <Label id="errorLabel"
+                   text="Unable to play video"
+                   font="font:MediumSystemFont"
+                   color="#ef4444"
+                   horizAlign="center"
+                   translation="[660, 520]"
+                   width="600" />
+        </Group>
+    </children>
+
+    <script type="text/brightscript" uri="VideoSlide.brs" />
+</component>

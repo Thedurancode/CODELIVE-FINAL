@@ -39,3 +39,4 @@ export { BatchTaskDialog } from './BatchTaskDialog';
 export { TaskSplitSuggestion, type SubtaskSuggestion } from './TaskSplitSuggestion';
 export { TaskCostEstimate, calculateCostEstimate, getCostTier, MODEL_PRICING } from './TaskCostEstimate';
 export { ParsedIssuePreview } from './ParsedIssuePreview';
+export { DeployStatusBadge } from './DeployStatusBadge';

@@ -11,48 +11,19 @@ import path from 'path';
 import { corsOptions } from './middleware/cors';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import healthRoutes from './routes/healthRoutes';
-import propertyRoutes from './routes/propertyRoutes';
-import propertyChecklistRoutes from './routes/propertyChecklistRoutes';
-import xomeRoutes from './routes/xomeRoutes';
-import hedgeFundRoutes from './routes/hedgeFundRoutes';
 import aiRoutes from './routes/aiRoutes';
-import pluginRoutes from './routes/pluginRoutes';
-import marketplaceRoutes from './routes/marketplaceRoutes';
 import agentRoutes from './routes/agentRoutes';
-import mlRoutes from './routes/mlRoutes';
 import knowledgeRoutes from './routes/knowledgeRoutes';
-import analyticsRoutes from './routes/analyticsRoutes';
 import documentRoutes from './routes/documentRoutes';
 import authRoutes from './routes/authRoutes';
-import marketDataRoutes from './routes/marketDataRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import openaiRoutes from './routes/openaiRoutes';
-import pipelineRoutes from './routes/pipelineRoutes';
-import portfolioRoutes from './routes/portfolioRoutes';
 import webhookRoutes from './routes/webhookRoutes';
-import complianceRoutes from './routes/complianceRoutes';
-import stateComplianceRoutes from './routes/stateComplianceRoutes';
-import proxyPicsRoutes from './routes/proxyPicsRoutes';
-import fastBuyBoxRoutes from './routes/fastBuyBoxRoutes';
-import proxyPicsWebhook from './routes/proxyPicsWebhook';
 import paymentRoutes from './routes/paymentRoutes';
-import deadLetterRoutes from './routes/deadLetterRoutes';
-import followUpRoutes from './routes/followUpRoutes';
-import contractRoutes from './routes/contractRoutes';
-import brokerRoutes from './routes/brokerRoutes';
-import brokerMSARoutes from './routes/brokerMSARoutes';
 import contactRoutes from './routes/contactRoutes';
-import signatureRoutes from './routes/signatureRoutes';
-import buyerRoutes from './routes/buyerRoutes';
-import publicRoutes from './routes/publicRoutes';
-import inquiryRoutes from './routes/inquiryRoutes';
-import buyerAgentRoutes from './routes/buyerAgentRoutes';
-import sellerAgentRoutes from './routes/sellerAgentRoutes';
 import adminTrackingRoutes from './routes/adminTrackingRoutes';
 import emailClientRoutes from './routes/emailClientRoutes';
 import teamChatRoutes from './routes/teamChatRoutes';
-import publicChatRoutes from './routes/publicChatRoutes';
-import complianceSpecRoutes from './routes/complianceSpecRoutes';
 import pushRoutes from './routes/pushRoutes';
 import auditLogRoutes from './routes/auditLogRoutes';
 import permissionRoutes from './routes/permissionRoutes';
@@ -62,11 +33,9 @@ import projectRoutes from './routes/projectRoutes';
 import githubRoutes from './routes/githubRoutes';
 import webhookManagementRoutes from './routes/webhookManagementRoutes';
 import activityFeedRoutes from './routes/activityFeedRoutes';
-import importWizardRoutes from './routes/importWizardRoutes';
 import voiceRoutes from './routes/voiceRoutes';
 import conversationRoutes from './routes/conversationRoutes';
 import entitySearchRoutes from './routes/entitySearchRoutes';
-import dealNoteRoutes from './routes/dealNoteRoutes';
 import teamMemberRoutes from './routes/teamMemberRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import templateAdminRoutes from './routes/templateAdminRoutes';
@@ -74,6 +43,7 @@ import setupRoutes from './routes/setupRoutes';
 import codingTaskRoutes from './routes/codingTaskRoutes';
 import spritesRoutes from './routes/spritesRoutes';
 import spriteTasksRoutes from './routes/spriteTasksRoutes';
+import deployHooksRoutes from './routes/deployHooksRoutes';
 import githubWebhookRoutes from './routes/githubWebhookRoutes';
 import redditRoutes from './routes/redditRoutes';
 import clientPortalRoutes from './routes/clientPortalRoutes';
@@ -82,19 +52,11 @@ import apiKeyRoutes from './routes/apiKeyRoutes';
 // Voice calling module (Twilio + OpenAI Realtime)
 import { twilioRoutes as voiceTwilioRoutes, callRoutes as voiceCallRoutes, handleTwilioConnection, closeAllSessions as closeVoiceSessions } from './voice';
 import { syncDatabase, sequelize } from './models';
-import { proxyPicsService } from './services/ProxyPicsService';
 import { stripeService } from './services/StripeService';
-import { docuSealService } from './services/DocuSealService';
 import { notificationService } from './services/NotificationService';
 import { supabaseRealtimeService } from './services/SupabaseRealtimeService';
-import { dealProcessingService, automationEngine } from './plugins';
 import { agentService } from './services/agentService';
-import { buyerAgentService } from './services/BuyerAgentService';
-import { sellerAgentService } from './services/SellerAgentService';
-import { inquiryService } from './services/InquiryService';
 import { emailPasswordEncryption } from './utils/emailPasswordEncryption';
-import { mlService } from './plugins/ml';
-import { imageEmbeddingService } from './services/ImageEmbeddingService';
 import { initializeKnowledgeSystem } from './services/knowledge';
 import { settingsService } from './services/settingsService';
 import { redisService } from './services/RedisService';
@@ -106,34 +68,17 @@ import { projectContactService } from './services/ProjectContactService';
 import { projectNoteService } from './services/ProjectNoteService';
 import { codingTaskService } from './services/CodingTaskService';
 import { conversationTitleService } from './services/ConversationTitleService';
-import { photoPersistenceService } from './services/PhotoPersistenceService';
-import { followUpScheduler } from './services/FollowUpScheduler';
-import { inquiryScheduler } from './services/InquiryScheduler';
-import { seedFollowUpChains } from './seeds/seedFollowUpChains';
-import { contractReminderScheduler } from './services/ContractReminderScheduler';
 import { scheduledTaskScheduler } from './services/ScheduledTaskScheduler';
 import { reminderScheduler } from './services/ReminderScheduler';
-import { complianceWatchdogScheduler } from './services/ComplianceWatchdogScheduler';
-import { offerExpirationScheduler } from './services/OfferExpirationScheduler';
-import { docuSealReconciliationScheduler } from './services/DocuSealReconciliationScheduler';
-import { addDocumentStatusIndex } from './scripts/addDocumentStatusIndex';
-import { dealApprovalService } from './services/DealApprovalService';
 import { notificationScheduler } from './services/NotificationScheduler';
 import { emailSyncScheduler } from './services/EmailSyncScheduler';
-import { dealProcessingWorker } from './services/DealProcessingWorker';
-import { dealProcessingQueue } from './services/DealProcessingQueue';
 import { pushNotificationService } from './services/PushNotificationService';
-import { mlFraudPredictionService } from './services/MLFraudPredictionService';
-import { fraudNetworkGraphService } from './services/FraudNetworkGraphService';
-import { complianceWebSocketService } from './services/ComplianceWebSocketService';
 import { spritesService } from './services/SpritesService';
 import { spritesWebSocketProxy } from './services/SpritesWebSocketProxy';
 import { tvRemoteWebSocketService } from './services/TVRemoteWebSocketService';
 import { githubSyncWebSocketService } from './services/GitHubSyncWebSocketService';
 import { teamCommunicationService } from './services/TeamCommunicationService';
-import { complianceTriggerService } from './services/ComplianceTriggerService';
 import { calendarIntegrationService } from './services/agent/CalendarIntegrationService';
-import { soc2AuditLogger } from './services/SOC2AuditLogger';
 import { realtimeVoiceService } from './services/RealtimeVoiceService';
 import { entitySearchService } from './services/EntitySearchService';
 import setupSwagger from './config/swagger';
@@ -205,53 +150,23 @@ app.use('/api/setup', setupRoutes); // First-run setup (no auth required)
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/listings', propertyRoutes);
-app.use('/api/listings', dealNoteRoutes); // Deal notes nested under listings
-app.use('/api/properties', propertyChecklistRoutes); // Property checklist routes
-app.use('/api/xome', xomeRoutes);
-app.use('/api/hedgefunds', hedgeFundRoutes);
 app.use('/api/ai', aiRoutes);
-app.use('/api/plugins', pluginRoutes);
-app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/voice', voiceRoutes);
 // Voice calling routes (Twilio + OpenAI Realtime)
 app.use('/voice/twilio', voiceTwilioRoutes); // Twilio webhooks (no /api prefix for Twilio callbacks)
 app.use('/voice/calls', voiceCallRoutes); // Call management API
 app.use('/api/conversations', conversationRoutes);
-app.use('/api/ml', mlRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/market-data', marketDataRoutes);
 app.use('/api/settings', settingsRoutes);
-app.use('/api/pipeline', pipelineRoutes);
-app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/webhooks/github', githubWebhookRoutes);
-app.use('/api/compliance', complianceRoutes);
-app.use('/api/compliance-specs', complianceSpecRoutes);
-app.use('/api/state-compliance', stateComplianceRoutes);
-app.use('/api/proxypics', proxyPicsRoutes);
-app.use('/api/webhooks/proxypics', proxyPicsWebhook);
 app.use('/api/payments', paymentRoutes);
-app.use('/api/fastbuybox', fastBuyBoxRoutes);
-app.use('/api/dead-letters', deadLetterRoutes);
-app.use('/api/follow-up', followUpRoutes);
-app.use('/api/contracts', contractRoutes);
-app.use('/api/broker', brokerRoutes);
-app.use('/api/msa', brokerMSARoutes);
 app.use('/api/contacts', contactRoutes);
-app.use('/api/signatures', signatureRoutes); // Public signature upload endpoints
-app.use('/api/buyers', buyerRoutes);
-app.use('/api/public', publicRoutes);
-app.use('/api/inquiries', inquiryRoutes);
-app.use('/api/buyer', buyerAgentRoutes);
-app.use('/api/seller', sellerAgentRoutes);
 app.use('/api/admin/tracking', adminTrackingRoutes);
 app.use('/api/admin/templates', templateAdminRoutes);
 app.use('/api/email-client', emailClientRoutes);
 app.use('/api/team-chat', teamChatRoutes);
-app.use('/api/public-chat', publicChatRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/permissions', permissionRoutes);
@@ -261,13 +176,13 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/github', githubRoutes);
 app.use('/api/webhooks/manage', webhookManagementRoutes);
 app.use('/api/activity-feed', activityFeedRoutes);
-app.use('/api/import-wizard', importWizardRoutes);
 app.use('/api/entity-search', entitySearchRoutes);
 app.use('/api/team', teamMemberRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/coding-tasks', codingTaskRoutes);
 app.use('/api/sprites', spritesRoutes);
 app.use('/api/sprite-tasks', spriteTasksRoutes);
+app.use('/api/deploy-hooks', deployHooksRoutes);
 app.use('/api/reddit', redditRoutes);
 app.use('/api/client', clientPortalRoutes);
 app.use('/api/api-keys', apiKeyRoutes); // API key management (JWT auth)
@@ -301,52 +216,27 @@ app.use(express.static(path.join(process.cwd(), 'public')));
  *               properties:
  *                 message:
  *                   type: string
- *                   example: Dispotree Backend API
+ *                   example: CodeLive Backend API
  *                 version:
  *                   type: string
- *                   example: 1.0.0
- *                 endpoints:
- *                   type: object
- *                   properties:
- *                     health:
- *                       type: string
- *                       example: /api/health
- *                     listings:
- *                       type: string
- *                       example: /api/listings
- *                     xome:
- *                       type: string
- *                       example: /api/xome
- *                     hedgefunds:
- *                       type: string
- *                       example: /api/hedgefunds
- *                     docs:
- *                       type: string
- *                       example: /api-docs
+ *                   example: 2.0.0
  */
 app.get('/', (req, res) => {
   res.json({
-    message: 'Dispotree Backend API',
+    message: 'CodeLive Backend API',
     version: '2.0.0',
     documentation: '/api-docs',
     endpoints: {
       health: '/api/health',
-      listings: '/api/listings',
-      xome: '/api/xome',
-      hedgefunds: '/api/hedgefunds',
       ai: '/api/ai',
-      plugins: '/api/plugins',
-      marketplace: '/api/marketplace',
-      ml: '/api/ml',
+      agent: '/api/agent',
       knowledge: '/api/knowledge',
-      analytics: '/api/analytics',
       documents: '/api/documents',
-      pipeline: '/api/pipeline',
-      portfolio: '/api/portfolio',
-      contracts: '/api/contracts',
-      buyers: '/api/buyers',
       tasks: '/api/tasks',
       reminders: '/api/reminders',
+      projects: '/api/projects',
+      sprites: '/api/sprites',
+      spriteTasks: '/api/sprite-tasks',
       teamChat: '/api/team-chat',
       calendar: '/api/calendar',
       docs: '/api-docs'
@@ -357,22 +247,12 @@ app.get('/', (req, res) => {
       health: '/v1/health',
       description: 'OpenAI-compatible API for OpenWebUI, LangChain, and other clients'
     },
-    aiAgents: {
-      compliance: 'Contract compliance analysis and verification',
-      buybox: 'Intelligent property-to-fund matching',
-      guardrail: 'Real-time compliance and content moderation',
-      underwriting: 'AI-powered data enrichment (Coming Soon)',
-      offers: 'Offer ranking and buyer behavior (Coming Soon)',
-      communication: 'AI buyer communication (Coming Soon)'
-    },
-    extensiblePlugins: {
-      dealSources: 'Pluggable deal source integrations (CSV, API, Email, Webhook)',
-      buyBoxScoring: 'Extensible buy box scoring with custom criteria',
-      automations: 'Event-driven automation engine',
-      workflows: 'Multi-step workflow orchestration',
-      aiAnalysis: 'AI-powered deal analysis and enrichment',
-      mlScoring: 'TensorFlow.js ML-enhanced deal quality scoring',
-      knowledgeBase: 'RAG-powered document knowledge base with semantic search'
+    features: {
+      aiAgents: 'AI-powered coding assistants with Claude integration',
+      sprites: 'Containerized development environments (Sprites)',
+      spriteTasks: 'Task queue for automated code changes',
+      knowledgeBase: 'RAG-powered document knowledge base with semantic search',
+      deployHooks: 'Automatic deployment triggers on task completion'
     }
   });
 });
@@ -414,8 +294,6 @@ const startServer = async () => {
         logger.info('Database models synchronized');
       }
 
-      // Add performance indexes for contract flow
-      await addDocumentStatusIndex();
     } catch (dbError) {
       logger.warn('Database connection failed, server running without database', {}, dbError);
     }
@@ -481,65 +359,11 @@ const startServer = async () => {
       logger.warn('Project Services initialization failed', {}, projectError);
     }
 
-    // Initialize SOC2 Audit Logger
-    try {
-      await soc2AuditLogger.initialize();
-      logger.info('SOC2 Audit Logger initialized successfully');
-    } catch (auditError) {
-      logger.warn('SOC2 Audit Logger initialization failed', {}, auditError);
-    }
-
-    // Initialize plugin system
-    try {
-      await dealProcessingService.initialize();
-      logger.info('Deal Processing Service initialized successfully');
-
-      // Load buy boxes from database into memory cache
-      await dealProcessingService.loadBuyBoxesFromDatabase();
-    } catch (pluginError) {
-      logger.warn('Plugin system initialization failed', {}, pluginError);
-    }
-
     // Initialize AI Agent (Admin - full access)
     try {
       await agentService.initialize();
     } catch (agentError) {
       logger.warn('AI Agent initialization failed', {}, agentError);
-    }
-
-    // Initialize Buyer Agent (Limited access for buyers)
-    try {
-      await inquiryService.initialize();
-      await buyerAgentService.initialize();
-    } catch (buyerAgentError) {
-      logger.warn('Buyer Agent initialization failed', {}, buyerAgentError);
-    }
-
-    // Initialize Seller Agent (Limited access for sellers/admins)
-    try {
-      await sellerAgentService.initialize();
-    } catch (sellerAgentError) {
-      logger.warn('Seller Agent initialization failed', {}, sellerAgentError);
-    }
-
-    // Initialize ML Service
-    try {
-      await mlService.initialize();
-      logger.info('ML Service initialized successfully');
-    } catch (mlError) {
-      logger.warn('ML Service initialization failed (ML features may be limited)', {}, mlError);
-    }
-
-    // Initialize Image Embedding Service
-    try {
-      await imageEmbeddingService.initialize();
-      if (imageEmbeddingService.isReady()) {
-        logger.info('Image Embedding Service initialized (visual ML features enabled)');
-      } else {
-        logger.warn('Image Embedding Service disabled (missing OPENAI_API_KEY)');
-      }
-    } catch (imgError) {
-      logger.warn('Image Embedding Service initialization failed', {}, imgError);
     }
 
     // Initialize Knowledge Base (RAG)
@@ -599,25 +423,6 @@ const startServer = async () => {
       logger.warn('Conversation Title Service initialization failed', {}, titleError);
     }
 
-    // Initialize DocuSeal Service
-    try {
-      await docuSealService.initialize();
-      if (docuSealService.isReady()) {
-        logger.info('DocuSeal Service initialized successfully');
-      } else {
-        logger.warn('DocuSeal Service disabled (missing DOCUSEAL_API_KEY)');
-      }
-    } catch (docuSealError) {
-      logger.warn('DocuSeal Service initialization failed', {}, docuSealError);
-    }
-
-    // Initialize ProxyPics Service
-    try {
-      await proxyPicsService.initialize();
-    } catch (proxyPicsError) {
-      logger.warn('ProxyPics Service initialization failed', {}, proxyPicsError);
-    }
-
     // Initialize Stripe Service
     try {
       await stripeService.initialize();
@@ -628,67 +433,6 @@ const startServer = async () => {
       }
     } catch (stripeError) {
       logger.warn('Stripe Service initialization failed', {}, stripeError);
-    }
-
-    // Initialize Broker Services
-    try {
-      const { brokerService } = await import('./services/BrokerService');
-      const { brokerMSAService } = await import('./services/BrokerMSAService');
-      const { brokerCommunicationService } = await import('./services/BrokerCommunicationService');
-      await brokerService.initialize();
-      await brokerMSAService.initialize();
-      await brokerCommunicationService.initialize();
-      logger.info('Broker Services initialized successfully');
-    } catch (brokerError) {
-      logger.warn('Broker Services initialization failed', {}, brokerError);
-    }
-
-    // Initialize Deal Approval Service
-    try {
-      await dealApprovalService.initialize();
-      logger.info('Deal Approval Service initialized successfully');
-    } catch (approvalError) {
-      logger.warn('Deal Approval Service initialization failed', {}, approvalError);
-    }
-
-    // Initialize Deal Processing Queue (transactional outbox pattern)
-    try {
-      await dealProcessingQueue.initialize();
-      logger.info('Deal Processing Queue initialized');
-    } catch (queueError) {
-      logger.warn('Deal Processing Queue initialization failed', {}, queueError);
-    }
-
-    // Initialize Deal Processing Worker (transactional outbox processor)
-    try {
-      await dealProcessingWorker.start();
-      logger.info('Deal Processing Worker started (outbox pattern enabled)');
-    } catch (workerError) {
-      logger.warn('Deal Processing Worker initialization failed', {}, workerError);
-    }
-
-    // Initialize ML Fraud Prediction Service
-    try {
-      await mlFraudPredictionService.initialize();
-      logger.info('ML Fraud Prediction Service initialized');
-    } catch (mlFraudError) {
-      logger.warn('ML Fraud Prediction Service initialization failed', {}, mlFraudError);
-    }
-
-    // Initialize Fraud Network Graph Service
-    try {
-      await fraudNetworkGraphService.initialize();
-      logger.info('Fraud Network Graph Service initialized');
-    } catch (graphError) {
-      logger.warn('Fraud Network Graph Service initialization failed', {}, graphError);
-    }
-
-    // Initialize Compliance Trigger Service (real-time event-driven compliance checks)
-    try {
-      await complianceTriggerService.initialize();
-      logger.info('Compliance Trigger Service initialized (real-time event triggers)');
-    } catch (triggerError) {
-      logger.warn('Compliance Trigger Service initialization failed', {}, triggerError);
     }
 
     // Initialize Team Communication Service
@@ -709,14 +453,6 @@ const startServer = async () => {
       }
     } catch (calendarError) {
       logger.warn('Calendar Integration Service initialization failed', {}, calendarError);
-    }
-
-    // Initialize Photo Persistence Service (Zillow photo caching)
-    try {
-      photoPersistenceService.start();
-      logger.info('Photo Persistence Service started', { schedule: 'daily at 3:00 AM' });
-    } catch (photoError) {
-      logger.warn('Photo Persistence Service initialization failed', {}, photoError);
     }
 
     const server = app.listen(PORT, '0.0.0.0', () => {
@@ -876,14 +612,6 @@ const startServer = async () => {
       logger.warn('Push Notification Service initialization failed', {}, pushError);
     }
 
-    // Initialize Compliance WebSocket Service
-    try {
-      complianceWebSocketService.initialize(server);
-      logger.info('Compliance WebSocket Service initialized', { path: '/ws/compliance' });
-    } catch (compWsError) {
-      logger.warn('Compliance WebSocket Service initialization failed', {}, compWsError);
-    }
-
     // Initialize Sprites Service and WebSocket Proxy
     try {
       spritesService.initialize();
@@ -909,36 +637,6 @@ const startServer = async () => {
       logger.warn('GitHub Sync WebSocket Service initialization failed', {}, githubSyncError);
     }
 
-    // Seed default follow-up chains
-    try {
-      await seedFollowUpChains();
-    } catch (seedError) {
-      logger.warn('Follow-up chains seeding failed', {}, seedError);
-    }
-
-    // Start Follow-up Scheduler
-    try {
-      followUpScheduler.start('*/15 * * * *'); // Every 15 minutes
-    } catch (schedulerError) {
-      logger.warn('Follow-up Scheduler initialization failed', {}, schedulerError);
-    }
-
-    // Start Inquiry Scheduler (expiration, reminders, escalation)
-    try {
-      inquiryScheduler.start();
-      logger.info('Inquiry Scheduler started');
-    } catch (schedulerError) {
-      logger.warn('Inquiry Scheduler initialization failed', {}, schedulerError);
-    }
-
-    // Start Contract Reminder Scheduler
-    try {
-      contractReminderScheduler.start('0 */2 * * *'); // Every 2 hours
-      logger.info('Contract Reminder Scheduler started', { schedule: 'every 2 hours' });
-    } catch (schedulerError) {
-      logger.warn('Contract Reminder Scheduler initialization failed', {}, schedulerError);
-    }
-
     // Start User Reminder Scheduler
     try {
       await reminderScheduler.initialize();
@@ -954,30 +652,6 @@ const startServer = async () => {
       logger.info('Scheduled Task Scheduler started', { schedule: 'every minute' });
     } catch (schedulerError) {
       logger.warn('Scheduled Task Scheduler initialization failed', {}, schedulerError);
-    }
-
-    // Start Compliance Watchdog Scheduler
-    try {
-      complianceWatchdogScheduler.start('0 */6 * * *'); // Every 6 hours
-      logger.info('Compliance Watchdog started', { schedule: 'every 6 hours' });
-    } catch (watchdogError) {
-      logger.warn('Compliance Watchdog initialization failed', {}, watchdogError);
-    }
-
-    // Start Offer Expiration Scheduler (FIX 3)
-    try {
-      offerExpirationScheduler.start('0 * * * *'); // Every hour
-      logger.info('Offer Expiration Scheduler started', { schedule: 'every hour' });
-    } catch (offerError) {
-      logger.warn('Offer Expiration Scheduler initialization failed', {}, offerError);
-    }
-
-    // Start DocuSeal Reconciliation Scheduler (FIX 5)
-    try {
-      docuSealReconciliationScheduler.start('0 */4 * * *'); // Every 4 hours
-      logger.info('DocuSeal Reconciliation Scheduler started', { schedule: 'every 4 hours' });
-    } catch (reconcileError) {
-      logger.warn('DocuSeal Reconciliation Scheduler initialization failed', {}, reconcileError);
     }
 
     // Start Notification Scheduler (daily/weekly digests)
@@ -1011,50 +685,20 @@ const startServer = async () => {
         // Shutdown notification service (WebSocket)
         notificationService.shutdown();
 
-        // Shutdown compliance WebSocket service
-        complianceWebSocketService.shutdown();
-
         // Shutdown TV Remote WebSocket service
         tvRemoteWebSocketService.shutdown();
 
         // Close voice calling sessions
         await closeVoiceSessions();
 
-        // Stop automation engine retry processor
-        automationEngine.stopRetryProcessor();
-
-        // Stop follow-up scheduler
-        followUpScheduler.stop();
-
-        // Stop contract reminder scheduler
-        contractReminderScheduler.stop();
-
         // Stop scheduled task scheduler
         scheduledTaskScheduler.stop();
-
-        // Stop compliance watchdog scheduler
-        complianceWatchdogScheduler.stop();
-
-        // Stop offer expiration scheduler
-        offerExpirationScheduler.stop();
-
-        // Stop DocuSeal reconciliation scheduler
-        docuSealReconciliationScheduler.stop();
 
         // Stop notification scheduler
         notificationScheduler.stop();
 
         // Stop email sync scheduler
         emailSyncScheduler.stop();
-
-        // Stop deal processing worker
-        dealProcessingWorker.stop();
-
-        // Stop photo persistence scheduler
-        photoPersistenceService.stop();
-
-        // Shutdown SOC2 Audit Logger (flush remaining logs)
-        await soc2AuditLogger.shutdown();
 
         // Close database connections
         await sequelize.close();

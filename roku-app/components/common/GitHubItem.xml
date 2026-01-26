@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    GitHub Item Component
+    =====================
+    Displays a GitHub issue or commit.
+-->
+<component name="GitHubItem" extends="Group">
+    <interface>
+        <field id="itemContent" type="node" onChange="onContentChange" />
+    </interface>
+
+    <children>
+        <!-- Card background -->
+        <Rectangle id="cardBg"
+                  width="1840"
+                  height="90"
+                  color="#18181b"
+                  cornerRadius="8" />
+
+        <!-- Issue/commit icon -->
+        <Rectangle id="iconBg"
+                  width="50"
+                  height="50"
+                  color="#27272a"
+                  cornerRadius="8"
+                  translation="[20, 20]" />
+        <Label id="icon"
+               text="🐛"
+               font="font:MediumSystemFont"
+               horizAlign="center"
+               translation="[20, 30]"
+               width="50" />
+
+        <!-- Title/message -->
+        <Label id="title"
+               text="Issue or commit title..."
+               font="font:MediumSystemFont"
+               color="#ffffff"
+               translation="[90, 15]"
+               width="1600"
+               maxLines="1" />
+
+        <!-- Meta info -->
+        <Label id="meta"
+               text="repo/name • #123 • opened by user"
+               font="font:SmallSystemFont"
+               color="#71717a"
+               translation="[90, 50]" />
+
+        <!-- State badge -->
+        <Rectangle id="stateBadge"
+                  width="70"
+                  height="24"
+                  color="#22c55e"
+                  cornerRadius="12"
+                  translation="[1740, 33]" />
+        <Label id="stateLabel"
+               text="open"
+               font="font:SmallSystemFont"
+               color="#ffffff"
+               horizAlign="center"
+               translation="[1740, 37]"
+               width="70" />
+    </children>
+
+    <script type="text/brightscript" uri="GitHubItem.brs" />
+</component>

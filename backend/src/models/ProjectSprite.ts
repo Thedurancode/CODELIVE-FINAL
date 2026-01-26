@@ -77,6 +77,11 @@ interface ProjectSpriteAttributes {
   startupCommand: string | null; // Command to run on terminal connect (e.g., "npm run dev")
   tmuxSessionName: string | null; // Name of the tmux session for persistent terminal
 
+  // MCP (Model Context Protocol) settings
+  mcpEnabled: boolean; // Whether MCP server is enabled
+  mcpPort: number | null; // Port the MCP server is listening on
+  mcpInstalledAt: Date | null; // When MCP server was installed
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -111,6 +116,9 @@ interface ProjectSpriteCreationAttributes
     | 'lastShellDirectory'
     | 'startupCommand'
     | 'tmuxSessionName'
+    | 'mcpEnabled'
+    | 'mcpPort'
+    | 'mcpInstalledAt'
     | 'createdAt'
     | 'updatedAt'
   > {}
@@ -156,6 +164,9 @@ class ProjectSprite
   declare lastShellDirectory: string | null;
   declare startupCommand: string | null;
   declare tmuxSessionName: string | null;
+  declare mcpEnabled: boolean;
+  declare mcpPort: number | null;
+  declare mcpInstalledAt: Date | null;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -506,6 +517,25 @@ ProjectSprite.init(
       allowNull: true,
       field: 'tmux_session_name',
       comment: 'Name of the tmux session for persistent terminal',
+    },
+    mcpEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'mcp_enabled',
+      comment: 'Whether MCP server is enabled on this sprite',
+    },
+    mcpPort: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'mcp_port',
+      comment: 'Port the MCP server is listening on',
+    },
+    mcpInstalledAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'mcp_installed_at',
+      comment: 'When MCP server was installed',
     },
     createdAt: {
       type: DataTypes.DATE,

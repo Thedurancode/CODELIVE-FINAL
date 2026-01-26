@@ -1,0 +1,29 @@
+# Image Assets Required
+
+Place the following images in this folder:
+
+## Required Channel Icons
+- icon_focus_hd.png (540x405) - Channel icon when focused
+- icon_focus_sd.png (246x140) - SD channel icon
+- icon_side_hd.png (108x81) - Side panel icon
+- icon_side_sd.png (55x41) - SD side panel icon
+
+## Required Splash Screens
+- splash_hd.jpg (1920x1080) - HD splash screen
+- splash_sd.jpg (720x480) - SD splash screen
+
+## App Assets
+- logo.png (200x60) - Header logo
+- logo-large.png (400x400) - Logo slide display
+- spinner.png (100x100) - Loading spinner animation
+- glow.png (800x800) - Radial glow effect for logo slide
+
+## Service Logos
+- reddit-logo.png (40x40) - Reddit icon
+- github-logo.png (40x40) - GitHub icon
+- youtube-play.png (120x84) - YouTube play button overlay
+
+## Notes
+- Use PNG format for transparency
+- Optimize images for file size (Roku has memory limits)
+- Test on actual device to verify appearance

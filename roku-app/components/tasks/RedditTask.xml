@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Reddit Task Component
+    =====================
+    Background task to fetch posts from Reddit.
+-->
+<component name="RedditTask" extends="Task">
+    <interface>
+        <field id="subreddits" type="array" />
+        <field id="posts" type="array" />
+        <field id="error" type="string" />
+    </interface>
+
+    <script type="text/brightscript" uri="RedditTask.brs" />
+</component>

@@ -1,0 +1,30 @@
+# CodeLive TV - Roku Application
+# ================================
+
+title=CodeLive TV
+subtitle=AI-Powered Development Dashboard
+major_version=1
+minor_version=0
+build_version=1
+
+# Icons (must be provided)
+mm_icon_focus_hd=pkg:/images/icon_focus_hd.png
+mm_icon_focus_sd=pkg:/images/icon_focus_sd.png
+mm_icon_side_hd=pkg:/images/icon_side_hd.png
+mm_icon_side_sd=pkg:/images/icon_side_sd.png
+
+# Splash screens
+splash_screen_hd=pkg:/images/splash_hd.jpg
+splash_screen_sd=pkg:/images/splash_sd.jpg
+splash_color=#0a0a0a
+splash_min_time=1500
+
+# Resolution support
+ui_resolutions=fhd
+
+# Features
+supports_input_launch=1
+confirm_partner_button=1
+
+# Build constants
+bs_const=debug=true

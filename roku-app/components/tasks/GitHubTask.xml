@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    GitHub Task Component
+    =====================
+    Background task to fetch issues or commits from GitHub via your API.
+-->
+<component name="GitHubTask" extends="Task">
+    <interface>
+        <field id="apiUrl" type="string" />
+        <field id="slideType" type="string" value="recent-issues" />
+        <field id="items" type="array" />
+        <field id="error" type="string" />
+    </interface>
+
+    <script type="text/brightscript" uri="GitHubTask.brs" />
+</component>

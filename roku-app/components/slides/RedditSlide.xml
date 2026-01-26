@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Reddit Slide Component
+    ======================
+    Displays trending posts from configured subreddits.
+-->
+<component name="RedditSlide" extends="Group">
+    <interface>
+        <field id="subreddits" type="array" onChange="onSubredditsChange" />
+        <field id="posts" type="array" />
+    </interface>
+
+    <children>
+        <!-- Header -->
+        <Group id="header" translation="[40, 120]">
+            <Poster id="redditLogo"
+                   uri="pkg:/images/reddit-logo.png"
+                   width="40"
+                   height="40" />
+            <Label text="Reddit"
+                   font="font:LargeBoldSystemFont"
+                   color="#ff4500"
+                   translation="[55, 5]" />
+            <Label id="subredditLabel"
+                   text="r/programming + r/technology"
+                   font="font:SmallSystemFont"
+                   color="#a1a1aa"
+                   translation="[55, 40]" />
+        </Group>
+
+        <!-- Posts grid (2 columns) -->
+        <LayoutGroup id="postsContainer"
+                    layoutDirection="horiz"
+                    itemSpacings="[20]"
+                    translation="[40, 200]">
+
+            <!-- Left column -->
+            <LayoutGroup id="leftColumn"
+                        layoutDirection="vert"
+                        itemSpacings="[15]">
+                <RedditPost id="post1" />
+                <RedditPost id="post2" />
+                <RedditPost id="post3" />
+                <RedditPost id="post4" />
+            </LayoutGroup>
+
+            <!-- Right column -->
+            <LayoutGroup id="rightColumn"
+                        layoutDirection="vert"
+                        itemSpacings="[15]">
+                <RedditPost id="post5" />
+                <RedditPost id="post6" />
+                <RedditPost id="post7" />
+                <RedditPost id="post8" />
+            </LayoutGroup>
+        </LayoutGroup>
+
+        <!-- Loading overlay -->
+        <Group id="loadingOverlay" visible="true">
+            <Rectangle width="1920" height="1080" color="#09090b" opacity="0.9" />
+            <BusySpinner id="spinner"
+                        translation="[910, 490]"
+                        poster="pkg:/images/spinner.png" />
+            <Label text="Loading Reddit posts..."
+                   font="font:MediumSystemFont"
+                   color="#a1a1aa"
+                   horizAlign="center"
+                   translation="[760, 560]"
+                   width="400" />
+        </Group>
+    </children>
+
+    <script type="text/brightscript" uri="RedditSlide.brs" />
+</component>

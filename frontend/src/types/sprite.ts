@@ -66,6 +66,11 @@ export interface Sprite {
   startupCommand: string | null;
   tmuxSessionName: string | null;
 
+  // MCP (Model Context Protocol)
+  mcpEnabled: boolean;
+  mcpPort: number | null;
+  mcpInstalledAt: string | null;
+
   createdAt: string;
   updatedAt: string;
 
@@ -459,4 +464,233 @@ export interface CreatePullRequestOptions {
 export interface PushResult {
   success: boolean;
   message: string;
+}
+
+// ============================================================================
+// MCP (MODEL CONTEXT PROTOCOL) TYPES
+// ============================================================================
+
+// MCP tool definition
+export interface McpTool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: string;
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+}
+
+// MCP health check response
+export interface McpHealthResponse {
+  healthy: boolean;
+  version?: string;
+}
+
+// MCP tool call result
+export interface McpToolCallResult {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+// MCP install result
+export interface McpInstallResult {
+  mcpInstalled: boolean;
+}
+
+// MCP server configuration (for custom MCP servers)
+export interface McpServerConfig {
+  id: string;
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  port: number;
+  enabled: boolean;
+  installedAt?: string;
+}
+
+// ============================================================================
+// MCP REGISTRY TYPES
+// ============================================================================
+
+// MCP Registry package info
+export interface McpRegistryPackage {
+  registry: 'npm' | 'pypi' | 'cargo' | 'docker';
+  name: string;
+  version?: string;
+  runtime?: string;
+  runtimeArgs?: string[];
+  packageArgs?: string[];
+  environmentVariables?: string[];
+}
+
+// MCP Registry remote transport info
+export interface McpRegistryRemote {
+  transportType: 'sse' | 'http';
+  url: string;
+}
+
+// MCP Registry server from the official registry
+export interface McpRegistryServer {
+  name: string;
+  description: string;
+  version: string;
+  repository?: {
+    url: string;
+    source?: string;
+    id?: string;
+  };
+  website?: string;
+  license?: string;
+  packages?: McpRegistryPackage[];
+  remotes?: McpRegistryRemote[];
+  tools?: string[];
+  prompts?: string[];
+  resources?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+  // Added by our API
+  installCommand?: string | null;
+  runCommand?: string | null;
+}
+
+// MCP Registry search response metadata
+export interface McpRegistryMetadata {
+  nextCursor?: string;
+  count: number;
+}
+
+// MCP Registry install result
+export interface McpRegistryInstallResult {
+  installed: boolean;
+  serverName: string;
+  version: string;
+  installCommand: string;
+  runCommand?: string | null;
+}
+
+// ============================================================================
+// MCP SERVER CONFIGURATION (Installed on Sprite)
+// ============================================================================
+
+// Status options for installed MCP servers
+export type McpInstalledServerStatus =
+  | 'pending' // Installation pending
+  | 'installed' // Installed but not running
+  | 'running' // Currently running
+  | 'stopped' // Stopped by user or system
+  | 'error' // Error state
+  | 'uninstalled'; // Marked for removal
+
+// Registry types
+export type McpServerRegistry = 'npm' | 'pypi' | 'cargo' | 'docker' | 'custom';
+
+// Environment variable configuration for MCP servers
+export interface McpEnvVar {
+  key: string;
+  value: string; // May be masked if isSecret
+  isSecret: boolean;
+  description?: string;
+}
+
+// Installed MCP server configuration
+export interface InstalledMcpServer {
+  id: string;
+  serverName: string;
+  displayName: string | null;
+  description: string | null;
+  registry: McpServerRegistry;
+  packageName: string | null;
+  packageVersion: string | null;
+  installCommand?: string | null;
+  runCommand?: string | null;
+  status: McpInstalledServerStatus;
+  autoStart: boolean;
+  startOrder: number;
+  tools: string[] | null;
+  installedAt: string | null;
+  lastStartedAt: string | null;
+  lastStoppedAt: string | null;
+  errorMessage: string | null;
+  hasEnvConfig: boolean;
+  // Version tracking fields
+  latestVersion: string | null;
+  lastUpdateCheck: string | null;
+  changelogUrl: string | null;
+  registryUrl: string | null;
+  // Additional fields returned by getMcpServer
+  envVars?: McpEnvVar[];
+  envStatus?: {
+    complete: boolean;
+    missing: string[];
+    configured: string[];
+  };
+}
+
+// Install MCP server with config request
+export interface InstallMcpServerRequest {
+  serverName: string;
+  version?: string;
+  envVars?: McpEnvVar[];
+  autoStart?: boolean;
+}
+
+// Update MCP server config request
+export interface UpdateMcpServerConfigRequest {
+  displayName?: string;
+  autoStart?: boolean;
+  startOrder?: number;
+  envVars?: McpEnvVar[];
+}
+
+// Auto-start server info
+export interface AutoStartServerInfo {
+  serverName: string;
+  displayName: string | null;
+  autoStart: boolean;
+  startOrder: number;
+  status: McpInstalledServerStatus;
+}
+
+// Auto-start result
+export interface AutoStartResult {
+  started: string[];
+  failed: Array<{ serverName: string; error: string }>;
+}
+
+// MCP Server Update Types
+export interface McpServerUpdateInfo {
+  serverName: string;
+  displayName: string | null;
+  hasUpdate: boolean;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  changelogUrl: string | null;
+  registryUrl: string | null;
+}
+
+export interface McpUpdateCheckResult {
+  servers: McpServerUpdateInfo[];
+  updatesAvailable: number;
+  checkedAt: string;
+}
+
+export interface McpServerUpdateResult {
+  server: InstalledMcpServer;
+  previousVersion: string | null;
+  newVersion: string | null;
+}
+
+export interface McpBulkUpdateResult {
+  updated: Array<{
+    serverName: string;
+    previousVersion: string | null;
+    newVersion: string | null;
+  }>;
+  failed: Array<{
+    serverName: string;
+    error: string;
+  }>;
 }

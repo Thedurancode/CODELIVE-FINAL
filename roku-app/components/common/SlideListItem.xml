@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Slide List Item Component
+    =========================
+    Displays a slide in the settings panel list.
+-->
+<component name="SlideListItem" extends="Group">
+    <interface>
+        <field id="itemContent" type="node" onChange="onContentChange" />
+        <field id="focusPercent" type="float" onChange="onFocusChange" />
+    </interface>
+
+    <children>
+        <!-- Item background -->
+        <Rectangle id="itemBg"
+                  width="540"
+                  height="60"
+                  color="#27272a"
+                  cornerRadius="8" />
+
+        <!-- Drag handle -->
+        <Label text="≡"
+               font="font:MediumSystemFont"
+               color="#71717a"
+               translation="[15, 17]" />
+
+        <!-- Slide type icon -->
+        <Rectangle id="typeIcon"
+                  width="36"
+                  height="36"
+                  color="#3f3f46"
+                  cornerRadius="6"
+                  translation="[45, 12]" />
+        <Label id="typeIconText"
+               text="📊"
+               font="font:SmallSystemFont"
+               horizAlign="center"
+               translation="[45, 18]"
+               width="36" />
+
+        <!-- Slide label -->
+        <Label id="slideLabel"
+               text="Slide Name"
+               font="font:MediumSystemFont"
+               color="#ffffff"
+               translation="[95, 8]"
+               width="300" />
+
+        <!-- Duration -->
+        <Label id="duration"
+               text="20s"
+               font="font:SmallSystemFont"
+               color="#a1a1aa"
+               translation="[95, 35]" />
+
+        <!-- Remove button hint -->
+        <Label text="×"
+               font="font:MediumBoldSystemFont"
+               color="#71717a"
+               translation="[500, 17]" />
+    </children>
+
+    <script type="text/brightscript" uri="SlideListItem.brs" />
+</component>

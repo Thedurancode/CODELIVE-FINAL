@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Projects Task Component
+    =======================
+    Background task to fetch projects from the API.
+-->
+<component name="ProjectsTask" extends="Task">
+    <interface>
+        <field id="apiUrl" type="string" />
+        <field id="projects" type="array" />
+        <field id="error" type="string" />
+    </interface>
+
+    <script type="text/brightscript" uri="ProjectsTask.brs" />
+</component>

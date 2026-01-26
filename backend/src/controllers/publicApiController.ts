@@ -10,6 +10,8 @@ import ProjectSprite from '../models/ProjectSprite';
 import SpriteTask from '../models/SpriteTask';
 import Project from '../models/Project';
 import { spritesService } from '../services/SpritesService';
+import { spriteMcpService } from '../services/SpriteMcpService';
+import { mcpRegistryService } from '../services/McpRegistryService';
 
 // ============================================================================
 // SPRITES
@@ -889,6 +891,1081 @@ export const getProject = async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: project,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// MCP (Model Context Protocol)
+// ============================================================================
+
+/**
+ * Install/start MCP server on a sprite
+ */
+export const installMcpServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spriteMcpService.installMcpServer(sprite.id);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error || 'Failed to install MCP server',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { mcpInstalled: true },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Check MCP server health
+ */
+export const getMcpHealth = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const health = await spriteMcpService.checkMcpHealth(sprite.id);
+
+    res.json({
+      success: true,
+      data: health,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get available MCP tools
+ */
+export const getMcpTools = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const tools = await spriteMcpService.getTools(sprite.id);
+
+    res.json({
+      success: true,
+      data: { tools },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Call an MCP tool
+ */
+export const callMcpTool = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+    const { tool, arguments: args = {} } = req.body;
+
+    if (!tool) {
+      return res.status(400).json({
+        success: false,
+        error: 'tool is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spriteMcpService.callTool(sprite.id, tool, args);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error || 'Tool call failed',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// MCP REGISTRY
+// ============================================================================
+
+/**
+ * Search MCP servers in the registry
+ */
+export const searchMcpRegistry = async (req: Request, res: Response) => {
+  try {
+    const { search, limit, cursor, category } = req.query;
+
+    const result = await mcpRegistryService.searchServers({
+      search: search as string,
+      limit: limit ? Number(limit) : undefined,
+      cursor: cursor as string,
+      category: category as string,
+    });
+
+    res.json({
+      success: true,
+      data: result.servers,
+      metadata: result.metadata,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get details for a specific MCP server from registry
+ */
+export const getMcpRegistryServer = async (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    const { version } = req.query;
+
+    const server = await mcpRegistryService.getServerDetails(
+      name,
+      (version as string) || 'latest'
+    );
+
+    if (!server) {
+      return res.status(404).json({
+        success: false,
+        error: 'Server not found in registry',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Add install/run commands
+    const installCommand = mcpRegistryService.getInstallCommand(server);
+    const runCommand = mcpRegistryService.getRunCommand(server);
+
+    res.json({
+      success: true,
+      data: {
+        ...server,
+        installCommand,
+        runCommand,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get popular MCP servers
+ */
+export const getPopularMcpServers = async (_req: Request, res: Response) => {
+  try {
+    const servers = await mcpRegistryService.getPopularServers();
+
+    res.json({
+      success: true,
+      data: servers,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Install an MCP server from registry onto a sprite
+ */
+export const installMcpFromRegistry = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+    const { serverName, version } = req.body;
+
+    if (!serverName) {
+      return res.status(400).json({
+        success: false,
+        error: 'serverName is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Get server details from registry
+    const server = await mcpRegistryService.getServerDetails(serverName, version || 'latest');
+    if (!server) {
+      return res.status(404).json({
+        success: false,
+        error: 'Server not found in registry',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const installCommand = mcpRegistryService.getInstallCommand(server);
+    if (!installCommand) {
+      return res.status(400).json({
+        success: false,
+        error: 'Server has no installable package',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Execute install command on sprite
+    const result = await spritesService.execCommand(
+      sprite.organizationId,
+      sprite.spriteName,
+      installCommand,
+      { timeout: 120000 }
+    );
+
+    if (result.exitCode !== 0) {
+      return res.status(500).json({
+        success: false,
+        error: `Installation failed: ${result.output}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        installed: true,
+        serverName: server.name,
+        version: server.version,
+        installCommand,
+        runCommand: mcpRegistryService.getRunCommand(server),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// MCP SERVER CONFIGURATION MANAGEMENT
+// ============================================================================
+
+/**
+ * Get all installed MCP servers for a sprite
+ */
+export const getMcpServers = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const servers = await spriteMcpService.getInstalledServers(id);
+
+    res.json({
+      success: true,
+      data: servers.map((s) => ({
+        id: s.id,
+        serverName: s.serverName,
+        displayName: s.displayName,
+        description: s.description,
+        registry: s.registry,
+        packageName: s.packageName,
+        packageVersion: s.packageVersion,
+        status: s.status,
+        autoStart: s.autoStart,
+        startOrder: s.startOrder,
+        tools: s.tools,
+        installedAt: s.installedAt,
+        lastStartedAt: s.lastStartedAt,
+        lastStoppedAt: s.lastStoppedAt,
+        errorMessage: s.errorMessage,
+        hasEnvConfig: !!s.envConfig?.variables?.length,
+      })),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get a specific MCP server configuration
+ */
+export const getMcpServer = async (req: Request, res: Response) => {
+  try {
+    const { id, serverName } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const server = await spriteMcpService.getServerByName(id, serverName);
+
+    if (!server) {
+      return res.status(404).json({
+        success: false,
+        error: 'Server not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Get env vars with secrets masked
+    const envVars = await spriteMcpService.getServerEnvVars(id, serverName);
+
+    // Check required env vars
+    const envStatus = await spriteMcpService.hasRequiredEnvVars(id, serverName);
+
+    res.json({
+      success: true,
+      data: {
+        id: server.id,
+        serverName: server.serverName,
+        displayName: server.displayName,
+        description: server.description,
+        registry: server.registry,
+        packageName: server.packageName,
+        packageVersion: server.packageVersion,
+        installCommand: server.installCommand,
+        runCommand: server.runCommand,
+        status: server.status,
+        autoStart: server.autoStart,
+        startOrder: server.startOrder,
+        tools: server.tools,
+        envVars,
+        envStatus,
+        installedAt: server.installedAt,
+        lastStartedAt: server.lastStartedAt,
+        lastStoppedAt: server.lastStoppedAt,
+        errorMessage: server.errorMessage,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Install MCP server from registry with configuration
+ */
+export const installMcpServerWithConfig = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+    const { serverName, version, envVars, autoStart } = req.body;
+
+    if (!serverName) {
+      return res.status(400).json({
+        success: false,
+        error: 'serverName is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const server = await spriteMcpService.installFromRegistry(id, serverName, {
+      version,
+      envVars,
+      autoStart,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: server.id,
+        serverName: server.serverName,
+        displayName: server.displayName,
+        status: server.status,
+        autoStart: server.autoStart,
+        installedAt: server.installedAt,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Update MCP server configuration
+ */
+export const updateMcpServerConfig = async (req: Request, res: Response) => {
+  try {
+    const { id, serverName } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+    const { displayName, autoStart, startOrder, envVars } = req.body;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const server = await spriteMcpService.updateServerConfig(id, serverName, {
+      displayName,
+      autoStart,
+      startOrder,
+      envVars,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: server.id,
+        serverName: server.serverName,
+        displayName: server.displayName,
+        autoStart: server.autoStart,
+        startOrder: server.startOrder,
+        hasEnvConfig: !!server.envConfig?.variables?.length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Start an MCP server
+ */
+export const startMcpServer = async (req: Request, res: Response) => {
+  try {
+    const { id, serverName } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const server = await spriteMcpService.startServer(id, serverName);
+
+    res.json({
+      success: true,
+      data: {
+        serverName: server.serverName,
+        status: server.status,
+        lastStartedAt: server.lastStartedAt,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Stop an MCP server
+ */
+export const stopMcpServerNamed = async (req: Request, res: Response) => {
+  try {
+    const { id, serverName } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const server = await spriteMcpService.stopServer(id, serverName);
+
+    res.json({
+      success: true,
+      data: {
+        serverName: server.serverName,
+        status: server.status,
+        lastStoppedAt: server.lastStoppedAt,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Uninstall an MCP server
+ */
+export const uninstallMcpServerNamed = async (req: Request, res: Response) => {
+  try {
+    const { id, serverName } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spriteMcpService.uninstallServer(id, serverName);
+
+    res.json({
+      success: true,
+      data: {
+        serverName,
+        uninstalled: true,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get auto-start configuration for a sprite
+ */
+export const getMcpAutoStartConfig = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const servers = await spriteMcpService.getAutoStartConfig(id);
+
+    res.json({
+      success: true,
+      data: servers.map((s) => ({
+        serverName: s.serverName,
+        displayName: s.displayName,
+        autoStart: s.autoStart,
+        startOrder: s.startOrder,
+        status: s.status,
+      })),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Update auto-start order for MCP servers
+ */
+export const updateMcpAutoStartOrder = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+    const { serverOrder } = req.body;
+
+    if (!Array.isArray(serverOrder)) {
+      return res.status(400).json({
+        success: false,
+        error: 'serverOrder must be an array of server names',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spriteMcpService.reorderAutoStartServers(id, serverOrder);
+
+    res.json({
+      success: true,
+      data: {
+        serverOrder,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Start all auto-start servers for a sprite
+ */
+export const startAutoStartServers = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spriteMcpService.startAutoStartServers(id);
+
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get required environment variables for a server from the registry
+ */
+export const getMcpServerRequiredEnvVars = async (req: Request, res: Response) => {
+  try {
+    const { serverName } = req.params;
+
+    const required = await spriteMcpService.getRequiredEnvVars(serverName);
+
+    res.json({
+      success: true,
+      data: {
+        serverName,
+        requiredEnvVars: required,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// MCP SERVER UPDATES
+// ============================================================================
+
+/**
+ * Check for updates for a single MCP server
+ */
+export const checkMcpServerForUpdate = async (req: Request, res: Response) => {
+  try {
+    const { id, serverName } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spriteMcpService.checkServerForUpdate(id, serverName);
+
+    res.json({
+      success: true,
+      data: {
+        serverName,
+        ...result,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Check for updates for all installed MCP servers on a sprite
+ */
+export const checkAllMcpServersForUpdates = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spriteMcpService.checkAllServersForUpdates(id);
+
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Update a single MCP server to the latest version
+ */
+export const updateMcpServer = async (req: Request, res: Response) => {
+  try {
+    const { id, serverName } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spriteMcpService.updateServer(id, serverName);
+
+    res.json({
+      success: true,
+      data: {
+        server: result.server,
+        previousVersion: result.previousVersion,
+        newVersion: result.newVersion,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Update all MCP servers with available updates
+ */
+export const updateAllMcpServers = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = req.apiKeyOrganizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!sprite.isActive()) {
+      return res.status(400).json({
+        success: false,
+        error: `Sprite is not active (status: ${sprite.status})`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await spriteMcpService.updateAllServers(id);
+
+    res.json({
+      success: true,
+      data: result,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

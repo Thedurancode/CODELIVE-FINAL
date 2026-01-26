@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    GitHub Slide Component
+    ======================
+    Displays recent issues or commits from GitHub.
+-->
+<component name="GitHubSlide" extends="Group">
+    <interface>
+        <field id="slideType" type="string" value="recent-issues" />
+        <field id="items" type="array" />
+    </interface>
+
+    <children>
+        <!-- Header -->
+        <Group id="header" translation="[40, 120]">
+            <Poster id="githubLogo"
+                   uri="pkg:/images/github-logo.png"
+                   width="40"
+                   height="40" />
+            <Label id="headerTitle"
+                   text="Recent Issues"
+                   font="font:LargeBoldSystemFont"
+                   color="#ffffff"
+                   translation="[55, 5]" />
+            <Label id="headerSubtitle"
+                   text="From your repositories"
+                   font="font:SmallSystemFont"
+                   color="#a1a1aa"
+                   translation="[55, 40]" />
+        </Group>
+
+        <!-- Items grid -->
+        <MarkupGrid id="itemsGrid"
+                   translation="[40, 200]"
+                   itemSize="[1840, 100]"
+                   itemSpacing="[0, 10]"
+                   numColumns="1"
+                   numRows="7"
+                   itemComponentName="GitHubItem" />
+
+        <!-- Loading overlay -->
+        <Group id="loadingOverlay" visible="true">
+            <Rectangle width="1920" height="1080" color="#09090b" opacity="0.9" />
+            <BusySpinner id="spinner"
+                        translation="[910, 490]"
+                        poster="pkg:/images/spinner.png" />
+            <Label id="loadingText"
+                   text="Loading GitHub data..."
+                   font="font:MediumSystemFont"
+                   color="#a1a1aa"
+                   horizAlign="center"
+                   translation="[760, 560]"
+                   width="400" />
+        </Group>
+    </children>
+
+    <script type="text/brightscript" uri="GitHubSlide.brs" />
+</component>

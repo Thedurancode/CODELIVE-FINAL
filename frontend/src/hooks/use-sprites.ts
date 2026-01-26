@@ -17,6 +17,14 @@ import type {
   SpriteService,
   CreateServiceOptions,
   ServiceLogsResponse,
+  InstalledMcpServer,
+  McpEnvVar,
+  AutoStartServerInfo,
+  AutoStartResult,
+  McpUpdateCheckResult,
+  McpServerUpdateResult,
+  McpBulkUpdateResult,
+  McpServerUpdateInfo,
 } from '@/types/sprite';
 import { useSpriteStore } from '@/stores/sprite-store';
 
@@ -38,6 +46,21 @@ export const spriteKeys = {
   // Git & PR keys
   branchStatus: (spriteId: string) => [...spriteKeys.all, 'git', 'status', spriteId] as const,
   pullRequest: (spriteId: string) => [...spriteKeys.all, 'pr', spriteId] as const,
+  // MCP keys
+  mcpHealth: (spriteId: string) => [...spriteKeys.all, 'mcp', 'health', spriteId] as const,
+  mcpTools: (spriteId: string) => [...spriteKeys.all, 'mcp', 'tools', spriteId] as const,
+  // MCP Registry keys
+  mcpRegistry: () => [...spriteKeys.all, 'mcp-registry'] as const,
+  mcpRegistryServers: (search?: string) => [...spriteKeys.mcpRegistry(), 'servers', search] as const,
+  mcpRegistryPopular: () => [...spriteKeys.mcpRegistry(), 'popular'] as const,
+  mcpRegistryServer: (name: string) => [...spriteKeys.mcpRegistry(), 'server', name] as const,
+  // MCP Server Config keys (installed servers on sprite)
+  mcpInstalledServers: (spriteId: string) => [...spriteKeys.all, 'mcp', 'installed', spriteId] as const,
+  mcpInstalledServer: (spriteId: string, serverName: string) => [...spriteKeys.mcpInstalledServers(spriteId), serverName] as const,
+  mcpAutoStart: (spriteId: string) => [...spriteKeys.all, 'mcp', 'auto-start', spriteId] as const,
+  // MCP Update keys
+  mcpUpdates: (spriteId: string) => [...spriteKeys.all, 'mcp', 'updates', spriteId] as const,
+  mcpServerUpdate: (spriteId: string, serverName: string) => [...spriteKeys.mcpUpdates(spriteId), serverName] as const,
 };
 
 // ============================================================================
@@ -843,6 +866,13 @@ import type {
   PullRequestInfo,
   CreatePullRequestOptions,
   PushResult,
+  McpTool,
+  McpHealthResponse,
+  McpToolCallResult,
+  McpInstallResult,
+  McpRegistryServer,
+  McpRegistryMetadata,
+  McpRegistryInstallResult,
 } from '@/types/sprite';
 
 /**
@@ -909,6 +939,465 @@ export function useCreatePullRequest() {
       queryClient.setQueryData(spriteKeys.pullRequest(spriteId), pr);
       // Invalidate branch status
       queryClient.invalidateQueries({ queryKey: spriteKeys.branchStatus(spriteId) });
+    },
+  });
+}
+
+// ============================================================================
+// MCP (MODEL CONTEXT PROTOCOL) HOOKS
+// ============================================================================
+
+/**
+ * Check MCP server health on a sprite
+ */
+export function useMcpHealth(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpHealth(spriteId ?? ''),
+    queryFn: () => api.get<McpHealthResponse>(`/api/sprites/${spriteId}/mcp/health`),
+    enabled: !!spriteId,
+    staleTime: 10000, // Cache for 10 seconds
+    refetchInterval: 30000, // Poll every 30 seconds when active
+  });
+}
+
+/**
+ * Get available MCP tools on a sprite
+ */
+export function useMcpTools(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpTools(spriteId ?? ''),
+    queryFn: () => api.get<{ tools: McpTool[] }>(`/api/sprites/${spriteId}/mcp/tools`),
+    enabled: !!spriteId,
+    staleTime: 60000, // Tools don't change often
+  });
+}
+
+/**
+ * Install MCP server on a sprite
+ */
+export function useInstallMcp() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId }: { spriteId: string }) => {
+      return api.post<McpInstallResult>(`/api/sprites/${spriteId}/mcp/install`);
+    },
+    onSuccess: (_, { spriteId }) => {
+      // Invalidate MCP queries
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpHealth(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpTools(spriteId) });
+      // Invalidate sprite to get updated mcpEnabled status
+      queryClient.invalidateQueries({ queryKey: spriteKeys.detail(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.lists() });
+    },
+  });
+}
+
+/**
+ * Call an MCP tool on a sprite
+ */
+export function useCallMcpTool() {
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      tool,
+      args = {},
+    }: {
+      spriteId: string;
+      tool: string;
+      args?: Record<string, unknown>;
+    }) => {
+      return api.post<McpToolCallResult>(`/api/sprites/${spriteId}/mcp/call`, {
+        tool,
+        arguments: args,
+      });
+    },
+  });
+}
+
+// ============================================================================
+// MCP REGISTRY HOOKS
+// ============================================================================
+
+/**
+ * Search MCP servers in the registry
+ */
+export function useMcpRegistrySearch(search?: string, options?: { limit?: number }) {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (options?.limit) params.set('limit', String(options.limit));
+
+  return useQuery({
+    queryKey: spriteKeys.mcpRegistryServers(search),
+    queryFn: () =>
+      api.get<McpRegistryServer[]>(
+        `/api/sprites/mcp-registry/servers?${params.toString()}`
+      ),
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+}
+
+/**
+ * Get popular MCP servers
+ */
+export function useMcpRegistryPopular() {
+  return useQuery({
+    queryKey: spriteKeys.mcpRegistryPopular(),
+    queryFn: () => api.get<McpRegistryServer[]>('/api/sprites/mcp-registry/servers/popular'),
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+}
+
+/**
+ * Get details for a specific MCP server
+ */
+export function useMcpRegistryServer(name: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpRegistryServer(name ?? ''),
+    queryFn: () => api.get<McpRegistryServer>(`/api/sprites/mcp-registry/servers/${encodeURIComponent(name ?? '')}`),
+    enabled: !!name,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Install an MCP server from registry onto a sprite
+ */
+export function useInstallMcpFromRegistry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      serverName,
+      version,
+    }: {
+      spriteId: string;
+      serverName: string;
+      version?: string;
+    }) => {
+      return api.post<McpRegistryInstallResult>(
+        `/api/sprites/${spriteId}/mcp/install-from-registry`,
+        { serverName, version }
+      );
+    },
+    onSuccess: (_, { spriteId }) => {
+      // Invalidate MCP queries to reflect newly installed server
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpHealth(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpTools(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.detail(spriteId) });
+    },
+  });
+}
+
+// ============================================================================
+// MCP SERVER CONFIGURATION MANAGEMENT
+// ============================================================================
+
+/**
+ * Get all installed MCP servers for a sprite
+ */
+export function useInstalledMcpServers(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpInstalledServers(spriteId ?? ''),
+    queryFn: () => api.get<InstalledMcpServer[]>(`/api/sprites/${spriteId}/mcp/servers`),
+    enabled: !!spriteId,
+  });
+}
+
+/**
+ * Get a specific installed MCP server configuration
+ */
+export function useInstalledMcpServer(spriteId: string | null | undefined, serverName: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpInstalledServer(spriteId ?? '', serverName ?? ''),
+    queryFn: () => api.get<InstalledMcpServer>(`/api/sprites/${spriteId}/mcp/servers/${encodeURIComponent(serverName ?? '')}`),
+    enabled: !!spriteId && !!serverName,
+  });
+}
+
+/**
+ * Install an MCP server with configuration (including env vars)
+ */
+export function useInstallMcpServerWithConfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      serverName,
+      version,
+      envVars,
+      autoStart,
+    }: {
+      spriteId: string;
+      serverName: string;
+      version?: string;
+      envVars?: McpEnvVar[];
+      autoStart?: boolean;
+    }) => {
+      return api.post<InstalledMcpServer>(`/api/sprites/${spriteId}/mcp/servers`, {
+        serverName,
+        version,
+        envVars,
+        autoStart,
+      });
+    },
+    onSuccess: (_, { spriteId }) => {
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpHealth(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpTools(spriteId) });
+    },
+  });
+}
+
+/**
+ * Update MCP server configuration (env vars, auto-start, etc.)
+ */
+export function useUpdateMcpServerConfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      spriteId,
+      serverName,
+      displayName,
+      autoStart,
+      startOrder,
+      envVars,
+    }: {
+      spriteId: string;
+      serverName: string;
+      displayName?: string;
+      autoStart?: boolean;
+      startOrder?: number;
+      envVars?: McpEnvVar[];
+    }) => {
+      return api.put<InstalledMcpServer>(`/api/sprites/${spriteId}/mcp/servers/${encodeURIComponent(serverName)}`, {
+        displayName,
+        autoStart,
+        startOrder,
+        envVars,
+      });
+    },
+    onSuccess: (_, { spriteId, serverName }) => {
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServer(spriteId, serverName) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpAutoStart(spriteId) });
+    },
+  });
+}
+
+/**
+ * Start an installed MCP server
+ */
+export function useStartMcpServer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId, serverName }: { spriteId: string; serverName: string }) => {
+      return api.post<{ serverName: string; status: string; lastStartedAt: string }>(
+        `/api/sprites/${spriteId}/mcp/servers/${encodeURIComponent(serverName)}/start`
+      );
+    },
+    onSuccess: (_, { spriteId, serverName }) => {
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServer(spriteId, serverName) });
+    },
+  });
+}
+
+/**
+ * Stop an installed MCP server
+ */
+export function useStopMcpServer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId, serverName }: { spriteId: string; serverName: string }) => {
+      return api.post<{ serverName: string; status: string; lastStoppedAt: string }>(
+        `/api/sprites/${spriteId}/mcp/servers/${encodeURIComponent(serverName)}/stop`
+      );
+    },
+    onSuccess: (_, { spriteId, serverName }) => {
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServer(spriteId, serverName) });
+    },
+  });
+}
+
+/**
+ * Uninstall an MCP server
+ */
+export function useUninstallMcpServer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId, serverName }: { spriteId: string; serverName: string }) => {
+      return api.delete<{ serverName: string; uninstalled: boolean }>(
+        `/api/sprites/${spriteId}/mcp/servers/${encodeURIComponent(serverName)}`
+      );
+    },
+    onSuccess: (_, { spriteId }) => {
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpHealth(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpTools(spriteId) });
+    },
+  });
+}
+
+// ============================================================================
+// MCP AUTO-START MANAGEMENT
+// ============================================================================
+
+/**
+ * Get auto-start configuration for a sprite
+ */
+export function useMcpAutoStartConfig(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpAutoStart(spriteId ?? ''),
+    queryFn: () => api.get<AutoStartServerInfo[]>(`/api/sprites/${spriteId}/mcp/auto-start`),
+    enabled: !!spriteId,
+  });
+}
+
+/**
+ * Update auto-start order for MCP servers
+ */
+export function useUpdateMcpAutoStartOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId, serverOrder }: { spriteId: string; serverOrder: string[] }) => {
+      return api.put<{ serverOrder: string[] }>(`/api/sprites/${spriteId}/mcp/auto-start/order`, {
+        serverOrder,
+      });
+    },
+    onSuccess: (_, { spriteId }) => {
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpAutoStart(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+    },
+  });
+}
+
+/**
+ * Manually trigger auto-start for all configured servers
+ */
+export function useStartAutoStartServers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId }: { spriteId: string }) => {
+      return api.post<AutoStartResult>(`/api/sprites/${spriteId}/mcp/auto-start/start`);
+    },
+    onSuccess: (_, { spriteId }) => {
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpAutoStart(spriteId) });
+    },
+  });
+}
+
+/**
+ * Get required environment variables for a server from the registry
+ */
+export function useMcpServerRequiredEnvVars(serverName: string | null | undefined) {
+  return useQuery({
+    queryKey: ['mcp-required-env', serverName],
+    queryFn: () =>
+      api.get<{ serverName: string; requiredEnvVars: string[] }>(
+        `/api/sprites/mcp-registry/servers/${encodeURIComponent(serverName ?? '')}/required-env`
+      ),
+    enabled: !!serverName,
+    staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+  });
+}
+
+// ============================================================================
+// MCP SERVER UPDATE HOOKS
+// ============================================================================
+
+/**
+ * Check for updates for all installed MCP servers on a sprite
+ */
+export function useMcpServerUpdates(spriteId: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpUpdates(spriteId ?? ''),
+    queryFn: () => api.get<McpUpdateCheckResult>(`/api/sprites/${spriteId}/mcp/check-updates`),
+    enabled: !!spriteId,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+}
+
+/**
+ * Check for update for a single MCP server
+ */
+export function useMcpServerUpdate(spriteId: string | null | undefined, serverName: string | null | undefined) {
+  return useQuery({
+    queryKey: spriteKeys.mcpServerUpdate(spriteId ?? '', serverName ?? ''),
+    queryFn: () =>
+      api.get<McpServerUpdateInfo>(
+        `/api/sprites/${spriteId}/mcp/${encodeURIComponent(serverName ?? '')}/check-update`
+      ),
+    enabled: !!spriteId && !!serverName,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+}
+
+/**
+ * Update a single MCP server to the latest version
+ */
+export function useUpdateMcpServer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId, serverName }: { spriteId: string; serverName: string }) => {
+      return api.post<McpServerUpdateResult>(
+        `/api/sprites/${spriteId}/mcp/${encodeURIComponent(serverName)}/update`
+      );
+    },
+    onSuccess: (_, { spriteId, serverName }) => {
+      // Invalidate related queries
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServer(spriteId, serverName) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpUpdates(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpServerUpdate(spriteId, serverName) });
+    },
+  });
+}
+
+/**
+ * Update all MCP servers with available updates
+ */
+export function useUpdateAllMcpServers() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId }: { spriteId: string }) => {
+      return api.post<McpBulkUpdateResult>(`/api/sprites/${spriteId}/mcp/update-all`);
+    },
+    onSuccess: (_, { spriteId }) => {
+      // Invalidate related queries
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpUpdates(spriteId) });
+    },
+  });
+}
+
+/**
+ * Manually trigger update check for all servers
+ */
+export function useCheckMcpUpdates() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ spriteId }: { spriteId: string }) => {
+      return api.get<McpUpdateCheckResult>(`/api/sprites/${spriteId}/mcp/check-updates`);
+    },
+    onSuccess: (data, { spriteId }) => {
+      // Update the cache with the fresh data
+      queryClient.setQueryData(spriteKeys.mcpUpdates(spriteId), data);
+      // Also invalidate installed servers to refresh version info
+      queryClient.invalidateQueries({ queryKey: spriteKeys.mcpInstalledServers(spriteId) });
     },
   });
 }

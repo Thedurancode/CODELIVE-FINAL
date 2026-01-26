@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
+  <file datatype="x-roku-brightscript" original="CodeLive TV" source-language="en-US">
+    <header>
+      <note>CodeLive TV Roku App Translations</note>
+    </header>
+    <body>
+      <trans-unit id="app_name">
+        <source>CodeLive TV</source>
+      </trans-unit>
+      <trans-unit id="loading">
+        <source>Loading...</source>
+      </trans-unit>
+      <trans-unit id="loading_projects">
+        <source>Loading projects...</source>
+      </trans-unit>
+      <trans-unit id="no_projects">
+        <source>No projects found</source>
+      </trans-unit>
+      <trans-unit id="error_loading">
+        <source>Error loading data</source>
+      </trans-unit>
+      <trans-unit id="settings">
+        <source>Settings</source>
+      </trans-unit>
+      <trans-unit id="slideshow_settings">
+        <source>Slideshow Settings</source>
+      </trans-unit>
+      <trans-unit id="auto_play">
+        <source>Auto-play slideshow</source>
+      </trans-unit>
+      <trans-unit id="slides">
+        <source>Slides</source>
+      </trans-unit>
+      <trans-unit id="add_slide">
+        <source>Add Slide</source>
+      </trans-unit>
+      <trans-unit id="paused">
+        <source>PAUSED</source>
+      </trans-unit>
+      <trans-unit id="all_projects">
+        <source>All Projects</source>
+      </trans-unit>
+      <trans-unit id="in_talks">
+        <source>In Talks</source>
+      </trans-unit>
+      <trans-unit id="on_hold">
+        <source>On Hold</source>
+      </trans-unit>
+      <trans-unit id="completed">
+        <source>Completed</source>
+      </trans-unit>
+      <trans-unit id="archived">
+        <source>Archived</source>
+      </trans-unit>
+      <trans-unit id="comments">
+        <source>comments</source>
+      </trans-unit>
+      <trans-unit id="points">
+        <source>points</source>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

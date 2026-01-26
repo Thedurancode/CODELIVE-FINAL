@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    YouTube Slide Component
+    =======================
+    Displays YouTube video using Roku's video player with YouTube API.
+    Note: Direct YouTube playback requires Roku partner certification.
+    This implementation uses a workaround via YouTube Data API.
+-->
+<component name="YouTubeSlide" extends="Group">
+    <interface>
+        <field id="videoId" type="string" onChange="onVideoIdChange" />
+    </interface>
+
+    <children>
+        <!-- Video player -->
+        <Video id="ytPlayer"
+              width="1920"
+              height="1080"
+              translation="[0, 0]"
+              enableUI="false" />
+
+        <!-- Fallback: Show video info if direct playback unavailable -->
+        <Group id="fallbackView" visible="false">
+            <Rectangle width="1920" height="1080" color="#09090b" />
+
+            <!-- YouTube thumbnail -->
+            <Poster id="thumbnail"
+                   width="1280"
+                   height="720"
+                   translation="[320, 100]" />
+
+            <!-- Play button overlay -->
+            <Poster id="playButton"
+                   uri="pkg:/images/youtube-play.png"
+                   width="120"
+                   height="84"
+                   translation="[900, 418]" />
+
+            <!-- Video title -->
+            <Label id="videoTitle"
+                   text="YouTube Video"
+                   font="font:LargeBoldSystemFont"
+                   color="#ffffff"
+                   horizAlign="center"
+                   translation="[260, 860]"
+                   width="1400"
+                   wrap="true"
+                   maxLines="2" />
+
+            <!-- Instructions -->
+            <Label text="Press OK to open in YouTube app"
+                   font="font:SmallSystemFont"
+                   color="#a1a1aa"
+                   horizAlign="center"
+                   translation="[660, 940]"
+                   width="600" />
+        </Group>
+
+        <!-- Loading overlay -->
+        <Group id="loadingOverlay" visible="true">
+            <Rectangle width="1920" height="1080" color="#09090b" opacity="0.8" />
+            <BusySpinner id="spinner"
+                        translation="[910, 490]"
+                        poster="pkg:/images/spinner.png" />
+        </Group>
+    </children>
+
+    <script type="text/brightscript" uri="YouTubeSlide.brs" />
+</component>
