@@ -309,12 +309,12 @@ export default function ProjectsPage() {
   const renderContent = () => {
     if (isLoading) {
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="p-4 rounded-xl bg-muted/50 border border-border/50">
+            <div key={i} className="p-3 sm:p-4 rounded-xl bg-muted/50 border border-border/50">
               <div className="flex items-center gap-3 mb-3">
-                <Skeleton className="h-12 w-12 rounded-lg" />
-                <div className="space-y-2 flex-1">
+                <Skeleton className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg flex-shrink-0" />
+                <div className="space-y-2 flex-1 min-w-0">
                   <Skeleton className="h-4 w-3/4" />
                   <Skeleton className="h-3 w-1/2" />
                 </div>
@@ -329,12 +329,12 @@ export default function ProjectsPage() {
 
     if (projects.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-16">
-          <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-            <FolderKanban className="h-8 w-8 text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center py-12 sm:py-16 px-4">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+            <FolderKanban className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-medium mb-2">No projects found</h3>
-          <p className="text-muted-foreground text-center max-w-sm">
+          <h3 className="text-base sm:text-lg font-medium mb-2 text-center">No projects found</h3>
+          <p className="text-sm text-muted-foreground text-center max-w-sm">
             {search || statusFilter !== 'all' || tagFilter
               ? 'Try adjusting your search or filters'
               : 'Create your first project to get started'}
@@ -427,191 +427,269 @@ export default function ProjectsPage() {
 
     if (viewMode === 'list') {
       return (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/50 hover:bg-transparent">
-                <TableHead className="w-10">
+        <>
+          {/* Mobile list view - card based */}
+          <div className="sm:hidden space-y-2 p-3">
+            {projects.map((project: Project) => (
+              <div
+                key={project.id}
+                className={cn(
+                  'p-3 rounded-lg bg-muted/30 border border-border/50 active:scale-[0.99] transition-all',
+                  selectedIds.has(project.id) && 'border-primary ring-1 ring-primary'
+                )}
+              >
+                <div className="flex items-center gap-3">
                   <Checkbox
-                    checked={selectedIds.size === projects.length && projects.length > 0}
-                    onCheckedChange={() => toggleSelectAll()}
+                    checked={selectedIds.has(project.id)}
+                    onCheckedChange={() => toggleSelect(project.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-5 w-5"
                   />
-                </TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Tags</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projects.map((project: Project) => (
-                <TableRow
-                  key={project.id}
-                  className={cn(
-                    'border-border/50 hover:bg-muted/50',
-                    selectedIds.has(project.id) && 'bg-primary/5'
-                  )}
-                >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selectedIds.has(project.id)}
-                      onCheckedChange={() => toggleSelect(project.id)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Link href={`/projects/${project.id}`} className="flex items-center gap-3">
-                      {project.logoUrl ? (
-                        <img src={project.logoUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
-                      ) : (
-                        <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                          <FolderKanban className="h-5 w-5 text-primary" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="font-medium hover:text-primary transition-colors">{project.title}</p>
-                        {project.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-1">{project.description}</p>
-                        )}
-                      </div>
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={STATUS_COLORS[project.status]}>
-                      {project.status.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {project.tags && project.tags.length > 0 ? (
-                      <div className="flex gap-1">
-                        {project.tags.slice(0, 2).map((tag) => (
-                          <Badge key={tag} variant="outline" className={`${getTagColor(tag)} text-xs`}>
-                            {tag}
-                          </Badge>
-                        ))}
-                        {project.tags.length > 2 && (
-                          <span className="text-xs text-muted-foreground">+{project.tags.length - 2}</span>
-                        )}
-                      </div>
+                  <Link href={`/projects/${project.id}`} className="flex-1 flex items-center gap-3 min-w-0">
+                    {project.logoUrl ? (
+                      <img src={project.logoUrl} alt="" className="h-10 w-10 rounded-lg object-cover flex-shrink-0" />
                     ) : (
-                      <span className="text-muted-foreground">-</span>
+                      <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                        <FolderKanban className="h-5 w-5 text-primary" />
+                      </div>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-muted-foreground">{formatDate(project.startDate)}</span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {project.githubUrl && (
-                        <SpriteLaunchButton
-                          projectId={project.id}
-                          projectTitle={project.title}
-                          githubUrl={project.githubUrl}
-                          compact
-                        />
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-card border">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/projects/${project.id}`}>
-                              <ExternalLink className="mr-2 h-4 w-4" />
-                              View
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditDialog(project)}>
-                            <Edit2 className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          {project.githubUrl && (
-                            <>
-                              <DropdownMenuItem asChild>
-                                <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
-                                  <Github className="mr-2 h-4 w-4" />
-                                  GitHub
-                                </a>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}>
-                                  <Code2 className="mr-2 h-4 w-4" />
-                                  Clone in VS Code
-                                </a>
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{project.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className={`${STATUS_COLORS[project.status]} text-[10px]`}>
+                          {project.status.replace('_', ' ')}
+                        </Badge>
+                        {project.startDate && (
+                          <span className="text-[10px] text-muted-foreground">{formatDate(project.startDate)}</span>
+                        )}
+                      </div>
                     </div>
-                  </TableCell>
+                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-9 w-9 flex-shrink-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-card border">
+                      <DropdownMenuItem asChild className="h-10">
+                        <Link href={`/projects/${project.id}`}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          View
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditDialog(project)} className="h-10">
+                        <Edit2 className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      {project.githubUrl && (
+                        <DropdownMenuItem asChild className="h-10">
+                          <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
+                            <Github className="mr-2 h-4 w-4" />
+                            GitHub
+                          </a>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400 h-10">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop list view - table based */}
+          <div className="hidden sm:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/50 hover:bg-transparent">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={selectedIds.size === projects.length && projects.length > 0}
+                      onCheckedChange={() => toggleSelectAll()}
+                    />
+                  </TableHead>
+                  <TableHead>Project</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Tags</TableHead>
+                  <TableHead>Start Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {projects.map((project: Project) => (
+                  <TableRow
+                    key={project.id}
+                    className={cn(
+                      'border-border/50 hover:bg-muted/50',
+                      selectedIds.has(project.id) && 'bg-primary/5'
+                    )}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(project.id)}
+                        onCheckedChange={() => toggleSelect(project.id)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/projects/${project.id}`} className="flex items-center gap-3">
+                        {project.logoUrl ? (
+                          <img src={project.logoUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                            <FolderKanban className="h-5 w-5 text-primary" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-medium hover:text-primary transition-colors">{project.title}</p>
+                          {project.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-1">{project.description}</p>
+                          )}
+                        </div>
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={STATUS_COLORS[project.status]}>
+                        {project.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {project.tags && project.tags.length > 0 ? (
+                        <div className="flex gap-1">
+                          {project.tags.slice(0, 2).map((tag) => (
+                            <Badge key={tag} variant="outline" className={`${getTagColor(tag)} text-xs`}>
+                              {tag}
+                            </Badge>
+                          ))}
+                          {project.tags.length > 2 && (
+                            <span className="text-xs text-muted-foreground">+{project.tags.length - 2}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">{formatDate(project.startDate)}</span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {project.githubUrl && (
+                          <SpriteLaunchButton
+                            projectId={project.id}
+                            projectTitle={project.title}
+                            githubUrl={project.githubUrl}
+                            compact
+                          />
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-card border">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/projects/${project.id}`}>
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                                View
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditDialog(project)}>
+                              <Edit2 className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            {project.githubUrl && (
+                              <>
+                                <DropdownMenuItem asChild>
+                                  <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
+                                    <Github className="mr-2 h-4 w-4" />
+                                    GitHub
+                                  </a>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}>
+                                    <Code2 className="mr-2 h-4 w-4" />
+                                    Clone in VS Code
+                                  </a>
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400">
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       );
     }
 
-    // Grid view (default)
+    // Grid view (default) - Mobile optimized
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-4">
         {projects.map((project: Project) => (
           <div
             key={project.id}
             className={cn(
-              'p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-primary/50 transition-all group',
+              'p-3 sm:p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-primary/50 transition-all group active:scale-[0.98]',
               selectedIds.has(project.id) && 'border-primary ring-1 ring-primary'
             )}
           >
             <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <Checkbox
                   checked={selectedIds.has(project.id)}
                   onCheckedChange={() => toggleSelect(project.id)}
                   onClick={(e) => e.stopPropagation()}
+                  className="h-5 w-5 sm:h-4 sm:w-4"
                 />
                 {project.logoUrl ? (
-                  <img src={project.logoUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                  <img src={project.logoUrl} alt="" className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover flex-shrink-0" />
                 ) : (
-                  <div className="h-12 w-12 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <FolderKanban className="h-6 w-6 text-primary" />
+                  <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <FolderKanban className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                   </div>
                 )}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-card border">
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild className="h-10 sm:h-auto">
                     <Link href={`/projects/${project.id}`}>
                       <ExternalLink className="mr-2 h-4 w-4" />
                       View
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => openEditDialog(project)}>
+                  <DropdownMenuItem onClick={() => openEditDialog(project)} className="h-10 sm:h-auto">
                     <Edit2 className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
                   {project.githubUrl && (
                     <>
-                      <DropdownMenuItem asChild>
+                      <DropdownMenuItem asChild className="h-10 sm:h-auto">
                         <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
                           <Github className="mr-2 h-4 w-4" />
                           GitHub
                         </a>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
+                      <DropdownMenuItem asChild className="h-10 sm:h-auto hidden sm:flex">
                         <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}>
                           <Code2 className="mr-2 h-4 w-4" />
                           Clone in VS Code
@@ -620,7 +698,7 @@ export default function ProjectsPage() {
                     </>
                   )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400">
+                  <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400 h-10 sm:h-auto">
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete
                   </DropdownMenuItem>
@@ -628,17 +706,17 @@ export default function ProjectsPage() {
               </DropdownMenu>
             </div>
 
-            <Link href={`/projects/${project.id}`} className="block">
-              <h3 className="font-semibold group-hover:text-primary transition-colors line-clamp-1 mb-1">
+            <Link href={`/projects/${project.id}`} className="block min-h-[60px]">
+              <h3 className="font-semibold text-sm sm:text-base group-hover:text-primary transition-colors line-clamp-1 mb-1">
                 {project.title}
               </h3>
               {project.description && (
-                <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{project.description}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mb-3">{project.description}</p>
               )}
             </Link>
 
-            <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/30">
-              <Badge variant="outline" className={`${STATUS_COLORS[project.status]} text-xs`}>
+            <div className="flex items-center justify-between mt-auto pt-3 border-t border-border/30 gap-2">
+              <Badge variant="outline" className={`${STATUS_COLORS[project.status]} text-[10px] sm:text-xs`}>
                 {project.status.replace('_', ' ')}
               </Badge>
               <div className="flex items-center gap-1">
@@ -659,28 +737,28 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex items-start justify-center py-6">
+    <div className="min-h-[calc(100vh-8rem)] flex items-start justify-center py-4 sm:py-6">
       <div className="w-full max-w-7xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6 px-4">
+        {/* Header - Mobile optimized */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 sm:mb-6 px-3 sm:px-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center flex-shrink-0">
               <FolderKanban className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Projects</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-xl sm:text-2xl font-bold">Projects</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {isLoading ? 'Loading...' : `${pagination?.total || 0} projects`}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {/* View Toggle */}
-            <div className="flex border border-border/50 rounded-lg overflow-hidden">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+            {/* View Toggle - More touch friendly */}
+            <div className="flex border border-border/50 rounded-lg overflow-hidden flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn('rounded-none h-9', viewMode === 'grid' && 'bg-primary/10 text-primary')}
+                className={cn('rounded-none h-10 w-10 sm:h-9 sm:w-auto sm:px-3', viewMode === 'grid' && 'bg-primary/10 text-primary')}
                 onClick={() => setViewMode('grid')}
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -688,7 +766,7 @@ export default function ProjectsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn('rounded-none h-9 border-x border-border/50', viewMode === 'list' && 'bg-primary/10 text-primary')}
+                className={cn('rounded-none h-10 w-10 sm:h-9 sm:w-auto sm:px-3 border-x border-border/50', viewMode === 'list' && 'bg-primary/10 text-primary')}
                 onClick={() => setViewMode('list')}
               >
                 <LayoutList className="h-4 w-4" />
@@ -696,36 +774,36 @@ export default function ProjectsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className={cn('rounded-none h-9', viewMode === 'kanban' && 'bg-primary/10 text-primary')}
+                className={cn('rounded-none h-10 w-10 sm:h-9 sm:w-auto sm:px-3 hidden sm:flex', viewMode === 'kanban' && 'bg-primary/10 text-primary')}
                 onClick={() => setViewMode('kanban')}
               >
                 <Columns3 className="h-4 w-4" />
               </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="h-10 w-10 sm:h-9 sm:w-9 p-0 flex-shrink-0">
               <RefreshCw className="h-4 w-4" />
             </Button>
             {mounted && (
               <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm">
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Project
+                  <Button size="sm" className="h-10 sm:h-9 flex-shrink-0">
+                    <Plus className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">New Project</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-xl p-0 overflow-hidden shadow-2xl">
-                  <DialogHeader className="px-6 pt-6 pb-0">
+                <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-[95vw] sm:max-w-xl p-0 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                         <Plus className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <DialogTitle className="text-xl">Create Project</DialogTitle>
-                        <p className="text-sm text-muted-foreground">Set up a new project</p>
+                        <DialogTitle className="text-lg sm:text-xl">Create Project</DialogTitle>
+                        <p className="text-xs sm:text-sm text-muted-foreground">Set up a new project</p>
                       </div>
                     </div>
                   </DialogHeader>
-                  <div className="px-6 pb-6">
+                  <div className="px-4 sm:px-6 pb-4 sm:pb-6">
                     <ProjectForm
                       onSubmit={handleCreate}
                       onCancel={() => setIsFormOpen(false)}
@@ -739,9 +817,9 @@ export default function ProjectsPage() {
         </div>
 
         {/* Main Content */}
-        <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden shadow-xl">
-          <div className="flex min-h-[600px]">
-            {/* Sidebar */}
+        <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl sm:rounded-2xl overflow-hidden shadow-xl mx-2 sm:mx-0">
+          <div className="flex flex-col lg:flex-row min-h-[500px] sm:min-h-[600px]">
+            {/* Sidebar - Hidden on mobile, shown on lg+ */}
             <div className="w-56 border-r border-border/50 bg-muted/30 p-2 hidden lg:block">
               <ScrollArea className="h-[600px]">
                 <nav className="space-y-1">
@@ -816,9 +894,10 @@ export default function ProjectsPage() {
 
             {/* Content */}
             <div className="flex-1 flex flex-col">
-              {/* Toolbar */}
-              <div className="p-4 border-b border-border/50 flex items-center gap-4 flex-wrap">
-                <div className="relative flex-1 min-w-[200px] max-w-md">
+              {/* Toolbar - Mobile optimized */}
+              <div className="p-3 sm:p-4 border-b border-border/50 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+                {/* Search - Full width on mobile */}
+                <div className="relative flex-1 min-w-0">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search projects..."
@@ -827,12 +906,12 @@ export default function ProjectsPage() {
                       setSearch(e.target.value);
                       setPage(1);
                     }}
-                    className="pl-9 bg-muted/50 border-border/50"
+                    className="pl-9 h-10 sm:h-9 bg-muted/50 border-border/50 w-full"
                   />
                 </div>
 
-                {/* Mobile filters */}
-                <div className="lg:hidden flex gap-2">
+                {/* Mobile filters - Horizontal scroll on mobile */}
+                <div className="lg:hidden flex gap-2 overflow-x-auto pb-1 sm:pb-0">
                   {mounted && (
                     <Select
                       value={statusFilter}
@@ -841,7 +920,7 @@ export default function ProjectsPage() {
                         setPage(1);
                       }}
                     >
-                      <SelectTrigger className="w-[140px] bg-muted/50">
+                      <SelectTrigger className="w-[130px] sm:w-[140px] h-10 sm:h-9 bg-muted/50 flex-shrink-0">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -854,24 +933,44 @@ export default function ProjectsPage() {
                       </SelectContent>
                     </Select>
                   )}
+                  {/* Tag filter for mobile */}
+                  {allTags.length > 0 && mounted && (
+                    <Select
+                      value={tagFilter || 'all'}
+                      onValueChange={(v) => {
+                        setTagFilter(v === 'all' ? null : v);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-[120px] h-10 sm:h-9 bg-muted/50 flex-shrink-0">
+                        <SelectValue placeholder="Tag" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Tags</SelectItem>
+                        {allTags.map(({ tag }) => (
+                          <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
-                {/* Bulk actions */}
+                {/* Bulk actions - Responsive */}
                 {selectedIds.size > 0 && (
-                  <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 sm:ml-auto">
+                    <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                       {selectedIds.size} selected
                     </span>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-red-400 border-red-500/30 hover:bg-red-500/10"
+                      className="h-10 sm:h-9 text-red-400 border-red-500/30 hover:bg-red-500/10"
                       onClick={handleBulkDelete}
                     >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
+                      <Trash2 className="h-4 w-4 sm:mr-1" />
+                      <span className="hidden sm:inline">Delete</span>
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={clearSelection}>
+                    <Button variant="ghost" size="sm" onClick={clearSelection} className="h-10 w-10 sm:h-9 sm:w-9 p-0">
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -893,27 +992,34 @@ export default function ProjectsPage() {
                 </AnimatePresence>
               </ScrollArea>
 
-              {/* Pagination */}
+              {/* Pagination - Mobile optimized */}
               {pagination && pagination.totalPages > 1 && (
-                <div className="p-4 border-t border-border/50 flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Showing {(page - 1) * pagination.limit + 1} to{' '}
-                    {Math.min(page * pagination.limit, pagination.total)} of {pagination.total}
+                <div className="p-3 sm:p-4 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <p className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+                    <span className="hidden sm:inline">Showing </span>
+                    {(page - 1) * pagination.limit + 1}-{Math.min(page * pagination.limit, pagination.total)}
+                    <span className="hidden sm:inline"> of</span>
+                    <span className="sm:hidden">/</span> {pagination.total}
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setPage(page - 1)}
                       disabled={page === 1}
+                      className="h-10 w-10 sm:h-9 sm:w-9 p-0"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
+                    <span className="text-sm text-muted-foreground min-w-[60px] text-center">
+                      {page} / {pagination.totalPages}
+                    </span>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setPage(page + 1)}
                       disabled={page >= pagination.totalPages}
+                      className="h-10 w-10 sm:h-9 sm:w-9 p-0"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
@@ -924,22 +1030,22 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {/* Edit Dialog */}
+        {/* Edit Dialog - Mobile optimized */}
         {mounted && (
           <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
-            <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-xl p-0 overflow-hidden shadow-2xl">
-              <DialogHeader className="px-6 pt-6 pb-0">
+            <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-[95vw] sm:max-w-xl p-0 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                     <Settings className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <DialogTitle className="text-xl">Edit Project</DialogTitle>
-                    <p className="text-sm text-muted-foreground">Update project settings</p>
+                    <DialogTitle className="text-lg sm:text-xl">Edit Project</DialogTitle>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Update project settings</p>
                   </div>
                 </div>
               </DialogHeader>
-              <div className="px-6 pb-6">
+              <div className="px-4 sm:px-6 pb-4 sm:pb-6">
                 {editingProject && (
                   <ProjectForm
                     project={editingProject}

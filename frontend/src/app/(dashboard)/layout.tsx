@@ -22,7 +22,7 @@ export default function DashboardLayout({
     <AgentProvider>
       <div className="min-h-screen bg-background" suppressHydrationWarning>
         <Header />
-        <main className="min-h-screen pt-14 md:pt-16 pb-24 md:pb-28">
+        <main className="min-h-screen pt-20 pb-24 md:pb-28">
           <div className="p-4 md:p-6">
             <PageTransition>{children}</PageTransition>
           </div>

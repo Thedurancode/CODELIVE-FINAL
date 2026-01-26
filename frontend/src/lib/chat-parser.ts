@@ -5,94 +5,14 @@
  * split content into segments for rich rendering (Generative UI).
  *
  * Supported component types:
- * - property_card: Single property display
- * - property_list: Multiple properties in a grid
- * - deal_score: Scoring results with visual bars
- * - buybox_match: Buy box matching results
- * - pipeline_card: Pipeline status visualization
- * - offer_card: Offer display
  * - confirmation: Confirmation dialog (human-in-the-loop)
  * - chart: Simple charts for analytics
- * - market_data: Market statistics display
  * - action_buttons: Interactive action buttons
  */
 
 // ============================================================================
 // Data Types for UI Components
 // ============================================================================
-
-export interface PropertyCardData {
-  id: number;
-  propertyId?: string;
-  address: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  price?: number;
-  arv?: number;
-  bedroomCount?: number;
-  bathroomCount?: number;
-  livingSpaceSqFt?: number;
-  yearBuilt?: number;
-  status?: string;
-  photoLinks?: string[];
-  propertyType?: string;
-}
-
-export interface PropertyListData {
-  properties: PropertyCardData[];
-  title?: string;
-  showCount?: boolean;
-}
-
-export interface DealScoreData {
-  propertyId: number;
-  propertyAddress: string;
-  overallScore: number;
-  scores: {
-    category: string;
-    score: number;
-    maxScore: number;
-    details?: string;
-  }[];
-  recommendation?: 'strong_buy' | 'buy' | 'hold' | 'pass';
-  summary?: string;
-}
-
-export interface BuyBoxMatchData {
-  propertyId: number;
-  propertyAddress: string;
-  matches: {
-    buyBoxId: number;
-    buyBoxName: string;
-    fundName?: string;
-    matchScore: number;
-    matchType: 'strong' | 'moderate' | 'weak' | 'no_match';
-    matchedCriteria: string[];
-    failedCriteria?: string[];
-  }[];
-  bestMatch?: string;
-}
-
-export interface PipelineCardData {
-  propertyId: number;
-  propertyAddress: string;
-  currentStage: 'new' | 'analyzing' | 'due_diligence' | 'offered' | 'negotiating' | 'under_contract' | 'closed';
-  daysInStage?: number;
-  nextActions?: string[];
-  assignedTo?: string;
-}
-
-export interface OfferCardData {
-  offerId?: number;
-  propertyId: number;
-  propertyAddress: string;
-  offerAmount: number;
-  buyerName: string;
-  status?: 'draft' | 'pending' | 'accepted' | 'rejected' | 'countered';
-  expiresAt?: string;
-  terms?: string;
-}
 
 export interface ConfirmationData {
   id: string;
@@ -117,19 +37,6 @@ export interface ChartData {
   showLegend?: boolean;
 }
 
-export interface MarketDataCardData {
-  location: string;
-  medianPrice: number;
-  priceChange?: number;
-  daysOnMarket?: number;
-  inventory?: number;
-  comparables?: {
-    address: string;
-    price: number;
-    soldDate?: string;
-  }[];
-}
-
 export interface ActionButtonsData {
   buttons: {
     label: string;
@@ -141,32 +48,35 @@ export interface ActionButtonsData {
   layout?: 'horizontal' | 'vertical';
 }
 
+export interface PropertyCardData {
+  id?: string;
+  address: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  price?: number;
+  arv?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  sqft?: number;
+  yearBuilt?: number;
+  propertyType?: string;
+  status?: string;
+  imageUrl?: string;
+}
+
 // ============================================================================
 // Parsed Segment Types
 // ============================================================================
 
 export type UIComponentType =
-  | 'property_card'
-  | 'property_list'
-  | 'deal_score'
-  | 'buybox_match'
-  | 'pipeline_card'
-  | 'offer_card'
   | 'confirmation'
   | 'chart'
-  | 'market_data'
   | 'action_buttons';
 
 export type UIComponentData =
-  | PropertyCardData
-  | PropertyListData
-  | DealScoreData
-  | BuyBoxMatchData
-  | PipelineCardData
-  | OfferCardData
   | ConfirmationData
   | ChartData
-  | MarketDataCardData
   | ActionButtonsData;
 
 export interface TextSegment {
@@ -181,22 +91,12 @@ export interface UIComponentSegment {
 
 export type ParsedMessageSegment = TextSegment | UIComponentSegment;
 
-// Legacy support - keep old interface working
-export interface LegacyParsedMessageSegment {
-  type: 'text' | 'property_card';
-  content?: string;
-  property?: PropertyCardData;
-}
-
 // ============================================================================
 // Parsing Functions
 // ============================================================================
 
-// Generic regex to match any UI component: {"type":"component_type","data":{...}}
-const UI_COMPONENT_REGEX = /\{"type":\s*"(property_card|property_list|deal_score|buybox_match|pipeline_card|offer_card|confirmation|chart|market_data|action_buttons)"\s*,\s*"data"\s*:\s*(\{[\s\S]*?\})\}(?=\s*(?:\{|$|[^}]))/g;
-
-// More robust regex for nested objects
-const UI_COMPONENT_REGEX_V2 = /\{"type":\s*"(property_card|property_list|deal_score|buybox_match|pipeline_card|offer_card|confirmation|chart|market_data|action_buttons)"\s*,\s*"data"\s*:\s*(\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})\}/g;
+// Regex for nested objects - matches confirmation, chart, action_buttons
+const UI_COMPONENT_REGEX_V2 = /\{"type":\s*"(confirmation|chart|action_buttons)"\s*,\s*"data"\s*:\s*(\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})\}/g;
 
 // Regex to match tool event markers (tool_start, tool_end) - these should be hidden
 const TOOL_EVENT_REGEX = /\{"type":\s*"tool_(start|end)"[^}]*\}/g;
@@ -287,25 +187,6 @@ export function parseMessageContent(content: string): ParsedMessageSegment[] {
   return segments;
 }
 
-/**
- * Legacy parser for backward compatibility
- * Returns the old format with property?: PropertyCardData
- */
-export function parseMessageContentLegacy(content: string): LegacyParsedMessageSegment[] {
-  const segments = parseMessageContent(content);
-
-  return segments.map(segment => {
-    if (segment.type === 'text') {
-      return { type: 'text', content: segment.content };
-    }
-    if (segment.type === 'property_card') {
-      return { type: 'property_card', property: segment.data as PropertyCardData };
-    }
-    // For other component types, just return as text for legacy consumers
-    return { type: 'text', content: JSON.stringify(segment) };
-  });
-}
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -317,26 +198,6 @@ export function hasUIComponents(content: string): boolean {
   if (!content) return false;
   UI_COMPONENT_REGEX_V2.lastIndex = 0;
   return UI_COMPONENT_REGEX_V2.test(content);
-}
-
-/**
- * Check if a message contains property cards (legacy helper)
- */
-export function hasPropertyCards(content: string): boolean {
-  if (!content) return false;
-  return content.includes('"type":"property_card"') || content.includes('"type": "property_card"');
-}
-
-/**
- * Extract all property cards from a message
- */
-export function extractPropertyCards(content: string): PropertyCardData[] {
-  const segments = parseMessageContent(content);
-  return segments
-    .filter((s): s is UIComponentSegment & { type: 'property_card' } =>
-      s.type === 'property_card'
-    )
-    .map(s => s.data as PropertyCardData);
 }
 
 /**
@@ -361,13 +222,6 @@ export function stripUIComponents(content: string): string {
   return stripToolEvents(content.replace(UI_COMPONENT_REGEX_V2, '')).trim();
 }
 
-/**
- * Remove property card markers from text (legacy helper)
- */
-export function stripPropertyCards(content: string): string {
-  return stripUIComponents(content);
-}
-
 // ============================================================================
 // Component Emission Helpers (for backend use)
 // ============================================================================
@@ -380,27 +234,6 @@ export function createUIComponentMarker<T extends UIComponentData>(
   data: T
 ): string {
   return JSON.stringify({ type, data });
-}
-
-/**
- * Create a property card marker
- */
-export function createPropertyCardMarker(property: PropertyCardData): string {
-  return createUIComponentMarker('property_card', property);
-}
-
-/**
- * Create a deal score marker
- */
-export function createDealScoreMarker(score: DealScoreData): string {
-  return createUIComponentMarker('deal_score', score);
-}
-
-/**
- * Create a buy box match marker
- */
-export function createBuyBoxMatchMarker(match: BuyBoxMatchData): string {
-  return createUIComponentMarker('buybox_match', match);
 }
 
 /**

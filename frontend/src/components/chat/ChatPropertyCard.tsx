@@ -1,9 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { Bed, Bath, Square, DollarSign, MapPin, Home, TrendingUp, ExternalLink } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { MapPin, DollarSign, Bed, Bath, Ruler, Calendar, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PropertyCardData } from '@/lib/chat-parser';
 
@@ -26,154 +23,112 @@ function formatNumber(num?: number): string {
   return new Intl.NumberFormat('en-US').format(num);
 }
 
-function getStatusColor(status?: string): string {
-  switch (status) {
-    case 'new':
-      return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-    case 'enriched':
-      return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-    case 'scored':
-      return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-    case 'submitted':
-      return 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20';
-    case 'accepted':
-      return 'bg-green-500/10 text-green-500 border-green-500/20';
-    case 'rejected':
-      return 'bg-red-500/10 text-red-500 border-red-500/20';
-    default:
-      return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
-  }
-}
-
 export function ChatPropertyCard({ property, className }: ChatPropertyCardProps) {
-  const router = useRouter();
-  const mainImage = property.photoLinks?.[0];
   const fullAddress = [
     property.address,
     property.city,
     property.state,
     property.zip,
-  ].filter(Boolean).join(', ');
-
-  const handleViewProperty = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    router.push(`/deals/${property.id}`);
-  };
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
-    <div className={cn('w-full max-w-sm bg-card border rounded-lg overflow-hidden shadow-sm my-2', className)}>
-      {/* Property Image */}
-      <div className="relative h-32 bg-muted">
-        {mainImage ? (
+    <div
+      className={cn(
+        'rounded-xl border border-zinc-700 bg-zinc-800/50 overflow-hidden',
+        'hover:border-zinc-600 transition-colors',
+        className
+      )}
+    >
+      {/* Image */}
+      {property.imageUrl && (
+        <div className="aspect-video w-full bg-zinc-900">
           <img
-            src={mainImage}
-            alt={property.address || 'Property'}
+            src={property.imageUrl}
+            alt={property.address}
             className="w-full h-full object-cover"
-            loading="lazy"
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Home className="h-10 w-10 text-muted-foreground/30" />
-          </div>
-        )}
+        </div>
+      )}
 
-        {/* Status Badge */}
-        {property.status && (
-          <Badge
-            className={cn(
-              'absolute top-2 right-2 capitalize text-xs',
-              getStatusColor(property.status)
-            )}
-          >
-            {property.status}
-          </Badge>
-        )}
-
-        {/* Property Type */}
-        {property.propertyType && (
-          <Badge
-            variant="secondary"
-            className="absolute top-2 left-2 bg-background/70 text-foreground border-0 text-xs"
-          >
-            {property.propertyType}
-          </Badge>
-        )}
-      </div>
-
-      {/* Property Details */}
-      <div className="p-3 space-y-2">
+      {/* Content */}
+      <div className="p-4 space-y-3">
         {/* Address */}
         <div className="flex items-start gap-2">
-          <MapPin className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
-          <p className="text-xs font-medium leading-tight line-clamp-2">{fullAddress || 'Address not available'}</p>
+          <MapPin className="h-4 w-4 text-accent-400 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-zinc-200 font-medium">{fullAddress}</p>
         </div>
 
         {/* Price Row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <DollarSign className="h-3.5 w-3.5 text-green-500" />
-            <span className="text-base font-bold text-green-600">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <DollarSign className="h-4 w-4 text-green-400" />
+            <span className="text-lg font-semibold text-white">
               {formatPrice(property.price)}
             </span>
           </div>
           {property.arv && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingUp className="h-3 w-3" />
-              <span>ARV: {formatPrice(property.arv)}</span>
+            <div className="text-xs text-zinc-400">
+              ARV: {formatPrice(property.arv)}
             </div>
           )}
         </div>
 
-        {/* Property Stats */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {property.bedroomCount !== undefined && (
-            <div className="flex items-center gap-1">
-              <Bed className="h-3.5 w-3.5" />
-              <span>{property.bedroomCount} bed</span>
+        {/* Details Grid */}
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          {property.bedrooms !== undefined && (
+            <div className="flex items-center gap-1.5 text-zinc-300">
+              <Bed className="h-3.5 w-3.5 text-zinc-500" />
+              <span>{property.bedrooms} beds</span>
             </div>
           )}
-          {property.bathroomCount !== undefined && (
-            <div className="flex items-center gap-1">
-              <Bath className="h-3.5 w-3.5" />
-              <span>{property.bathroomCount} bath</span>
+          {property.bathrooms !== undefined && (
+            <div className="flex items-center gap-1.5 text-zinc-300">
+              <Bath className="h-3.5 w-3.5 text-zinc-500" />
+              <span>{property.bathrooms} baths</span>
             </div>
           )}
-          {property.livingSpaceSqFt && (
-            <div className="flex items-center gap-1">
-              <Square className="h-3.5 w-3.5" />
-              <span>{formatNumber(property.livingSpaceSqFt)} sqft</span>
+          {property.sqft !== undefined && (
+            <div className="flex items-center gap-1.5 text-zinc-300">
+              <Ruler className="h-3.5 w-3.5 text-zinc-500" />
+              <span>{formatNumber(property.sqft)} sqft</span>
+            </div>
+          )}
+          {property.yearBuilt !== undefined && (
+            <div className="flex items-center gap-1.5 text-zinc-300">
+              <Calendar className="h-3.5 w-3.5 text-zinc-500" />
+              <span>Built {property.yearBuilt}</span>
             </div>
           )}
         </div>
 
-        {/* View Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full text-xs h-7 mt-1"
-          onClick={handleViewProperty}
-        >
-          <ExternalLink className="h-3 w-3 mr-1.5" />
-          View Details
-        </Button>
+        {/* Property Type & Status */}
+        {(property.propertyType || property.status) && (
+          <div className="flex items-center gap-2 pt-1">
+            {property.propertyType && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-700 text-xs text-zinc-300">
+                <Home className="h-3 w-3" />
+                {property.propertyType}
+              </span>
+            )}
+            {property.status && (
+              <span
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-xs font-medium',
+                  property.status.toLowerCase() === 'active'
+                    ? 'bg-green-500/20 text-green-400'
+                    : property.status.toLowerCase() === 'pending'
+                    ? 'bg-yellow-500/20 text-yellow-400'
+                    : 'bg-zinc-700 text-zinc-300'
+                )}
+              >
+                {property.status}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-/**
- * Container for multiple property cards in chat
- */
-export function ChatPropertyCardList({ properties }: { properties: PropertyCardData[] }) {
-  if (properties.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-3 my-2">
-      {properties.map((property, index) => (
-        <ChatPropertyCard key={property.id || index} property={property} />
-      ))}
-    </div>
-  );
-}
-
-export default ChatPropertyCard;

@@ -4,42 +4,21 @@ import { lazy, Suspense, type ComponentType } from 'react';
 import type {
   UIComponentType,
   UIComponentData,
-  PropertyCardData,
-  PropertyListData,
-  DealScoreData,
-  BuyBoxMatchData,
-  PipelineCardData,
-  OfferCardData,
   ConfirmationData,
   ChartData,
-  MarketDataCardData,
   ActionButtonsData,
 } from '@/lib/chat-parser';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Lazy load components for better performance
-const ChatPropertyCard = lazy(() => import('./ChatPropertyCard'));
-const ChatPropertyList = lazy(() => import('./ChatPropertyList'));
-const ChatDealScore = lazy(() => import('./ChatDealScore'));
-const ChatBuyBoxMatch = lazy(() => import('./ChatBuyBoxMatch'));
-const ChatPipelineCard = lazy(() => import('./ChatPipelineCard'));
-const ChatOfferCard = lazy(() => import('./ChatOfferCard'));
 const ChatConfirmation = lazy(() => import('./ChatConfirmation'));
 const ChatChart = lazy(() => import('./ChatChart'));
-const ChatMarketData = lazy(() => import('./ChatMarketData'));
 const ChatActionButtons = lazy(() => import('./ChatActionButtons'));
 
 // Component props mapping
 interface ComponentPropsMap {
-  property_card: { property: PropertyCardData };
-  property_list: { data: PropertyListData };
-  deal_score: { data: DealScoreData };
-  buybox_match: { data: BuyBoxMatchData };
-  pipeline_card: { data: PipelineCardData };
-  offer_card: { data: OfferCardData };
   confirmation: { data: ConfirmationData; onAction?: (action: string, data?: Record<string, unknown>) => void };
   chart: { data: ChartData };
-  market_data: { data: MarketDataCardData };
   action_buttons: { data: ActionButtonsData; onAction?: (action: string, data?: Record<string, unknown>) => void };
 }
 
@@ -59,15 +38,8 @@ const componentRegistry: Record<
   UIComponentType,
   ComponentType<{ data: UIComponentData; onAction?: (action: string, data?: Record<string, unknown>) => void }>
 > = {
-  property_card: ({ data }) => <ChatPropertyCard property={data as PropertyCardData} />,
-  property_list: ({ data }) => <ChatPropertyList data={data as PropertyListData} />,
-  deal_score: ({ data }) => <ChatDealScore data={data as DealScoreData} />,
-  buybox_match: ({ data }) => <ChatBuyBoxMatch data={data as BuyBoxMatchData} />,
-  pipeline_card: ({ data }) => <ChatPipelineCard data={data as PipelineCardData} />,
-  offer_card: ({ data }) => <ChatOfferCard data={data as OfferCardData} />,
   confirmation: ({ data, onAction }) => <ChatConfirmation data={data as ConfirmationData} onAction={onAction} />,
   chart: ({ data }) => <ChatChart data={data as ChartData} />,
-  market_data: ({ data }) => <ChatMarketData data={data as MarketDataCardData} />,
   action_buttons: ({ data, onAction }) => <ChatActionButtons data={data as ActionButtonsData} onAction={onAction} />,
 };
 

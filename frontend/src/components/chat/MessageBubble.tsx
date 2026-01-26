@@ -17,8 +17,7 @@ import {
 } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
-import { parseMessageContent, type UIComponentType, type PropertyCardData } from '@/lib/chat-parser';
-import { ChatPropertyCard } from './ChatPropertyCard';
+import { parseMessageContent, type UIComponentType } from '@/lib/chat-parser';
 import { ChatUIComponent } from './ChatComponentRegistry';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { CodeBlock } from './CodeBlock';
@@ -378,18 +377,6 @@ export function MessageBubble({
           }
 
           // Handle UI component segments using the registry
-          // Special case for property_card to maintain backward compatibility
-          if (segment.type === 'property_card') {
-            const propertyData = segment.data as PropertyCardData;
-            return (
-              <ChatPropertyCard
-                key={`property-${propertyData.id || index}`}
-                property={propertyData}
-              />
-            );
-          }
-
-          // All other UI components use the registry
           return (
             <ChatUIComponent
               key={`${segment.type}-${index}`}

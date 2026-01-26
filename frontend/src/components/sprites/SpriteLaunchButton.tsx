@@ -8,7 +8,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bot, Play, Square, Terminal, RotateCcw, ChevronDown, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { Bot, Play, Square, Terminal, RotateCcw, ChevronDown, Loader2, Trash2, AlertTriangle, GitBranch } from 'lucide-react';
 import { SpriteLaunchDialog } from './SpriteLaunchDialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -249,41 +249,74 @@ export function SpriteLaunchButton({
     );
   }
 
+  // Get display branch name
+  const displayBranch = hasSprite ? (sprite!.featureBranch || sprite!.branch || 'main') : null;
+
   // Full button with dropdown
   return (
     <div className={cn('flex items-center gap-1', className)}>
-      <Button
-        variant={isActive ? 'default' : isInError ? 'destructive' : 'outline'}
-        size="sm"
-        onClick={isInError ? handleDeleteAndRecreate : handleLaunch}
-        disabled={isPending || isTransitioning || !isLoaded}
-        className={cn(
-          'gap-2',
-          isActive && 'bg-purple-600 hover:bg-purple-700 text-white'
-        )}
-      >
-        {isPending || isTransitioning ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : isInError ? (
-          <AlertTriangle className="h-4 w-4" />
-        ) : isActive ? (
-          <Terminal className="h-4 w-4" />
-        ) : canResume ? (
-          <Play className="h-4 w-4" />
-        ) : (
-          <Bot className="h-4 w-4" />
-        )}
-        <span>
-          {!hasSprite && 'Coding Agent'}
-          {hasSprite && isActive && 'Open Terminal'}
-          {hasSprite && canResume && 'Resume'}
-          {hasSprite && isInError && 'Recreate'}
-          {hasSprite && isRestoring && 'Restoring...'}
-          {hasSprite && isCheckpointing && 'Saving...'}
-          {hasSprite && isTransitioning && !isRestoring && !isCheckpointing && 'Starting...'}
-        </span>
-        {hasSprite && !isInError && <SpriteStatusDot status={sprite!.status} />}
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={isActive ? 'default' : isInError ? 'destructive' : 'outline'}
+              size="sm"
+              onClick={isInError ? handleDeleteAndRecreate : handleLaunch}
+              disabled={isPending || isTransitioning || !isLoaded}
+              className={cn(
+                'gap-2',
+                isActive && 'bg-purple-600 hover:bg-purple-700 text-white',
+                hasSprite && !isActive && !isInError && 'border-purple-500/30 bg-purple-500/5'
+              )}
+            >
+              {isPending || isTransitioning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isInError ? (
+                <AlertTriangle className="h-4 w-4" />
+              ) : isActive ? (
+                <Terminal className="h-4 w-4" />
+              ) : canResume ? (
+                <Play className="h-4 w-4" />
+              ) : hasSprite ? (
+                <Terminal className="h-4 w-4" />
+              ) : (
+                <Bot className="h-4 w-4" />
+              )}
+              <span>
+                {!hasSprite && 'Launch Agent'}
+                {hasSprite && isActive && 'Terminal'}
+                {hasSprite && canResume && 'Resume'}
+                {hasSprite && isInError && 'Recreate'}
+                {hasSprite && isRestoring && 'Restoring...'}
+                {hasSprite && isCheckpointing && 'Saving...'}
+                {hasSprite && isTransitioning && !isRestoring && !isCheckpointing && 'Starting...'}
+              </span>
+              {hasSprite && !isInError && <SpriteStatusDot status={sprite!.status} />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            {!hasSprite ? (
+              <p>Launch a new coding agent for this project</p>
+            ) : (
+              <div className="space-y-1">
+                <p className="font-medium">
+                  {isActive ? 'Agent running' : canResume ? 'Agent hibernating' : `Agent ${sprite!.status}`}
+                </p>
+                {displayBranch && (
+                  <p className="text-xs text-muted-foreground">
+                    Branch: <span className="font-mono text-purple-400">{displayBranch}</span>
+                  </p>
+                )}
+                {sprite!.checkpointCount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {sprite!.checkpointCount} checkpoint{sprite!.checkpointCount > 1 ? 's' : ''} saved
+                  </p>
+                )}
+              </div>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       {/* Stop button - visible when sprite is running */}
       {hasSprite && isActive && (
@@ -316,11 +349,24 @@ export function SpriteLaunchButton({
               <ChevronDown className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-2 py-1.5">
-              <SpriteStatusBadge status={sprite!.status} size="sm" />
+          <DropdownMenuContent align="end" className="w-64">
+            <div className="px-3 py-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <SpriteStatusBadge status={sprite!.status} size="sm" />
+                {sprite!.checkpointCount > 0 && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {sprite!.checkpointCount} checkpoint{sprite!.checkpointCount > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              {displayBranch && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <GitBranch className="h-3 w-3" />
+                  <span className="font-mono text-foreground">{displayBranch}</span>
+                </p>
+              )}
               {isInError && sprite!.errorMessage && (
-                <p className="text-xs text-destructive mt-1">{sprite!.errorMessage}</p>
+                <p className="text-xs text-destructive">{sprite!.errorMessage}</p>
               )}
             </div>
             <DropdownMenuSeparator />

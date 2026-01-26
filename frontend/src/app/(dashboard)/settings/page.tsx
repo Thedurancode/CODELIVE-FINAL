@@ -34,7 +34,6 @@ import {
   Users,
   Bot,
   Server,
-  Camera,
   Shield,
   Settings,
   Tv,
@@ -44,7 +43,6 @@ import { useAppStore } from '@/stores/app-store';
 import { toast } from 'sonner';
 import EmailSourceSettings from '@/components/settings/EmailSourceSettings';
 import { EmailAccountSettings } from '@/components/settings/EmailAccountSettings';
-import ProxyPicsOrders from '@/components/settings/ProxyPicsOrders';
 import MCPServersSettings from '@/components/settings/MCPServersSettings';
 import TeamManagement from '@/components/settings/TeamManagement';
 import { SpriteSettings } from '@/components/settings/SpriteSettings';
@@ -68,7 +66,6 @@ const settingsSections = [
   { id: 'team', label: 'Team', icon: Users },
   { id: 'agents', label: 'AI Agents', icon: Bot },
   { id: 'mcp', label: 'MCP Servers', icon: Server },
-  { id: 'proxypics', label: 'ProxyPics', icon: Camera },
   { id: 'templates', label: 'Templates', icon: FileText },
   { id: 'api', label: 'API Keys', icon: Key },
   { id: 'scoring', label: 'Scoring', icon: Sliders },
@@ -370,17 +367,6 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground">Configure Model Context Protocol servers</p>
             </div>
             <MCPServersSettings />
-          </div>
-        );
-
-      case 'proxypics':
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold">ProxyPics</h2>
-              <p className="text-sm text-muted-foreground">Manage property photo orders</p>
-            </div>
-            <ProxyPicsOrders />
           </div>
         );
 

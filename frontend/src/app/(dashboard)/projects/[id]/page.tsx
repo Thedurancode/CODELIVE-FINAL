@@ -332,64 +332,36 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <Button variant="ghost" size="icon" className="shrink-0 mt-1" asChild>
+      <div className="flex flex-col gap-4">
+        {/* Top row: Back button, logo, title */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="shrink-0" asChild>
             <Link href="/projects">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div className="flex items-start gap-4">
-            {project.logoUrl ? (
-              <img
-                src={project.logoUrl}
-                alt={`${project.title} logo`}
-                className="h-12 w-12 rounded-lg object-cover shrink-0"
-              />
-            ) : (
-              <div className="h-12 w-12 rounded-lg bg-accent-600/20 flex items-center justify-center shrink-0">
-                <FolderKanban className="h-6 w-6 text-accent-400" />
-              </div>
-            )}
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground">{project.title}</h1>
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                <Badge variant="outline" className={STATUS_COLORS[project.status]}>
-                  {STATUS_ICONS[project.status]}
-                  <span className="ml-1">{project.status.replace('_', ' ')}</span>
-                </Badge>
-                {project.tags && project.tags.map((tag) => (
-                  <Badge key={tag} variant="outline" className={getTagColor(tag)}>
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
+          {project.logoUrl ? (
+            <img
+              src={project.logoUrl}
+              alt={`${project.title} logo`}
+              className="h-11 w-11 rounded-lg object-cover shrink-0"
+            />
+          ) : (
+            <div className="h-11 w-11 rounded-lg bg-accent-600/20 flex items-center justify-center shrink-0">
+              <FolderKanban className="h-5 w-5 text-accent-400" />
             </div>
+          )}
+          <div>
+            <h1 className="text-xl font-bold text-foreground">{project.title}</h1>
+            <Badge variant="outline" className={`${STATUS_COLORS[project.status]} text-xs mt-1`}>
+              {project.status.replace('_', ' ')}
+            </Badge>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="relative overflow-hidden bg-red-500/10 backdrop-blur-sm border border-red-500/30 text-red-400 hover:bg-red-500/20 hover:text-red-300 hover:border-red-400/50 transition-all duration-300 shadow-[0_0_15px_rgba(239,68,68,0.15)] hover:shadow-[0_0_20px_rgba(239,68,68,0.25)]"
-            onClick={() => setIsCodingTaskDialogOpen(true)}
-            disabled={!project.githubUrl}
-            title={!project.githubUrl ? 'Add a GitHub URL to enable coding tasks' : 'Start Coding Task'}
-          >
-            <Bot className="h-4 w-4 mr-1" />
-            Code
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="relative overflow-hidden bg-green-500/10 backdrop-blur-sm border border-green-500/30 text-green-400 hover:bg-green-500/20 hover:text-green-300 hover:border-green-400/50 transition-all duration-300 shadow-[0_0_15px_rgba(34,197,94,0.15)] hover:shadow-[0_0_20px_rgba(34,197,94,0.25)]"
-            onClick={() => setIsNewIssueDialogOpen(true)}
-            disabled={!project.githubUrl}
-            title={!project.githubUrl ? 'Add a GitHub URL to create issues' : 'New Issue'}
-          >
-            <CirclePlus className="h-4 w-4 mr-1" />
-            Issue
-          </Button>
+
+        {/* Action buttons row - Consolidated */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Primary action: Open Terminal / Launch Agent */}
           {project.githubUrl && (
             <SpriteLaunchButton
               projectId={project.id}
@@ -397,71 +369,92 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               githubUrl={project.githubUrl}
             />
           )}
+
+          {/* GitHub dropdown - combines GitHub, Clone options */}
           {project.githubUrl && (
-            <Button variant="outline" size="sm" className="border" asChild>
-              <a href={project.githubUrl} target="_blank" rel="noopener noreferrer" title="Open in GitHub">
-                <Github className="h-4 w-4" />
-              </a>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Github className="h-4 w-4 mr-1" />
+                  GitHub
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-card border">
+                <DropdownMenuItem asChild>
+                  <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open Repository
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsNewIssueDialogOpen(true)}>
+                  <CirclePlus className="mr-2 h-4 w-4" />
+                  New Issue
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsCodingTaskDialogOpen(true)}>
+                  <Bot className="mr-2 h-4 w-4" />
+                  Start Coding Task
+                </DropdownMenuItem>
+                {canClone && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <a href={`x-github-client://openRepo/${project.githubUrl}`}>
+                        <MonitorDown className="mr-2 h-4 w-4" />
+                        Clone in GitHub Desktop
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}>
+                        <Code2 className="mr-2 h-4 w-4" />
+                        Clone in VS Code
+                      </a>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
-          {project.githubUrl && canClone && (
-            <Button variant="outline" size="sm" className="border" asChild>
-              <a href={`x-github-client://openRepo/${project.githubUrl}`} title="Clone in GitHub Desktop">
-                <MonitorDown className="h-4 w-4" />
-              </a>
-            </Button>
-          )}
-          {project.githubUrl && canClone && (
-            <Button variant="outline" size="sm" className="border" asChild>
-              <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`} title="Clone in VS Code">
-                <Code2 className="h-4 w-4" />
-              </a>
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="border"
-            onClick={handleCopyPublicLink}
-            title="Copy public link for ticket submissions"
-          >
-            {linkCopied ? (
-              <Check className="h-4 w-4 mr-1 text-green-400" />
-            ) : (
-              <Share2 className="h-4 w-4 mr-1" />
-            )}
-            Share
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border"
-            onClick={() => setIsClientPortalDialogOpen(true)}
-            title="Manage client portal access"
-          >
-            <UserPlus className="h-4 w-4 mr-1" />
-            Clients
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border"
-            onClick={() => setIsEditDialogOpen(true)}
-          >
-            <Edit2 className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
+
+          {/* Share dropdown - combines Share and Clients */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="border">
+              <Button variant="outline" size="sm">
+                <Share2 className="h-4 w-4 mr-1" />
+                Share
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="bg-card border">
+              <DropdownMenuItem onClick={handleCopyPublicLink}>
+                {linkCopied ? (
+                  <Check className="mr-2 h-4 w-4 text-green-400" />
+                ) : (
+                  <Copy className="mr-2 h-4 w-4" />
+                )}
+                Copy Public Link
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsClientPortalDialogOpen(true)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Manage Client Access
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* More actions dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-secondary border">
+            <DropdownMenuContent align="end" className="bg-card border">
+              <DropdownMenuItem onClick={() => setIsEditDialogOpen(true)}>
+                <Edit2 className="mr-2 h-4 w-4" />
+                Edit Project
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => handleStatusChange('active')}
                 disabled={project.status === 'active'}
-                className="text-foreground cursor-pointer"
               >
                 <Play className="mr-2 h-4 w-4" />
                 Set Active
@@ -469,7 +462,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <DropdownMenuItem
                 onClick={() => handleStatusChange('on_hold')}
                 disabled={project.status === 'on_hold'}
-                className="text-foreground cursor-pointer"
               >
                 <Pause className="mr-2 h-4 w-4" />
                 Put On Hold
@@ -477,7 +469,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <DropdownMenuItem
                 onClick={() => handleStatusChange('completed')}
                 disabled={project.status === 'completed'}
-                className="text-green-400 cursor-pointer"
+                className="text-green-400"
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Mark Completed
@@ -485,15 +477,15 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <DropdownMenuItem
                 onClick={() => handleStatusChange('archived')}
                 disabled={project.status === 'archived'}
-                className="text-muted-foreground cursor-pointer"
+                className="text-muted-foreground"
               >
                 <Archive className="mr-2 h-4 w-4" />
                 Archive
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={handleDelete}
-                className="text-red-400 cursor-pointer"
+                className="text-red-400"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Project
