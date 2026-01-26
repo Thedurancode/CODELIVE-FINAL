@@ -1,0 +1,782 @@
+/**
+ * Sprite Tasks Routes
+ *
+ * API routes for managing the sprite task queue.
+ */
+
+import { Router } from 'express';
+import spriteTasksController from '../controllers/spriteTasksController';
+
+const router = Router();
+
+/**
+ * @swagger
+ * tags:
+ *   name: Sprite Tasks
+ *   description: Task queue management for sprites
+ */
+
+// ============================================================================
+// TASK CRUD
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprite-tasks:
+ *   post:
+ *     summary: Create a new task
+ *     description: |
+ *       Create a task and add it to the queue. Tasks can be:
+ *       - Created manually with a title and description
+ *       - Linked to a GitHub issue for tracking
+ *
+ *       Tasks are processed by sprites which:
+ *       1. Create a branch named after the task
+ *       2. Run Claude to implement the task
+ *       3. Create a PR that references the issue
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - projectId
+ *               - title
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *               title:
+ *                 type: string
+ *                 description: Task title (used for branch naming)
+ *               description:
+ *                 type: string
+ *                 description: Detailed description
+ *               prompt:
+ *                 type: string
+ *                 description: Custom prompt for Claude (auto-generated if not provided)
+ *               priority:
+ *                 type: string
+ *                 enum: [low, medium, high, urgent]
+ *                 default: medium
+ *               githubIssueNumber:
+ *                 type: integer
+ *                 description: GitHub issue number to link
+ *               githubIssueUrl:
+ *                 type: string
+ *                 description: Full GitHub issue URL
+ *     responses:
+ *       200:
+ *         description: Task created
+ *       400:
+ *         description: Invalid input
+ */
+router.post('/', spriteTasksController.createTask);
+
+/**
+ * @swagger
+ * /api/sprite-tasks:
+ *   get:
+ *     summary: Get all tasks
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: string
+ *         description: Filter by project
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Comma-separated status filter (pending,in_progress,completed,etc)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Max number of tasks to return
+ *     responses:
+ *       200:
+ *         description: List of tasks
+ */
+router.get('/', spriteTasksController.getTasks);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/stats:
+ *   get:
+ *     summary: Get queue statistics
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: string
+ *         description: Filter by project
+ *     responses:
+ *       200:
+ *         description: Queue statistics
+ */
+router.get('/stats', spriteTasksController.getQueueStats);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}:
+ *   get:
+ *     summary: Get a single task
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task details
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id', spriteTasksController.getTask);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}:
+ *   put:
+ *     summary: Update a task
+ *     description: Only pending or assigned tasks can be updated
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               prompt:
+ *                 type: string
+ *               priority:
+ *                 type: string
+ *                 enum: [low, medium, high, urgent]
+ *     responses:
+ *       200:
+ *         description: Task updated
+ */
+router.put('/:id', spriteTasksController.updateTask);
+
+// ============================================================================
+// TASK ACTIONS
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/cancel:
+ *   post:
+ *     summary: Cancel a task
+ *     description: Only pending or assigned tasks can be cancelled
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task cancelled
+ */
+router.post('/:id/cancel', spriteTasksController.cancelTask);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/retry:
+ *   post:
+ *     summary: Retry a failed task
+ *     description: Only failed or cancelled tasks can be retried
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task queued for retry
+ */
+router.post('/:id/retry', spriteTasksController.retryTask);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/assign:
+ *   post:
+ *     summary: Manually assign a task to a sprite
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - spriteId
+ *             properties:
+ *               spriteId:
+ *                 type: string
+ *                 format: uuid
+ *     responses:
+ *       200:
+ *         description: Task assigned
+ */
+router.post('/:id/assign', spriteTasksController.assignTask);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/start:
+ *   post:
+ *     summary: Start processing an assigned task
+ *     description: Creates the branch and marks task as in_progress
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task started
+ */
+router.post('/:id/start', spriteTasksController.startTask);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/process:
+ *   post:
+ *     summary: Process a task completely
+ *     description: |
+ *       Runs the full workflow:
+ *       1. Assign to sprite (if not already)
+ *       2. Create branch
+ *       3. Run Claude
+ *       4. Create PR
+ *
+ *       This is an async operation that may take several minutes.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               spriteId:
+ *                 type: string
+ *                 description: Optional sprite ID (auto-selects if not provided)
+ *     responses:
+ *       200:
+ *         description: Task processed
+ */
+router.post('/:id/process', spriteTasksController.processTask);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/pr:
+ *   post:
+ *     summary: Create PR for a task
+ *     description: Creates a pull request for an in_progress task
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: PR created
+ */
+router.post('/:id/pr', spriteTasksController.createPR);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/complete:
+ *   post:
+ *     summary: Mark a task as completed
+ *     description: Manually mark a task as completed (usually done automatically when PR is merged)
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Task completed
+ */
+router.post('/:id/complete', spriteTasksController.completeTask);
+
+// ============================================================================
+// GITHUB ISSUE INTEGRATION
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprite-tasks/from-issue:
+ *   post:
+ *     summary: Create a task from a GitHub issue
+ *     description: |
+ *       Fetches the GitHub issue details and creates a task in the queue.
+ *       The issue title becomes the task title, and the issue body becomes the prompt.
+ *       This does NOT start processing - use process-issue for one-click execution.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - projectId
+ *               - issueNumber
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: The project (must have githubUrl configured)
+ *               issueNumber:
+ *                 type: integer
+ *                 description: GitHub issue number
+ *               priority:
+ *                 type: string
+ *                 enum: [low, medium, high, urgent]
+ *                 default: medium
+ *               spriteId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional specific sprite to use for fetching issue
+ *     responses:
+ *       200:
+ *         description: Task created from issue
+ *       400:
+ *         description: Invalid input or issue already closed
+ */
+router.post('/from-issue', spriteTasksController.createFromIssue);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/process-issue:
+ *   post:
+ *     summary: Process a GitHub issue (one-click automation)
+ *     description: |
+ *       The main entry point for processing GitHub issues. This:
+ *       1. Fetches the issue from GitHub
+ *       2. Creates a tracking task
+ *       3. Assigns to an available sprite
+ *       4. Creates a feature branch named after the issue
+ *       5. Runs Claude to implement the changes
+ *       6. Creates a PR that references and will close the issue when merged
+ *
+ *       This is an async operation that may take several minutes.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - projectId
+ *               - issueNumber
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: The project (must have githubUrl and a running sprite)
+ *               issueNumber:
+ *                 type: integer
+ *                 description: GitHub issue number to process
+ *               spriteId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional specific sprite (auto-selects if not provided)
+ *               priority:
+ *                 type: string
+ *                 enum: [low, medium, high, urgent]
+ *                 default: medium
+ *     responses:
+ *       200:
+ *         description: Issue processing started
+ *       400:
+ *         description: Invalid input
+ *       404:
+ *         description: No available sprite
+ */
+router.post('/process-issue', spriteTasksController.processIssue);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/diff:
+ *   get:
+ *     summary: Get diff for a task's branch
+ *     description: |
+ *       Returns the git diff between the task's branch and the base branch (main).
+ *       Useful for showing file changes in real-time during task execution.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Diff data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 files:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       path:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         enum: [added, modified, deleted, renamed]
+ *                       additions:
+ *                         type: integer
+ *                       deletions:
+ *                         type: integer
+ *                 branchName:
+ *                   type: string
+ *                 baseBranch:
+ *                   type: string
+ *                 additions:
+ *                   type: integer
+ *                 deletions:
+ *                   type: integer
+ *                 changedFiles:
+ *                   type: integer
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id/diff', spriteTasksController.getTaskDiff);
+
+// ============================================================================
+// GITHUB ISSUE SYNC
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/sync-status:
+ *   get:
+ *     summary: Get GitHub issue sync status for a task
+ *     description: |
+ *       Returns the current sync status between the task and its linked GitHub issue.
+ *       Includes comment count, current labels, and last sync time.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Sync status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 hasLinkedIssue:
+ *                   type: boolean
+ *                 lastSynced:
+ *                   type: string
+ *                   format: date-time
+ *                 issueNumber:
+ *                   type: integer
+ *                 issueUrl:
+ *                   type: string
+ *                 commentCount:
+ *                   type: integer
+ *                 currentLabels:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id/sync-status', spriteTasksController.getSyncStatus);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/activity:
+ *   get:
+ *     summary: Get activity timeline for a task
+ *     description: |
+ *       Returns a merged timeline of task status changes and GitHub issue comments.
+ *       Useful for showing a unified activity view.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Activity timeline
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   type:
+ *                     type: string
+ *                     enum: [status_change, comment, pr_created, error]
+ *                   timestamp:
+ *                     type: string
+ *                     format: date-time
+ *                   message:
+ *                     type: string
+ *                   actor:
+ *                     type: string
+ *                   metadata:
+ *                     type: object
+ *       404:
+ *         description: Task not found
+ */
+router.get('/:id/activity', spriteTasksController.getTaskActivity);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/{id}/sync:
+ *   post:
+ *     summary: Force sync a task with its GitHub issue
+ *     description: |
+ *       Manually triggers a bidirectional sync:
+ *       - Pulls latest issue title/body changes from GitHub
+ *       - Pulls new comments from GitHub
+ *       - Updates issue labels based on task status
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Sync completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 issueUpdated:
+ *                   type: boolean
+ *                 newComments:
+ *                   type: integer
+ *                 labelsUpdated:
+ *                   type: boolean
+ *       404:
+ *         description: Task not found
+ */
+router.post('/:id/sync', spriteTasksController.syncTask);
+
+// ============================================================================
+// SMART ISSUE PARSING
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprite-tasks/parse:
+ *   post:
+ *     summary: Parse issue text into structured task data
+ *     description: |
+ *       Parses GitHub issue content to extract:
+ *       - Subtasks from checklists
+ *       - Target files from path references
+ *       - Acceptance criteria from relevant sections
+ *       - Priority from labels
+ *       - Technical context from code blocks
+ *       - Generated Claude prompt
+ *
+ *       Use this to preview parsed data before creating a task.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 description: Issue title
+ *               body:
+ *                 type: string
+ *                 description: Issue body (markdown)
+ *               labels:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Issue labels for priority detection
+ *     responses:
+ *       200:
+ *         description: Parsed issue data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 title:
+ *                   type: string
+ *                 description:
+ *                   type: string
+ *                 subtasks:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       title:
+ *                         type: string
+ *                       completed:
+ *                         type: boolean
+ *                       order:
+ *                         type: integer
+ *                 targetFiles:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 acceptanceCriteria:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 priority:
+ *                   type: string
+ *                   enum: [low, medium, high, urgent]
+ *                 estimatedComplexity:
+ *                   type: string
+ *                   enum: [trivial, simple, moderate, complex]
+ *                 prompt:
+ *                   type: string
+ *                   description: Generated Claude prompt
+ */
+router.post('/parse', spriteTasksController.parseIssue);
+
+/**
+ * @swagger
+ * /api/sprite-tasks/parse-github-issue:
+ *   post:
+ *     summary: Fetch and parse a GitHub issue by number
+ *     description: |
+ *       Fetches an issue from GitHub and parses it into structured task data.
+ *       Returns parsed data plus original issue metadata.
+ *     tags: [Sprite Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - projectId
+ *               - issueNumber
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Project with linked GitHub repo
+ *               issueNumber:
+ *                 type: integer
+ *                 description: GitHub issue number
+ *               spriteId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional sprite to use for fetching
+ *     responses:
+ *       200:
+ *         description: Parsed issue data with GitHub metadata
+ *       404:
+ *         description: Issue not found
+ */
+router.post('/parse-github-issue', spriteTasksController.parseGitHubIssue);
+
+export default router;
