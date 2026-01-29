@@ -109,7 +109,7 @@ export const getSprite = async (req: Request, res: Response) => {
 export const createSprite = async (req: Request, res: Response) => {
   try {
     const organizationId = req.apiKeyOrganizationId!;
-    const { projectId, repoUrl, branch = 'main', startupCommand } = req.body;
+    const { projectId, repoUrl, branch = 'main' } = req.body;
 
     if (!projectId || !repoUrl) {
       return res.status(400).json({
@@ -137,7 +137,6 @@ export const createSprite = async (req: Request, res: Response) => {
       organizationId,
       repoUrl,
       branch,
-      startupCommand,
     });
 
     res.status(201).json({
@@ -333,7 +332,7 @@ export const executeCommand = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await spritesService.executeCommand(sprite.id, command, Math.min(timeout, 120000));
+    const result = await spritesService.execCommand(sprite.organizationId, sprite.spriteName, command);
 
     res.json({
       success: true,
@@ -541,7 +540,11 @@ export const deleteFile = async (req: Request, res: Response) => {
       });
     }
 
-    await spritesService.deleteFile(sprite.id, path);
+    await spritesService.deleteFile(sprite.id, {
+      path,
+      workingDir: sprite.workingDirectory || '/home/sprite',
+      recursive: req.body.recursive === true,
+    });
 
     res.json({
       success: true,
@@ -772,12 +775,11 @@ export const sendChatMessage = async (req: Request, res: Response) => {
       });
     }
 
-    // Use the sprites service to send chat
-    const response = await spritesService.sendChatMessage(sprite.id, message, conversationId);
-
-    res.json({
-      success: true,
-      data: response,
+    // Chat functionality not yet implemented in public API
+    // TODO: Implement chat integration via Claude Code streaming
+    res.status(501).json({
+      success: false,
+      error: 'Chat functionality not yet implemented in public API. Use WebSocket streaming instead.',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -810,15 +812,11 @@ export const getChatHistory = async (req: Request, res: Response) => {
       });
     }
 
-    const history = await spritesService.getChatHistory(
-      sprite.id,
-      conversationId as string,
-      Number(limit)
-    );
-
-    res.json({
-      success: true,
-      data: history,
+    // Chat history functionality not yet implemented in public API
+    // TODO: Implement chat history retrieval
+    res.status(501).json({
+      success: false,
+      error: 'Chat history functionality not yet implemented in public API.',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

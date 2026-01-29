@@ -20,8 +20,43 @@ import { spriteTaskService } from '../services/SpriteTaskService';
 import { githubIssueSyncService } from '../services/GitHubIssueSyncService';
 import { githubSyncWebSocketService } from '../services/GitHubSyncWebSocketService';
 import { deployHookService } from '../services/DeployHookService';
+import { projectRecapService } from '../services/ProjectRecapService';
+import Project from '../models/Project';
 
 const router = Router();
+
+/**
+ * Helper to queue recap updates for projects linked to a GitHub repo
+ */
+async function queueRecapUpdateForRepo(repoUrl: string): Promise<void> {
+  try {
+    // Find projects that link to this repo
+    const { Op } = await import('sequelize');
+    const projects = await Project.findAll({
+      where: {
+        githubUrl: {
+          [Op.or]: [
+            repoUrl,
+            repoUrl + '.git',
+            repoUrl.replace('.git', ''),
+          ],
+        },
+      },
+      attributes: ['id'],
+    });
+
+    // Queue recap updates for all linked projects
+    for (const project of projects) {
+      projectRecapService.queueUpdate(project.id);
+    }
+
+    if (projects.length > 0) {
+      console.log(`📝 Queued recap updates for ${projects.length} project(s) linked to ${repoUrl}`);
+    }
+  } catch (error) {
+    console.error('Failed to queue recap updates for repo:', error);
+  }
+}
 
 // Rate limiter for webhooks
 const webhookLimiter = rateLimit({
@@ -329,6 +364,9 @@ router.post('/', webhookLimiter, async (req: Request, res: Response) => {
               }
             }
           }
+
+          // Queue recap update for any projects linked to this repo (non-blocking)
+          queueRecapUpdateForRepo(repository.html_url).catch(() => {});
 
           return res.json({
             success: true,

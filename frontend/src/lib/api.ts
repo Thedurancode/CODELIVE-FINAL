@@ -14,53 +14,11 @@ async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  // Try to get token from multiple sources
-  let token = null;
-
-  if (typeof window !== 'undefined') {
-    // 1. Check localStorage first (fastest) - try all possible token keys
-    token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
-
-    // 2. Check cookie if no localStorage token
-    if (!token) {
-      const cookieMatch = document.cookie.match(/(?:dispotree_token|codelive_token)=([^;]+)/);
-      if (cookieMatch) {
-        token = cookieMatch[1];
-        // Cache in localStorage for faster access
-        localStorage.setItem('dispotree_token', token);
-      }
-    }
-
-    // 3. Only try Supabase if no token found (with timeout to prevent hanging)
-    if (!token) {
-      try {
-        // Dynamic import to avoid SSR issues
-        const { supabase } = await import('./supabase');
-        if (supabase?.auth) {
-          // Add timeout to prevent hanging when Supabase is down
-          const sessionPromise = supabase.auth.getSession();
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Supabase timeout')), 2000)
-          );
-
-          const { data } = await Promise.race([sessionPromise, timeoutPromise]) as { data: { session: { access_token: string } | null } };
-          if (data?.session?.access_token) {
-            token = data.session.access_token;
-            // Cache in localStorage for faster access
-            localStorage.setItem('dispotree_token', token);
-          }
-        }
-      } catch (e) {
-        console.warn('Supabase auth not available:', e);
-      }
-    }
-  }
-
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
+    credentials: 'include', // Send cookies for session-based auth
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
   });
@@ -118,22 +76,9 @@ export const api = {
     }),
 
   upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
-    let token = null;
-    if (typeof window !== 'undefined') {
-      token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
-      if (!token) {
-        const cookieMatch = document.cookie.match(/(?:dispotree_token|codelive_token)=([^;]+)/);
-        if (cookieMatch) {
-          token = cookieMatch[1];
-        }
-      }
-    }
-
     const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
+      credentials: 'include', // Send cookies for session-based auth
       body: formData,
     });
 
@@ -165,34 +110,13 @@ export async function streamChat(
   onToolEvent?: (event: ToolEvent) => void,
   abortSignal?: AbortSignal
 ): Promise<string> {
-  // Get token from Supabase session first, fallback to localStorage (same as fetchApi)
-  let token = null;
-  if (typeof window !== 'undefined') {
-    try {
-      const { supabase } = await import('./supabase');
-      if (supabase?.auth) {
-        const { data } = await supabase.auth.getSession();
-        token = data?.session?.access_token;
-      }
-    } catch (e) {
-      console.warn('Supabase auth not available for chat:', e);
-    }
-
-    // Fallback to localStorage if no session
-    if (!token) {
-      token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
-    }
-  }
-
-  let useOpenAICompat = !token;
-
-  const requestChat = async (useCompat: boolean, authToken: string | null) => {
+  const requestChat = async (useCompat: boolean) => {
     const endpoint = useCompat ? '/v1/chat/completions' : '/api/agent/chat/stream';
     return fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
+      credentials: 'include', // Send cookies for session-based auth
       headers: {
         'Content-Type': 'application/json',
-        ...(authToken && { Authorization: `Bearer ${authToken}` }),
       },
       body: JSON.stringify(
         useCompat
@@ -208,13 +132,12 @@ export async function streamChat(
     });
   };
 
-  let res = await requestChat(useOpenAICompat, token);
+  let res = await requestChat(false);
 
   // If auth fails, try the unauthenticated endpoint as fallback
-  if (!res.ok && !useOpenAICompat && res.status === 401) {
+  if (!res.ok && res.status === 401) {
     console.warn('Chat auth failed, falling back to unauthenticated endpoint');
-    useOpenAICompat = true;
-    res = await requestChat(true, null);
+    res = await requestChat(true);
   }
 
   if (!res.ok) {
@@ -273,6 +196,8 @@ export async function streamChat(
   if (reader) {
     let reading = true;
     let buffer = '';
+    const useOpenAICompat = res.url.includes('/v1/');
+
     try {
       while (reading) {
         // Check abort signal before each read
@@ -360,23 +285,11 @@ export async function streamSpriteChat(
     abortSignal?: AbortSignal;
   } = {}
 ): Promise<{ fullContent: string; sessionId?: string }> {
-  // Get auth token
-  let token = null;
-  if (typeof window !== 'undefined') {
-    token = localStorage.getItem('dispotree_token') || localStorage.getItem('codelive_token');
-    if (!token) {
-      const cookieMatch = document.cookie.match(/(?:dispotree_token|codelive_token)=([^;]+)/);
-      if (cookieMatch) {
-        token = cookieMatch[1];
-      }
-    }
-  }
-
   const res = await fetch(`${API_URL}/api/sprites/${spriteId}/chat/stream`, {
     method: 'POST',
+    credentials: 'include', // Send cookies for session-based auth
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
     },
     body: JSON.stringify({
       prompt,

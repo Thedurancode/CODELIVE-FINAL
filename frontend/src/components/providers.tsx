@@ -5,6 +5,7 @@ import { useState, createContext, useContext, useEffect, useCallback, ReactNode 
 import { Toaster, toast } from 'sonner';
 import { useWebSocket, WebSocketMessage } from '@/hooks/use-websocket';
 import { ThemeProvider } from '@/components/providers/theme-provider';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ============================================================================
 // NOTIFICATION CONTEXT
@@ -149,15 +150,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <NotificationProvider>
-          {children}
-        </NotificationProvider>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            className: 'bg-card text-foreground border',
-          }}
-        />
+        <TooltipProvider delayDuration={0}>
+          <NotificationProvider>
+            {children}
+          </NotificationProvider>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              className: 'bg-card text-foreground border',
+            }}
+          />
+        </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -9,6 +9,7 @@
 
 import ProjectNote from '../models/ProjectNote';
 import MarketplaceUser from '../models/MarketplaceUser';
+import { projectRecapService } from './ProjectRecapService';
 
 // Interfaces
 interface CreateNoteInput {
@@ -55,6 +56,9 @@ class ProjectNoteService {
       content: input.content,
       subject: input.subject,
     });
+
+    // Queue recap update (non-blocking)
+    projectRecapService.queueUpdate(input.projectId);
 
     // Fetch with author
     return this.getNoteById(note.id, input.organizationId) as Promise<ProjectNoteWithAuthor>;
@@ -131,6 +135,9 @@ class ProjectNoteService {
 
     await note.update(updateData);
 
+    // Queue recap update (non-blocking)
+    projectRecapService.queueUpdate(note.projectId);
+
     return this.getNoteById(noteId, organizationId);
   }
 
@@ -153,7 +160,12 @@ class ProjectNoteService {
       throw new Error('Only the author can delete this note');
     }
 
+    const projectId = note.projectId;
     await note.destroy();
+
+    // Queue recap update (non-blocking)
+    projectRecapService.queueUpdate(projectId);
+
     return true;
   }
 

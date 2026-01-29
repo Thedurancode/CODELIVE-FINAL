@@ -1,43 +1,68 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2 } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Loader2, Camera, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
-
-interface AuthResponse {
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    company?: string;
-    verified?: boolean;
-  };
-  token: string;
-  expiresIn: number;
-}
 
 const REMEMBER_EMAIL_KEY = 'codelive_remember_email';
 const REMEMBER_ME_KEY = 'codelive_remember_me';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login, register, isLoading: authLoading, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [isRegister, setIsRegister] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     email: '',
     password: '',
     name: '',
   });
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Image must be less than 5MB');
+        return;
+      }
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'U';
+  };
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && !authLoading) {
+      router.push('/projects');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   // Check if system needs first-run setup
   useEffect(() => {
@@ -82,40 +107,33 @@ export default function LoginPage() {
 
     try {
       if (isRegister) {
-        // Register with backend API
-        const response = await api.post<AuthResponse>('/api/auth/local/register', {
-          email: form.email,
-          password: form.password,
-          name: form.name,
-        });
+        await register(form.email, form.password, form.name);
 
-        if (response.token) {
-          document.cookie = `dispotree_token=${response.token}; path=/; max-age=${60 * 60 * 24 * 7}`;
-          localStorage.setItem('dispotree_token', response.token);
-          toast.success('Account created!');
-          router.push('/projects');
-        }
-      } else {
-        // Login with backend API
-        const response = await api.post<AuthResponse>('/api/auth/local/login', {
-          email: form.email,
-          password: form.password,
-        });
-
-        if (response.token) {
-          if (rememberMe) {
-            localStorage.setItem(REMEMBER_ME_KEY, 'true');
-            localStorage.setItem(REMEMBER_EMAIL_KEY, form.email);
-            document.cookie = `dispotree_token=${response.token}; path=/; max-age=${60 * 60 * 24 * 30}`;
-          } else {
-            localStorage.removeItem(REMEMBER_ME_KEY);
-            localStorage.removeItem(REMEMBER_EMAIL_KEY);
-            document.cookie = `dispotree_token=${response.token}; path=/`;
+        // Upload avatar if selected
+        if (avatarFile) {
+          try {
+            const formData = new FormData();
+            formData.append('file', avatarFile);
+            await api.upload('/api/users/me/avatar', formData);
+          } catch (avatarError) {
+            console.error('Failed to upload avatar:', avatarError);
+            // Don't fail registration if avatar upload fails
           }
-          localStorage.setItem('dispotree_token', response.token);
-          toast.success('Welcome back!');
-          router.push('/projects');
         }
+
+        toast.success('Account created!');
+      } else {
+        // Handle remember me
+        if (rememberMe) {
+          localStorage.setItem(REMEMBER_ME_KEY, 'true');
+          localStorage.setItem(REMEMBER_EMAIL_KEY, form.email);
+        } else {
+          localStorage.removeItem(REMEMBER_ME_KEY);
+          localStorage.removeItem(REMEMBER_EMAIL_KEY);
+        }
+
+        await login(form.email, form.password);
+        toast.success('Welcome back!');
       }
     } catch (error) {
       const err = error as Error;
@@ -205,16 +223,50 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
-              <div className="space-y-2">
-                <Label className="text-zinc-400">Name</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Your name"
-                  className="bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:ring-primary/20"
-                  required={isRegister}
-                />
-              </div>
+              <>
+                {/* Avatar Upload */}
+                <div className="flex flex-col items-center gap-3">
+                  <div
+                    className="relative cursor-pointer group"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Avatar className="h-20 w-20 border-2 border-zinc-700 group-hover:border-primary transition-colors">
+                      <AvatarImage src={avatarPreview || undefined} alt="Profile" />
+                      <AvatarFallback className="bg-zinc-800 text-zinc-400 text-xl">
+                        {form.name ? getInitials(form.name) : <User className="h-8 w-8" />}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Camera className="h-6 w-6 text-white" />
+                    </div>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    {avatarPreview ? 'Change photo' : 'Add profile photo'}
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-zinc-400">Name</Label>
+                  <Input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Your name"
+                    className="bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:ring-primary/20"
+                    required={isRegister}
+                  />
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label className="text-zinc-400">Email</Label>
@@ -258,9 +310,9 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading}
+              disabled={isLoading || authLoading}
             >
-              {isLoading ? (
+              {isLoading || authLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {isRegister ? 'Creating...' : 'Signing in...'}
@@ -278,15 +330,6 @@ export default function LoginPage() {
             >
               {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
-            {!isRegister && (
-              <button
-                type="button"
-                onClick={() => router.push('/auth/magic')}
-                className="text-sm text-primary hover:text-primary/80 transition-colors"
-              >
-                Sign in with magic link (no password)
-              </button>
-            )}
           </div>
         </CardContent>
       </Card>

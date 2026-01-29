@@ -13,6 +13,7 @@ import Contact from '../models/Contact';
 import Project from '../models/Project';
 import MarketplaceUser from '../models/MarketplaceUser';
 import { gitHubService, CollaboratorPermission } from './GitHubService';
+import { projectRecapService } from './ProjectRecapService';
 
 // Interfaces
 interface AddContactData {
@@ -155,6 +156,9 @@ class ProjectContactService {
     this.autoInviteToGitHub(data.projectId, data.contactId, projectContact.id).catch((err) => {
       console.error('GitHub auto-invite failed:', err);
     });
+
+    // Queue recap update (non-blocking)
+    projectRecapService.queueUpdate(data.projectId);
 
     return result as ProjectContactWithRelations;
   }
@@ -399,6 +403,12 @@ class ProjectContactService {
     const deleted = await ProjectContact.destroy({
       where: { projectId, contactId },
     });
+
+    // Queue recap update if contact was removed (non-blocking)
+    if (deleted > 0) {
+      projectRecapService.queueUpdate(projectId);
+    }
+
     return deleted > 0;
   }
 

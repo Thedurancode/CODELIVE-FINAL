@@ -9,6 +9,7 @@
 
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
+import type MarketplaceUser from './MarketplaceUser';
 
 interface DealActionAttributes {
   id: string;
@@ -117,6 +118,9 @@ class DealAction
   declare matchedBuyBoxId: string | undefined;
 
   declare readonly createdAt: Date;
+
+  // Associations
+  declare user?: MarketplaceUser;
 }
 
 DealAction.init(

@@ -243,3 +243,38 @@ export function useRemoveProjectMember() {
     },
   });
 }
+
+// ============================================================================
+// PROJECT RECAP HOOKS
+// ============================================================================
+
+export interface ProjectRecap {
+  recap: string | null;
+  updatedAt: string | null;
+  projectId: string;
+}
+
+/**
+ * Get the AI-generated recap for a project
+ */
+export function useProjectRecap(projectId: string) {
+  return useQuery({
+    queryKey: ['projectRecap', projectId],
+    queryFn: () => api.get<ProjectRecap>(`/api/projects/${projectId}/recap`),
+    enabled: !!projectId,
+  });
+}
+
+/**
+ * Force refresh the AI recap for a project
+ */
+export function useRefreshProjectRecap() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, userName }: { projectId: string; userName?: string }) =>
+      api.post<ProjectRecap>(`/api/projects/${projectId}/recap/refresh`, { userName }),
+    onSuccess: (data, { projectId }) => {
+      queryClient.setQueryData(['projectRecap', projectId], data);
+    },
+  });
+}

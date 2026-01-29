@@ -310,6 +310,8 @@ export function useTVRemoteReceiver(handlers: TVRemoteHandlers, roomCode?: strin
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('broadcast');
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [wasKickedOut, setWasKickedOut] = useState(false);
+  const kickedOutRef = useRef(false); // Use ref to avoid stale closure in callbacks
 
   // Broadcast status via appropriate channel
   const broadcastStatus = useCallback(() => {
@@ -412,7 +414,14 @@ export function useTVRemoteReceiver(handlers: TVRemoteHandlers, roomCode?: strin
         } else if (data.type === 'room-info') {
           setRoomInfo(data.payload as RoomInfo);
         } else if (data.type === 'error') {
-          console.error('[TVRemote] WebSocket error:', data.error);
+          console.warn('[TVRemote] WebSocket error:', data.error);
+          // Handle "kicked out" scenario - another display took over this room
+          if (data.error === 'Another display connected to this room') {
+            console.info('[TVRemote] This display was replaced by another. Stopping reconnection attempts.');
+            kickedOutRef.current = true;
+            setWasKickedOut(true);
+            // Close WebSocket cleanly - onclose will check kickedOutRef and skip reconnection
+          }
         }
       } catch (e) {
         console.error('[TVRemote] Failed to parse message:', e);
@@ -421,6 +430,12 @@ export function useTVRemoteReceiver(handlers: TVRemoteHandlers, roomCode?: strin
 
     ws.onclose = () => {
       wsRef.current = null;
+
+      // Don't reconnect if this display was kicked out by another display
+      if (kickedOutRef.current) {
+        console.info('[TVRemote] Not reconnecting - display was replaced.');
+        return;
+      }
 
       // Attempt to reconnect after 3 seconds
       if (reconnectTimeoutRef.current) {
@@ -485,10 +500,21 @@ export function useTVRemoteReceiver(handlers: TVRemoteHandlers, roomCode?: strin
     };
   }, [roomCode, connectWebSocket, disconnectWebSocket, processCommand, broadcastStatus]);
 
+  // Reset kicked out state and attempt to reconnect
+  const resetConnection = useCallback(() => {
+    kickedOutRef.current = false;
+    setWasKickedOut(false);
+    if (roomCode) {
+      connectWebSocket(roomCode);
+    }
+  }, [roomCode, connectWebSocket]);
+
   return {
     broadcastStatus,
     connectionMode,
     roomInfo,
+    wasKickedOut,
+    resetConnection,
   };
 }
 

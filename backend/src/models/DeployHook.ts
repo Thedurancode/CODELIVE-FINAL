@@ -449,10 +449,5 @@ export default DeployHook;
 export {
   DeployHookAttributes,
   DeployHookCreationAttributes,
-  DeployHookProvider,
-  DeployHookStatus,
-  DeployTrigger,
-  DeployEnvironment,
-  DeployExecutionStatus,
   ProviderConfig,
 };

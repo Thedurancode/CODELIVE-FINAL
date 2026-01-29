@@ -1352,6 +1352,7 @@ interface HackerNewsItem {
   score: number;
   descendants?: number;
   type: string;
+  text?: string; // For Ask HN, Show HN, and other self-posts
 }
 
 function HackerNewsSlide() {
@@ -1492,6 +1493,38 @@ function HackerNewsSlide() {
                 {currentStory.title}
               </h2>
 
+              {/* Description / Text Content */}
+              {currentStory.text && (
+                <div className="mb-8 p-6 rounded-2xl bg-zinc-800/40 border border-zinc-700/50">
+                  <p
+                    className="text-2xl text-zinc-300 leading-relaxed line-clamp-4"
+                    dangerouslySetInnerHTML={{
+                      __html: currentStory.text
+                        .replace(/<p>/g, '')
+                        .replace(/<\/p>/g, ' ')
+                        .replace(/<a\s+href="([^"]+)"[^>]*>([^<]+)<\/a>/g, '$2')
+                        .substring(0, 500) + (currentStory.text.length > 500 ? '...' : '')
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* URL Preview for external links */}
+              {currentStory.url && !currentStory.text && (
+                <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-zinc-800/60 to-zinc-800/40 border border-zinc-700/50">
+                  <div className="flex items-start gap-4">
+                    <div className="w-16 h-16 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                      <Globe className="w-8 h-8 text-orange-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-zinc-400 text-lg mb-1">External Article</p>
+                      <p className="text-2xl text-orange-300 font-medium truncate">{getDomain(currentStory.url)}</p>
+                      <p className="text-zinc-500 text-base mt-2 truncate">{currentStory.url}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Source & Author */}
               <div className="flex items-center gap-8 mb-8">
                 {currentStory.url && (
@@ -1556,18 +1589,37 @@ function HackerNewsSlide() {
       {/* Bottom Bar - Next Up Preview */}
       {stories.length > 0 && (
         <div className="relative z-10 border-t border-zinc-800/50 bg-black/50 backdrop-blur-sm">
-          <div className="flex items-center gap-8 px-12 py-4">
+          <div className="flex items-center gap-8 px-12 py-5">
             <span className="text-orange-500 font-bold text-lg whitespace-nowrap flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
               NEXT UP
             </span>
-            <div className="flex-1 flex items-center gap-6 overflow-hidden">
+            <div className="flex-1 flex items-center gap-8 overflow-hidden">
               {stories.slice(currentIndex + 1, currentIndex + 4).concat(stories.slice(0, Math.max(0, 3 - (stories.length - currentIndex - 1)))).slice(0, 3).map((story, idx) => (
-                <div key={story.id} className="flex items-center gap-3 opacity-60">
-                  <span className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-400">
+                <div key={story.id} className="flex items-center gap-4 flex-1 max-w-md">
+                  <span className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-lg font-bold text-zinc-400 flex-shrink-0">
                     {((currentIndex + 1 + idx) % stories.length) + 1}
                   </span>
-                  <span className="text-zinc-400 truncate max-w-xs">{story.title}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-zinc-300 font-medium truncate">{story.title}</p>
+                    <div className="flex items-center gap-3 text-sm text-zinc-500 mt-1">
+                      <span className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
+                        </svg>
+                        {story.score}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" />
+                        {story.descendants || 0}
+                      </span>
+                      {story.url && (
+                        <span className="text-orange-400/70 truncate max-w-[120px]">
+                          {getDomain(story.url)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

@@ -263,7 +263,7 @@ export interface TaskStats {
 }
 
 // Project Management Types
-export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'archived' | 'cancelled';
+export type ProjectStatus = 'in_talks' | 'now_coding' | 'needs_review' | 'completed' | 'cancelled';
 
 export interface Project {
   id: string;

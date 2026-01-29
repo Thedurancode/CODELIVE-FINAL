@@ -20,8 +20,8 @@ interface ProjectAttributes {
   deploymentUrl: string | null;
   status: ProjectStatus;
 
-  // Organization scoping (team-shared)
-  organizationId: string;
+  // Organization scoping (legacy, now uses createdById)
+  organizationId: string | null;
   createdById: string | null;
 
   // Dates
@@ -32,6 +32,10 @@ interface ProjectAttributes {
   // Additional info
   tags: string[];
   metadata: Record<string, unknown> | null;
+
+  // AI-generated recap
+  aiRecap: string | null;
+  aiRecapUpdatedAt: Date | null;
 
   // Timestamps
   createdAt: Date;
@@ -47,12 +51,15 @@ interface ProjectCreationAttributes
     | 'githubUrl'
     | 'deploymentUrl'
     | 'status'
+    | 'organizationId'
     | 'createdById'
     | 'startDate'
     | 'targetEndDate'
     | 'actualEndDate'
     | 'tags'
     | 'metadata'
+    | 'aiRecap'
+    | 'aiRecapUpdatedAt'
     | 'createdAt'
     | 'updatedAt'
   > {}
@@ -69,7 +76,7 @@ class Project
   declare deploymentUrl: string | null;
   declare status: ProjectStatus;
 
-  declare organizationId: string;
+  declare organizationId: string | null;
   declare createdById: string | null;
 
   declare startDate: Date | null;
@@ -78,6 +85,9 @@ class Project
 
   declare tags: string[];
   declare metadata: Record<string, unknown> | null;
+
+  declare aiRecap: string | null;
+  declare aiRecapUpdatedAt: Date | null;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -191,14 +201,9 @@ Project.init(
     },
     organizationId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       field: 'organization_id',
-      references: {
-        model: 'organizations',
-        key: 'id',
-      },
-      onDelete: 'CASCADE',
-      comment: 'Organization that owns this project (team-shared)',
+      comment: 'Organization that owns this project (legacy, now uses createdById)',
     },
     createdById: {
       type: DataTypes.UUID,
@@ -236,6 +241,18 @@ Project.init(
       allowNull: true,
       defaultValue: null,
       comment: 'Flexible metadata for additional fields',
+    },
+    aiRecap: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'ai_recap',
+      comment: 'AI-generated project activity recap for voice agents',
+    },
+    aiRecapUpdatedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'ai_recap_updated_at',
+      comment: 'When the AI recap was last updated',
     },
     createdAt: {
       type: DataTypes.DATE,

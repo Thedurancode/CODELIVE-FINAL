@@ -14,10 +14,14 @@ import MarketplaceUser from '../models/MarketplaceUser';
 import Contact from '../models/Contact';
 import ProjectContact from '../models/ProjectContact';
 import ProjectNote from '../models/ProjectNote';
+import ProjectMember from '../models/ProjectMember';
 import Task from '../models/Task';
+import { projectRecapService } from './ProjectRecapService';
 
 // Interfaces
 interface ProjectFilters {
+  userId?: string; // Filter by user access (creator or member)
+  organizationId?: string; // Legacy: filter by organization
   page?: number;
   limit?: number;
   search?: string;
@@ -34,7 +38,7 @@ interface CreateProjectData {
   githubUrl?: string;
   deploymentUrl?: string;
   status?: ProjectStatus;
-  organizationId: string;
+  organizationId?: string; // Optional - not required for user-based access
   createdById?: string;
   startDate?: Date | string;
   targetEndDate?: Date | string;
@@ -79,9 +83,12 @@ class ProjectService {
 
   /**
    * Get projects with filtering and pagination
+   * Can filter by userId (creator) or organizationId (legacy)
    */
-  async getProjects(organizationId: string, filters: ProjectFilters = {}) {
+  async getProjects(filters: ProjectFilters = {}) {
     const {
+      userId,
+      organizationId,
       page = 1,
       limit = 20,
       search,
@@ -93,30 +100,55 @@ class ProjectService {
     } = filters;
 
     const offset = (page - 1) * limit;
-    const where: Record<string, unknown> = { organizationId };
+    const conditions: any[] = [];
+
+    // Filter by user access (projects they created OR are a member of)
+    if (userId) {
+      // Get project IDs where user is an active member
+      const memberProjects = await ProjectMember.findAll({
+        where: { userId, isActive: true },
+        attributes: ['projectId'],
+      });
+      const memberProjectIds = memberProjects.map((m) => m.projectId);
+
+      // User can see projects they created OR are a member of
+      const accessConditions: any[] = [{ createdById: userId }];
+      if (memberProjectIds.length > 0) {
+        accessConditions.push({ id: { [Op.in]: memberProjectIds } });
+      }
+      conditions.push({ [Op.or]: accessConditions });
+    } else if (organizationId) {
+      // Legacy: filter by organization
+      conditions.push({ organizationId });
+    }
 
     // Status filter
     if (status) {
-      where.status = Array.isArray(status) ? { [Op.in]: status } : status;
+      conditions.push({ status: Array.isArray(status) ? { [Op.in]: status } : status });
     }
 
-    // Created by filter
+    // Created by filter (explicit filter, different from access control)
     if (createdById) {
-      where.createdById = createdById;
+      conditions.push({ createdById });
     }
 
     // Tags filter
     if (tags && tags.length > 0) {
-      where.tags = { [Op.overlap]: tags };
+      conditions.push({ tags: { [Op.overlap]: tags } });
     }
 
     // Search filter
     if (search) {
-      where[Op.or as any] = [
-        { title: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
-      ];
+      conditions.push({
+        [Op.or]: [
+          { title: { [Op.iLike]: `%${search}%` } },
+          { description: { [Op.iLike]: `%${search}%` } },
+        ],
+      });
     }
+
+    // Combine all conditions with AND
+    const where = conditions.length > 0 ? { [Op.and]: conditions } : {};
 
     const { count, rows } = await Project.findAndCountAll({
       where,
@@ -216,7 +248,7 @@ class ProjectService {
       description: data.description || null,
       githubUrl: data.githubUrl || null,
       deploymentUrl: data.deploymentUrl || null,
-      status: data.status || 'active',
+      status: data.status || 'in_talks',
       organizationId: data.organizationId,
       createdById: data.createdById || null,
       startDate: data.startDate ? new Date(data.startDate) : null,
@@ -232,8 +264,11 @@ class ProjectService {
   /**
    * Update a project
    */
-  async updateProject(id: string, organizationId: string, data: UpdateProjectData): Promise<Project | null> {
-    const project = await Project.findOne({ where: { id, organizationId } });
+  async updateProject(id: string, organizationId: string | undefined, data: UpdateProjectData): Promise<Project | null> {
+    const where: Record<string, unknown> = { id };
+    if (organizationId) where.organizationId = organizationId;
+
+    const project = await Project.findOne({ where });
     if (!project) return null;
 
     const updates: Partial<Project> = {};
@@ -263,16 +298,22 @@ class ProjectService {
 
     await project.update(updates);
 
-    return this.getProjectForOrganization(id, organizationId);
+    // Queue recap update if status or significant fields changed (non-blocking)
+    if (data.status !== undefined || data.title !== undefined || data.description !== undefined) {
+      projectRecapService.queueUpdate(id);
+    }
+
+    return this.getProject(id);
   }
 
   /**
    * Delete a project
    */
-  async deleteProject(id: string, organizationId: string): Promise<boolean> {
-    const deleted = await Project.destroy({
-      where: { id, organizationId },
-    });
+  async deleteProject(id: string, organizationId?: string): Promise<boolean> {
+    const where: Record<string, unknown> = { id };
+    if (organizationId) where.organizationId = organizationId;
+
+    const deleted = await Project.destroy({ where });
     return deleted > 0;
   }
 
@@ -291,10 +332,10 @@ class ProjectService {
 
     // Count by status
     const byStatus: Record<ProjectStatus, number> = {
-      active: 0,
-      on_hold: 0,
+      in_talks: 0,
+      now_coding: 0,
+      needs_review: 0,
       completed: 0,
-      archived: 0,
       cancelled: 0,
     };
 

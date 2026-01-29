@@ -14,12 +14,11 @@ interface MarketplaceUserAttributes {
   name: string;
   company?: string;
   phone?: string;
-  role: 'buyer' | 'investor' | 'wholesaler' | 'agent' | 'broker' | 'broker_assistant' |
-        'transaction_coordinator' | 'team_member' | 'admin' | 'super_admin' | 'client';
+  role: 'admin' | 'team_member' | 'client' | 'contact';
   verified: boolean;
   avatar?: string;
   fundId?: string; // Link to Fund for institutional buyers (from Fast Buy Box)
-  organizationId?: string; // Organization the user belongs to
+  betterAuthUserId?: string; // Link to Better Auth user
 
   // Team member profile fields
   bio?: string; // Team member biography/about section
@@ -70,7 +69,7 @@ interface MarketplaceUserCreationAttributes
     | 'verified'
     | 'avatar'
     | 'fundId'
-    | 'organizationId'
+    | 'betterAuthUserId'
     | 'bio'
     | 'expertise'
     | 'title'
@@ -110,12 +109,11 @@ class MarketplaceUser
   declare name: string;
   declare company: string | undefined;
   declare phone: string | undefined;
-  declare role: 'buyer' | 'investor' | 'wholesaler' | 'agent' | 'broker' | 'broker_assistant' |
-        'transaction_coordinator' | 'team_member' | 'admin' | 'super_admin' | 'client';
+  declare role: 'admin' | 'team_member' | 'client' | 'contact';
   declare verified: boolean;
   declare avatar: string | undefined;
   declare fundId: string | undefined;
-  declare organizationId: string | undefined;
+  declare betterAuthUserId: string | undefined;
 
   // Team member profile fields
   declare bio: string | undefined;
@@ -184,9 +182,8 @@ MarketplaceUser.init(
       allowNull: true,
     },
     role: {
-      type: DataTypes.ENUM('buyer', 'investor', 'wholesaler', 'agent', 'broker', 'broker_assistant',
-                          'transaction_coordinator', 'team_member', 'admin', 'super_admin', 'client'),
-      defaultValue: 'buyer',
+      type: DataTypes.ENUM('admin', 'team_member', 'client', 'contact'),
+      defaultValue: 'team_member',
     },
     verified: {
       type: DataTypes.BOOLEAN,
@@ -204,16 +201,12 @@ MarketplaceUser.init(
         key: 'id',
       },
     },
-    organizationId: {
-      type: DataTypes.UUID,
+    betterAuthUserId: {
+      type: DataTypes.TEXT,
       allowNull: true,
-      field: 'organization_id',
-      references: {
-        model: 'organizations',
-        key: 'id',
-      },
-      onDelete: 'SET NULL',
-      comment: 'Organization the user belongs to',
+      unique: true,
+      field: 'better_auth_user_id',
+      comment: 'Link to Better Auth user table',
     },
     // Team member profile fields
     bio: {
@@ -361,7 +354,7 @@ MarketplaceUser.init(
       { fields: ['verified'] },
       { fields: ['lastActiveAt'] },
       { fields: ['fundId'] },
-      { fields: ['organization_id'] },
+      { fields: ['better_auth_user_id'], unique: true },
     ],
   }
 );

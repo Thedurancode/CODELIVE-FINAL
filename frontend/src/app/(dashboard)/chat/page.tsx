@@ -35,7 +35,6 @@ import {
   Volume2,
   VolumeX
 } from 'lucide-react';
-import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Message {
@@ -547,60 +546,6 @@ export default function ChatPage() {
                     >
                       {messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-                          <motion.div
-                            className="relative mb-8"
-                            initial={{ opacity: 0, scale: 0.8, rotate: -10 }}
-                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                            transition={{
-                              duration: 0.5,
-                              delay: 0.2,
-                              type: 'spring',
-                              stiffness: 200,
-                            }}
-                          >
-                            {/* Animated glow effect */}
-                            <motion.div
-                              className="pointer-events-none absolute -inset-4 rounded-2xl bg-gradient-to-br from-cyan-400/30 via-accent-500/25 to-fuchsia-500/30 blur-xl"
-                              animate={{
-                                opacity: [0.4, 0.7, 0.4],
-                                scale: [0.95, 1.08, 0.95],
-                              }}
-                              transition={{
-                                duration: 2.5,
-                                repeat: Infinity,
-                                ease: 'easeInOut',
-                              }}
-                            />
-                            {/* Pulsing border ring */}
-                            <motion.div
-                              className="pointer-events-none absolute -inset-1 rounded-2xl border-2 border-accent-400/30"
-                              animate={{
-                                opacity: [0.2, 0.5, 0.2],
-                              }}
-                              transition={{
-                                duration: 2,
-                                repeat: Infinity,
-                                ease: 'easeInOut',
-                              }}
-                            />
-                            {/* Square avatar with rounded corners */}
-                            <div className="relative z-10 h-20 w-20 rounded-2xl bg-gradient-to-br from-accent-500/20 to-accent-600/10 ring-2 ring-accent-500/40 overflow-hidden shadow-xl shadow-accent-500/20">
-                              <Image
-                                src={agent.avatar}
-                                alt={agent.name}
-                                fill
-                                sizes="80px"
-                                className="object-cover"
-                              />
-                            </div>
-                            {/* Online status indicator */}
-                            <motion.div
-                              className="absolute -bottom-1 -right-1 z-20 w-6 h-6 rounded-lg bg-green-500 border-3 border-zinc-950 shadow-lg shadow-green-500/50"
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              transition={{ duration: 0.3, delay: 0.5, type: 'spring', stiffness: 200 }}
-                            />
-                          </motion.div>
                           <motion.h1
                             className="text-3xl font-bold text-zinc-100 mb-3"
                             initial={{ opacity: 0, y: 10 }}

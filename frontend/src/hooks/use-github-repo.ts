@@ -179,10 +179,13 @@ export function useGitHubCommits(
     path?: string;
     perPage?: number;
     page?: number;
+    enabled?: boolean;
   }
 ) {
+  // Exclude 'enabled' from query key to prevent unnecessary re-queries
+  const { enabled, ...queryOptions } = options || {};
   return useQuery({
-    queryKey: ['github', 'commits', owner, repo, options],
+    queryKey: ['github', 'commits', owner, repo, queryOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (options?.sha) params.set('sha', options.sha);
@@ -194,7 +197,7 @@ export function useGitHubCommits(
         `/api/github/repos/${owner}/${repo}/commits${queryString ? `?${queryString}` : ''}`
       );
     },
-    enabled: !!owner && !!repo,
+    enabled: !!owner && !!repo && (enabled !== false),
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }
@@ -236,10 +239,13 @@ export function useGitHubPullRequests(
     direction?: 'asc' | 'desc';
     perPage?: number;
     page?: number;
+    enabled?: boolean;
   }
 ) {
+  // Exclude 'enabled' from query key to prevent unnecessary re-queries
+  const { enabled, ...queryOptions } = options || {};
   return useQuery({
-    queryKey: ['github', 'pulls', owner, repo, options],
+    queryKey: ['github', 'pulls', owner, repo, queryOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (options?.state) params.set('state', options.state);
@@ -252,7 +258,7 @@ export function useGitHubPullRequests(
         `/api/github/repos/${owner}/${repo}/pulls${queryString ? `?${queryString}` : ''}`
       );
     },
-    enabled: !!owner && !!repo,
+    enabled: !!owner && !!repo && (enabled !== false),
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }
@@ -304,10 +310,13 @@ export function useGitHubIssues(
   options?: {
     state?: 'open' | 'closed' | 'all';
     perPage?: number;
+    enabled?: boolean;
   }
 ) {
+  // Exclude 'enabled' from query key to prevent unnecessary re-queries
+  const { enabled, ...queryOptions } = options || {};
   return useQuery({
-    queryKey: ['github', 'issues', owner, repo, options],
+    queryKey: ['github', 'issues', owner, repo, queryOptions],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (options?.state) params.set('state', options.state);
@@ -317,7 +326,7 @@ export function useGitHubIssues(
         `/api/github/issues?owner=${owner}&repo=${repo}${queryString ? `&${queryString}` : ''}`
       );
     },
-    enabled: !!owner && !!repo,
+    enabled: !!owner && !!repo && (enabled !== false),
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }

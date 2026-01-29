@@ -541,7 +541,7 @@ class ComplianceWorkflowExecution
     return this.findAll({
       where: {
         dealHeld: true,
-        dealReleasedAt: null,
+        dealReleasedAt: { [Op.is]: null },
       },
       order: [['dealHeldAt', 'ASC']],
     });

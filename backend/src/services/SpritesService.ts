@@ -67,7 +67,7 @@ export interface ExecSession {
 export interface CreateSpriteOptions {
   projectId: string;
   organizationId: string;
-  createdById: string;
+  createdById?: string | null;
   repoUrl: string;
   branch?: string;
   orgSlug?: string;

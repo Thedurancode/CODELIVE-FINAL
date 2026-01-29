@@ -30,10 +30,7 @@ import DealSource from '../models/DealSource';
 import { safeParseInt } from '../utils/security';
 import { EmailDealSourcePlugin } from '../plugins/sources/EmailDealSourcePlugin';
 
-// Define AuthRequest interface for typed user access
-interface AuthRequest extends Request {
-  user?: { id: string; role: string };
-}
+// Request is just Request - user type is globally defined in Express namespace
 
 // ============================================================================
 // DEAL SOURCES
@@ -62,7 +59,7 @@ export const getAvailableSourceTypes = async (req: Request, res: Response) => {
 /**
  * Get all active deal sources
  */
-export const getActiveSources = async (req: AuthRequest, res: Response) => {
+export const getActiveSources = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
@@ -127,7 +124,7 @@ export const getActiveSources = async (req: AuthRequest, res: Response) => {
 /**
  * Add a new deal source
  */
-export const addDealSource = async (req: AuthRequest, res: Response) => {
+export const addDealSource = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {

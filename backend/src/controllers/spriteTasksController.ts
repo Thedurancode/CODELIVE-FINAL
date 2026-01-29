@@ -9,6 +9,7 @@ import { spriteTaskService } from '../services/SpriteTaskService';
 import { githubIssueSyncService } from '../services/GitHubIssueSyncService';
 import { issueParserService } from '../services/IssueParserService';
 import SpriteTask from '../models/SpriteTask';
+import ProjectSprite from '../models/ProjectSprite';
 
 /**
  * Create a new task
@@ -583,12 +584,23 @@ export const parseGitHubIssue = async (req: Request, res: Response) => {
       });
     }
 
+    // Get sprite for this project (use provided spriteId or find active one)
+    const sprite = spriteId
+      ? await ProjectSprite.findByPk(spriteId)
+      : await ProjectSprite.findOne({
+          where: { projectId, status: 'active' },
+          order: [['createdAt', 'DESC']],
+        });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'No active sprite found for this project',
+      });
+    }
+
     // Fetch the issue from GitHub via SpriteTaskService
-    const issue = await spriteTaskService.fetchGitHubIssue({
-      projectId,
-      issueNumber: parseInt(issueNumber, 10),
-      spriteId,
-    });
+    const issue = await spriteTaskService.fetchGitHubIssue(sprite, parseInt(issueNumber, 10));
 
     if (!issue) {
       return res.status(404).json({
@@ -597,17 +609,21 @@ export const parseGitHubIssue = async (req: Request, res: Response) => {
       });
     }
 
-    // Parse the issue
-    const parsed = issueParserService.parseGitHubIssue(issue);
+    // Parse the issue - convert labels from string[] to {name: string}[] format
+    const parsed = issueParserService.parseGitHubIssue({
+      title: issue.title,
+      body: issue.body,
+      labels: issue.labels.map((l) => ({ name: l })),
+    });
 
     res.json({
       success: true,
       data: {
         ...parsed,
         issueNumber: issue.number,
-        issueUrl: issue.html_url,
+        issueUrl: issue.url,
         issueState: issue.state,
-        issueLabels: issue.labels?.map((l: any) => l.name) || [],
+        issueLabels: issue.labels,
       },
     });
   } catch (error) {

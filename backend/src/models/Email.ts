@@ -377,7 +377,7 @@ class Email
   /**
    * Restore from trash
    */
-  async restore(originalFolder: EmailFolder = 'inbox'): Promise<void> {
+  async restoreFromTrash(originalFolder: EmailFolder = 'inbox'): Promise<void> {
     await this.update({ folder: originalFolder, deletedAt: null });
   }
 

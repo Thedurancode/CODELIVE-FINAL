@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useTVRemoteController, generateRoomCode, type SlideConfig } from '@/hooks/use-tv-remote';
+import { useHARemoteController } from '@/hooks/use-ha-remote';
+import { HADeviceGrid, HADomainSection, type HADeviceState } from '@/components/home-assistant/HADeviceCard';
 
 // Dynamically import Scanner to avoid SSR issues with camera APIs
 const Scanner = dynamic(
@@ -44,6 +46,10 @@ import {
   Check,
   Camera,
   QrCode,
+  Lightbulb,
+  Thermometer,
+  Speaker,
+  Home,
 } from 'lucide-react';
 
 const SPEED_OPTIONS = [0.5, 1, 1.5, 2];
@@ -110,6 +116,29 @@ export default function IPadControllerPage() {
   const [editingSlideIndex, setEditingSlideIndex] = useState<number | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [showHomeAssistant, setShowHomeAssistant] = useState(false);
+
+  // Home Assistant remote controller
+  const {
+    isConnected: haConnected,
+    isSubscribed: haSubscribed,
+    devices: haDevices,
+    error: haError,
+    getLights,
+    getSwitches,
+    getClimate,
+    getMediaPlayers,
+    getScenes,
+    toggle: haToggle,
+    turnOn: haTurnOn,
+    turnOff: haTurnOff,
+    mediaPlayPause: haMediaPlayPause,
+    setBrightness: haSetBrightness,
+    setTemperature: haSetTemperature,
+    setVolume: haSetVolume,
+    activateScene: haActivateScene,
+    connect: haConnect,
+  } = useHARemoteController(roomCode);
 
   // Load room code from URL query param or localStorage
   useEffect(() => {
@@ -910,6 +939,153 @@ export default function IPadControllerPage() {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Home Assistant Toggle */}
+      <button
+        onClick={() => setShowHomeAssistant(!showHomeAssistant)}
+        className="w-full bg-zinc-900 hover:bg-zinc-800 rounded-2xl p-4 mb-4 border border-zinc-800 flex items-center justify-between transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Home className="h-6 w-6 text-blue-400" />
+          <span className="font-semibold">Smart Home</span>
+          {haSubscribed && (
+            <span className="px-2 py-0.5 bg-blue-500/20 rounded-full text-xs text-blue-400">
+              {haDevices.length} devices
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {haSubscribed ? (
+            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+          ) : haConnected ? (
+            <span className="w-2 h-2 bg-amber-400 rounded-full" />
+          ) : (
+            <span className="w-2 h-2 bg-zinc-600 rounded-full" />
+          )}
+          {showHomeAssistant ? (
+            <ChevronUp className="h-6 w-6 text-zinc-400" />
+          ) : (
+            <ChevronDown className="h-6 w-6 text-zinc-400" />
+          )}
+        </div>
+      </button>
+
+      {/* Home Assistant Panel */}
+      {showHomeAssistant && (
+        <div className="bg-zinc-900 rounded-2xl p-4 mb-6 border border-zinc-800">
+          {/* Connection Status */}
+          {!haSubscribed ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Home className="h-8 w-8 text-zinc-500" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2 text-zinc-300">
+                {haConnected ? 'Connecting to Home Assistant...' : 'Home Assistant Not Connected'}
+              </h3>
+              <p className="text-sm text-zinc-500 mb-4">
+                {haError || 'Configure Home Assistant in settings to control your smart devices'}
+              </p>
+              {!haConnected && roomCode && (
+                <button
+                  onClick={() => haConnect(roomCode)}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold transition-all active:scale-95"
+                >
+                  Retry Connection
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Error Display */}
+              {haError && (
+                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                  {haError}
+                </div>
+              )}
+
+              {/* Lights Section */}
+              {getLights().length > 0 && (
+                <HADomainSection
+                  title="Lights"
+                  icon={<Lightbulb className="h-5 w-5 text-yellow-400" />}
+                  devices={getLights()}
+                  onToggle={haToggle}
+                  onBrightnessChange={haSetBrightness}
+                  compact
+                />
+              )}
+
+              {/* Climate Section */}
+              {getClimate().length > 0 && (
+                <HADomainSection
+                  title="Climate"
+                  icon={<Thermometer className="h-5 w-5 text-orange-400" />}
+                  devices={getClimate()}
+                  onToggle={haToggle}
+                  onTemperatureChange={haSetTemperature}
+                  compact
+                />
+              )}
+
+              {/* Switches Section */}
+              {getSwitches().length > 0 && (
+                <HADomainSection
+                  title="Switches"
+                  icon={<Power className="h-5 w-5 text-green-400" />}
+                  devices={getSwitches()}
+                  onToggle={haToggle}
+                  compact
+                />
+              )}
+
+              {/* Media Players Section */}
+              {getMediaPlayers().length > 0 && (
+                <HADomainSection
+                  title="Media"
+                  icon={<Speaker className="h-5 w-5 text-purple-400" />}
+                  devices={getMediaPlayers()}
+                  onToggle={haToggle}
+                  onTurnOn={haTurnOn}
+                  onTurnOff={haTurnOff}
+                  onPlayPause={haMediaPlayPause}
+                  onVolumeChange={haSetVolume}
+                />
+              )}
+
+              {/* Scenes Section */}
+              {getScenes().length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sun className="h-5 w-5 text-amber-400" />
+                    <h3 className="font-semibold">Scenes</h3>
+                    <span className="text-xs text-muted-foreground">({getScenes().length})</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {getScenes().map((scene) => (
+                      <button
+                        key={scene.entity_id}
+                        onClick={() => haActivateScene(scene.entity_id)}
+                        className="p-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-medium transition-all active:scale-95 flex items-center gap-2"
+                      >
+                        <Sparkles className="h-4 w-4 text-amber-400" />
+                        <span className="truncate">{scene.friendly_name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No Devices */}
+              {haDevices.length === 0 && (
+                <div className="text-center py-4 text-zinc-500">
+                  <p>No devices found</p>
+                  <p className="text-xs mt-1">Check your Home Assistant configuration</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

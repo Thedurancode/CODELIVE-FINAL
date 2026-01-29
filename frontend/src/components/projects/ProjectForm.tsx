@@ -22,10 +22,10 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const PROJECT_STATUSES: { value: ProjectStatus; label: string }[] = [
-  { value: 'active', label: 'Active' },
-  { value: 'on_hold', label: 'On Hold' },
+  { value: 'in_talks', label: 'In Talks' },
+  { value: 'now_coding', label: 'Now Coding' },
+  { value: 'needs_review', label: 'Needs Review' },
   { value: 'completed', label: 'Completed' },
-  { value: 'archived', label: 'Archived' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
@@ -48,7 +48,7 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [githubUrl, setGithubUrl] = useState<string | null>(project?.githubUrl || null);
   const [deploymentUrl, setDeploymentUrl] = useState(project?.deploymentUrl || '');
-  const [status, setStatus] = useState<ProjectStatus>(project?.status || 'active');
+  const [status, setStatus] = useState<ProjectStatus>(project?.status || 'in_talks');
   const [startDate, setStartDate] = useState(
     project?.startDate ? new Date(project.startDate).toISOString().split('T')[0] : ''
   );
@@ -66,7 +66,7 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
       setLogoPreview(project.logoUrl || null);
       setGithubUrl(project.githubUrl || null);
       setDeploymentUrl(project.deploymentUrl || '');
-      setStatus(project.status || 'active');
+      setStatus(project.status || 'in_talks');
       setStartDate(
         project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : ''
       );

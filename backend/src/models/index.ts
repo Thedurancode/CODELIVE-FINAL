@@ -191,6 +191,9 @@ import DeployHook from './DeployHook';
 // API Key Models
 import ApiKey from './ApiKey';
 
+// Home Assistant Models
+import HomeAssistantConfig from './HomeAssistantConfig';
+
 // State Compliance Workflow Models
 import StateDealCompliance, { initStateDealCompliance } from './StateDealCompliance';
 import StateWorkflowState, { initStateWorkflowState } from './StateWorkflowState';
@@ -2037,6 +2040,8 @@ export default {
   DeployHook,
   // API Key Models
   ApiKey,
+  // Home Assistant Models
+  HomeAssistantConfig,
   syncDatabase,
   testConnection,
 };

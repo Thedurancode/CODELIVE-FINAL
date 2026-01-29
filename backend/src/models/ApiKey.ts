@@ -261,4 +261,4 @@ ApiKey.init(
 );
 
 export default ApiKey;
-export { ApiKeyAttributes, ApiKeyCreationAttributes, ApiKeyScope };
+export { ApiKeyAttributes, ApiKeyCreationAttributes };

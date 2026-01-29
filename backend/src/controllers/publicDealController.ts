@@ -6,6 +6,7 @@ import PropertyDocument from '../models/PropertyDocument';
 import DealAction from '../models/DealAction';
 import DealOffer from '../models/DealOffer';
 import Contact from '../models/Contact';
+import PropertyContact from '../models/PropertyContact';
 import ComplianceCheck from '../models/ComplianceCheck';
 
 /**
@@ -65,6 +66,12 @@ export const getPublicDeal = async (req: Request, res: Response) => {
     await link.incrementViewCount();
 
     const property = link.property;
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        error: 'Property not found',
+      });
+    }
 
     // Build response based on settings
     const responseData: any = {
@@ -144,7 +151,7 @@ export const getPublicDeal = async (req: Request, res: Response) => {
     if (link.settings.showViewers) {
       // Get users who viewed this deal
       const viewers = await DealAction.findAll({
-        where: { propertyId: property.id, action: 'view' },
+        where: { propertyId: property.id, actionType: 'view' },
         include: [
           {
             model: MarketplaceUser,
@@ -178,12 +185,22 @@ export const getPublicDeal = async (req: Request, res: Response) => {
     }
 
     if (link.settings.showContacts) {
-      // Get assigned contacts
-      const contacts = await Contact.findAll({
+      // Get assigned contacts via PropertyContact join table
+      const propertyContacts = await PropertyContact.findAll({
         where: { propertyId: property.id },
-        attributes: ['id', 'name', 'email', 'phone', 'role', 'company'],
+        include: [
+          {
+            model: Contact,
+            as: 'contact',
+            attributes: ['id', 'name', 'email', 'phone', 'role', 'company'],
+          },
+        ],
       });
-      responseData.contacts = contacts;
+      responseData.contacts = propertyContacts.map((pc) => ({
+        ...pc.contact,
+        assignedRole: pc.role,
+        isPrimary: pc.isPrimary,
+      }));
     }
 
     res.json({

@@ -25,7 +25,7 @@ const publicLimiter = rateLimit({
 // Rate limiting for authenticated endpoints
 const projectLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100,
+  max: 500, // Increased for development
   message: { success: false, error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -350,6 +350,34 @@ router.get('/search', projectController.searchProjects);
  *         description: List of tags with counts
  */
 router.get('/tags', projectController.getProjectTags);
+
+/**
+ * @swagger
+ * /api/projects/recap/all:
+ *   post:
+ *     summary: Get AI-generated recap of all recent projects
+ *     description: Returns a voice-optimized summary of recent project activity across all projects
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userName:
+ *                 type: string
+ *                 description: User name for personalization
+ *               limit:
+ *                 type: number
+ *                 default: 3
+ *                 description: Number of recent projects to include
+ *     responses:
+ *       200:
+ *         description: All projects recap
+ */
+router.post('/recap/all', projectController.getAllProjectsRecap);
 
 /**
  * @swagger
@@ -943,6 +971,76 @@ router.delete('/:id/notes/:noteId', projectController.deleteProjectNote);
  *         description: Project or note not found
  */
 router.post('/:id/notes/:noteId/github-issue', projectController.createGitHubIssueFromNote);
+
+// ============================================================================
+// PROJECT AI RECAP
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/recap:
+ *   get:
+ *     summary: Get AI-generated project recap
+ *     description: Returns the current AI-generated activity recap for the project. Generates a new one if missing or stale.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Project recap
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     projectId:
+ *                       type: string
+ *                     recap:
+ *                       type: string
+ *                       description: AI-generated project activity summary
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       404:
+ *         description: Project not found
+ */
+router.get('/:id/recap', authenticate, projectController.getProjectRecap);
+
+/**
+ * @swagger
+ * /api/projects/{id}/recap/refresh:
+ *   post:
+ *     summary: Force refresh the project recap
+ *     description: Bypasses cache and generates a new AI recap immediately
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Refreshed project recap
+ *       404:
+ *         description: Project not found
+ */
+router.post('/:id/recap/refresh', authenticate, projectController.refreshProjectRecap);
 
 // ============================================================================
 // PROJECT LOGO

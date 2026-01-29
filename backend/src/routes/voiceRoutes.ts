@@ -8,6 +8,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import OpenAI from 'openai';
 import { agentService } from '../services/agentService';
+import { elevenLabsService } from '../services/ElevenLabsService';
 import { authenticate } from '../middleware/auth';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
@@ -352,6 +353,128 @@ router.get('/realtime-status', async (req: Request, res: Response) => {
         'Knowledge base search',
       ],
     },
+  });
+});
+
+// =============================================================================
+// ELEVENLABS TTS ENDPOINTS
+// =============================================================================
+
+/**
+ * @swagger
+ * /api/voice/elevenlabs/speak:
+ *   post:
+ *     summary: Convert text to speech using ElevenLabs
+ *     description: Generate high-quality, realistic speech from text using ElevenLabs TTS
+ *     tags: [Voice]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - text
+ *             properties:
+ *               text:
+ *                 type: string
+ *                 description: Text to convert to speech (max 5000 chars)
+ *               voice:
+ *                 type: string
+ *                 default: rachel
+ *                 description: Voice key name (e.g., rachel, adam, sarah)
+ *               stability:
+ *                 type: number
+ *                 default: 0.5
+ *                 description: Voice stability (0-1)
+ *               similarityBoost:
+ *                 type: number
+ *                 default: 0.75
+ *                 description: Voice similarity boost (0-1)
+ *     responses:
+ *       200:
+ *         description: Audio data URL
+ *       503:
+ *         description: ElevenLabs not configured
+ */
+router.post('/elevenlabs/speak', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { text, voice = 'rachel', voiceId: directVoiceId, stability, similarityBoost } = req.body;
+
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ success: false, error: 'Text is required' });
+    }
+
+    if (!elevenLabsService.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'ElevenLabs API key not configured',
+      });
+    }
+
+    // Use direct voiceId if provided, otherwise look up by voice key name
+    let voiceId = directVoiceId;
+    if (!voiceId) {
+      const voiceData = elevenLabsService.getVoice(voice);
+      voiceId = voiceData?.id;
+    }
+
+    const audioDataUrl = await elevenLabsService.textToSpeechBase64(text, {
+      voiceId,
+      stability,
+      similarityBoost,
+    });
+
+    res.json({
+      success: true,
+      audio: audioDataUrl,
+      voice: directVoiceId ? 'custom' : voice,
+    });
+
+  } catch (error) {
+    console.error('[ElevenLabs TTS] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'ElevenLabs TTS failed',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/voice/elevenlabs/voices:
+ *   get:
+ *     summary: Get available ElevenLabs voices
+ *     tags: [Voice]
+ */
+router.get('/elevenlabs/voices', (req: Request, res: Response) => {
+  const voices = elevenLabsService.getVoices();
+  const isConfigured = elevenLabsService.isConfigured();
+
+  res.json({
+    success: true,
+    configured: isConfigured,
+    voices: voices,
+    recommended: ['rachel', 'adam', 'sarah', 'josh', 'emily'],
+  });
+});
+
+/**
+ * @swagger
+ * /api/voice/elevenlabs/status:
+ *   get:
+ *     summary: Check ElevenLabs service status
+ *     tags: [Voice]
+ */
+router.get('/elevenlabs/status', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    configured: elevenLabsService.isConfigured(),
+    message: elevenLabsService.isConfigured()
+      ? 'ElevenLabs TTS is available'
+      : 'ElevenLabs API key not configured. Add ELEVENLABS_API_KEY to enable.',
   });
 });
 

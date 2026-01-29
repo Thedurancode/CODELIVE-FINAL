@@ -162,6 +162,7 @@ DealSource.init(
     sequelize,
     tableName: 'deal_sources',
     underscored: true,
+    timestamps: true,
     indexes: [
       { fields: ['user_id'] },
       { fields: ['type'] },

@@ -12,6 +12,7 @@ import { Request, Response } from 'express';
 import { projectService } from '../services/ProjectService';
 import { projectContactService } from '../services/ProjectContactService';
 import { projectNoteService } from '../services/ProjectNoteService';
+import { projectRecapService } from '../services/ProjectRecapService';
 import { taskService } from '../services/TaskService';
 import { gitHubService } from '../services/GitHubService';
 import type { ProjectStatus } from '../models/Project';
@@ -97,8 +98,6 @@ async function autoInviteMemberToGitHub(
 
 export const getProjects = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
-
     const {
       page,
       limit,
@@ -110,9 +109,9 @@ export const getProjects = async (req: Request, res: Response) => {
       sortOrder,
     } = req.query;
 
-    // Get projects created by user or where user is a member
+    // Get all projects (shared workspace - all authenticated users can see all projects)
     const result = await projectService.getProjects({
-      userId, // Filter by user access
+      // No userId filter - all users can view all projects
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
       search: search as string,
@@ -1464,6 +1463,142 @@ export const removeProjectMember = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get AI-generated project recap
+ * Returns the current recap or generates a new one if stale/missing
+ */
+export const getProjectRecap = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Get recap (will generate if needed)
+    const recap = await projectRecapService.getRecap(id);
+
+    if (recap === null) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        projectId: id,
+        recap,
+        updatedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[getProjectRecap] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Force refresh the AI-generated project recap
+ * Bypasses cache and generates a new recap immediately
+ */
+export const refreshProjectRecap = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userName } = req.body || {};
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Force refresh with optional user name for personalization
+    const recap = await projectRecapService.refreshRecap(id, userName);
+
+    if (recap === null) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        projectId: id,
+        recap,
+        updatedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[refreshProjectRecap] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get AI-generated recap of all recent projects
+ * Returns a summary of recent activity across all projects
+ */
+export const getAllProjectsRecap = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+    const { userName, limit } = req.body || {};
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Generate recap of recent projects
+    const recap = await projectRecapService.generateAllProjectsRecap(
+      userName,
+      limit || 3
+    );
+
+    res.json({
+      success: true,
+      data: {
+        recap,
+        updatedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[getAllProjectsRecap] Error:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : String(error),

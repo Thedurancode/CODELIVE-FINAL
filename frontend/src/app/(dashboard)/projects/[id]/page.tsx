@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, useRef, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,8 +68,11 @@ import {
   ListChecks,
   FolderTree,
   Plug,
+  Sparkles,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
-import { useProject, useUpdateProject, useDeleteProject } from '@/hooks/use-projects';
+import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
 import { useGitHubCollaboratorAccess } from '@/hooks/use-github';
 import { useProjectClients, useGenerateInvite, useRevokeClientAccess } from '@/hooks/use-client-portal';
@@ -87,6 +90,8 @@ import { SpriteLaunchButton, SpritePanel, SpriteTaskQueuePanel, SpriteFileBrowse
 import { SpriteChatPanel } from '@/components/sprites/SpriteChatPanel';
 import { useSpriteByProject } from '@/hooks/use-sprites';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { api } from '@/lib/api';
+import { useAuth } from '@/hooks/use-auth';
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   active: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -133,6 +138,7 @@ function formatDate(dateString: string | null | undefined) {
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCodingTaskDialogOpen, setIsCodingTaskDialogOpen] = useState(false);
   const [isNewIssueDialogOpen, setIsNewIssueDialogOpen] = useState(false);
@@ -147,9 +153,29 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
   const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
   const [inviteEmailSent, setInviteEmailSent] = useState(false);
+  const [isAddNoteDialogOpen, setIsAddNoteDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | undefined>(undefined);
+  const [isPlayingRecap, setIsPlayingRecap] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recapAudioCacheRef = useRef<{ text: string; audioUrl: string } | null>(null);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      // Also cancel browser speech synthesis if active
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const handleCopyPublicLink = () => {
@@ -170,10 +196,23 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   // Parse GitHub URL for issue creation
   const repoInfo = project?.githubUrl ? parseGitHubUrl(project.githubUrl) : null;
   const createIssue = useCreateGitHubIssue(repoInfo?.owner, repoInfo?.repo);
-  const { data: recentIssues } = useGitHubIssues(repoInfo?.owner, repoInfo?.repo, { state: 'open', perPage: 5 });
-  const { data: closedIssues } = useGitHubIssues(repoInfo?.owner, repoInfo?.repo, { state: 'closed', perPage: 100 });
-  const { data: commits } = useGitHubCommits(repoInfo?.owner, repoInfo?.repo, { perPage: 100 });
-  const { data: pullRequests } = useGitHubPullRequests(repoInfo?.owner, repoInfo?.repo, { state: 'open', perPage: 100 });
+
+  // GitHub data - reduced perPage for better performance
+  const { data: recentIssues } = useGitHubIssues(repoInfo?.owner, repoInfo?.repo, {
+    state: 'open',
+    perPage: 5
+  });
+  const { data: closedIssues } = useGitHubIssues(repoInfo?.owner, repoInfo?.repo, {
+    state: 'closed',
+    perPage: 20  // Reduced from 100
+  });
+  const { data: commits } = useGitHubCommits(repoInfo?.owner, repoInfo?.repo, {
+    perPage: 20  // Reduced from 100
+  });
+  const { data: pullRequests } = useGitHubPullRequests(repoInfo?.owner, repoInfo?.repo, {
+    state: 'open',
+    perPage: 20  // Reduced from 100
+  });
   const { data: collaboratorAccess } = useGitHubCollaboratorAccess(project?.githubUrl);
   const canClone = collaboratorAccess?.isCollaborator ?? false;
 
@@ -184,6 +223,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   // Sprite hook for MCP panel
   const { data: sprite } = useSpriteByProject(id);
+
+  // Project recap hooks
+  const { data: recapData, isLoading: isRecapLoading } = useProjectRecap(id);
+  const refreshRecap = useRefreshProjectRecap();
 
   const handleUpdate = async (projectData: Partial<Project>) => {
     try {
@@ -254,6 +297,144 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       toast.error((error as Error).message || 'Failed to revoke access');
     }
   };
+
+  const handleRefreshRecap = async () => {
+    try {
+      await refreshRecap.mutateAsync(id);
+      toast.success('Project recap refreshed');
+    } catch {
+      toast.error('Failed to refresh recap');
+    }
+  };
+
+  const handlePlayRecap = useCallback(async () => {
+    // If already playing, stop
+    if (isPlayingRecap) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setIsPlayingRecap(false);
+      return;
+    }
+
+    setIsLoadingAudio(true);
+
+    try {
+      // First, generate a fresh recap with the user's name for personalization
+      const freshRecap = await refreshRecap.mutateAsync({
+        projectId: id,
+        userName: user?.name || undefined
+      });
+      const textToSpeak = freshRecap?.recap;
+
+      if (!textToSpeak) {
+        toast.error('No recap available to play');
+        setIsLoadingAudio(false);
+        return;
+      }
+
+      // Check if we have cached audio for this exact recap text
+      if (recapAudioCacheRef.current?.text === textToSpeak) {
+        // Use cached audio - no change in recap
+        const audio = new Audio(recapAudioCacheRef.current.audioUrl);
+        audioRef.current = audio;
+
+        audio.onplay = () => {
+          setIsPlayingRecap(true);
+          setIsLoadingAudio(false);
+        };
+        audio.onended = () => {
+          setIsPlayingRecap(false);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsPlayingRecap(false);
+          setIsLoadingAudio(false);
+          audioRef.current = null;
+          // Cache might be stale, clear it
+          recapAudioCacheRef.current = null;
+          toast.error('Failed to play cached audio');
+        };
+
+        await audio.play();
+        return;
+      }
+
+      // Recap changed - generate new audio with ElevenLabs
+      const response = await api.post<{ audio: string; voice: string }>('/api/voice/elevenlabs/speak', {
+        text: textToSpeak,
+        voice: 'rachel', // Pre-made ElevenLabs voice (calm American female)
+      });
+
+      if (response?.audio) {
+        // Cache the new audio
+        recapAudioCacheRef.current = { text: textToSpeak, audioUrl: response.audio };
+
+        const audio = new Audio(response.audio);
+        audioRef.current = audio;
+
+        audio.onplay = () => {
+          setIsPlayingRecap(true);
+          setIsLoadingAudio(false);
+        };
+        audio.onended = () => {
+          setIsPlayingRecap(false);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsPlayingRecap(false);
+          setIsLoadingAudio(false);
+          audioRef.current = null;
+          toast.error('Failed to play audio');
+        };
+
+        await audio.play();
+        return;
+      }
+    } catch (error) {
+      // ElevenLabs not available, fall back to browser TTS
+      console.log('ElevenLabs not available, using browser TTS:', error);
+    }
+
+    setIsLoadingAudio(false);
+
+    // Fallback to browser speech synthesis
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      toast.error('Speech synthesis not available');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v =>
+      v.name.includes('Samantha') ||
+      v.name.includes('Google') ||
+      v.name.includes('Natural') ||
+      v.lang.startsWith('en')
+    );
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onstart = () => setIsPlayingRecap(true);
+    utterance.onend = () => setIsPlayingRecap(false);
+    utterance.onerror = () => {
+      setIsPlayingRecap(false);
+      toast.error('Failed to play recap');
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }, [isPlayingRecap, id, refreshRecap, user?.name]);
 
   const handleCreateIssue = async () => {
     if (!issueTitle.trim()) {
@@ -361,6 +542,48 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Action buttons row - Consolidated */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Play Recap - Voice button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className={isPlayingRecap
+              ? "bg-violet-500/20 border-violet-500/40 text-violet-400 hover:bg-violet-500/30"
+              : "hover:bg-violet-500/10 hover:text-violet-400 hover:border-violet-500/40"
+            }
+            onClick={handlePlayRecap}
+            disabled={isLoadingAudio}
+            title={isPlayingRecap ? "Stop playback" : "Generate and play fresh AI recap"}
+          >
+            {isLoadingAudio ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : isPlayingRecap ? (
+              <>
+                <VolumeX className="h-4 w-4 mr-2" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Volume2 className="h-4 w-4 mr-2" />
+                Play Recap
+              </>
+            )}
+          </Button>
+
+          {/* Add Note - Primary Action */}
+          <Button
+            className="bg-emerald-500/20 backdrop-blur-sm border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300 hover:border-emerald-400/60 shadow-lg shadow-emerald-500/10 transition-all duration-200"
+            onClick={() => {
+              setActiveTab('notes');
+              setIsAddNoteDialogOpen(true);
+            }}
+          >
+            <StickyNote className="h-4 w-4 mr-2" />
+            Add Note
+          </Button>
+
           {/* Primary action: Open Terminal / Launch Agent */}
           {project.githubUrl && (
             <SpriteLaunchButton
@@ -499,7 +722,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2">
-          <Tabs defaultValue={project.githubUrl ? 'github' : 'notes'} className="space-y-4">
+          <Tabs
+            value={activeTab || (project.githubUrl ? 'github' : 'notes')}
+            onValueChange={setActiveTab}
+            className="space-y-4"
+          >
             <TabsList className="bg-secondary border">
               {project.githubUrl && (
                 <TabsTrigger value="github" className="data-[state=active]:bg-secondary">
@@ -610,7 +837,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <CardTitle className="text-lg font-medium text-foreground">Notes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ProjectNotesPanel projectId={id} githubUrl={project.githubUrl} />
+                  <ProjectNotesPanel
+                    projectId={id}
+                    githubUrl={project.githubUrl}
+                    externalDialogOpen={isAddNoteDialogOpen}
+                    onExternalDialogOpenChange={setIsAddNoteDialogOpen}
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -663,6 +895,50 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         <p className="text-[10px] text-muted-foreground">Open PRs</p>
                       </div>
                     </>
+                  )}
+                </div>
+              </div>
+
+              {/* AI Recap Section */}
+              <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center">
+                      <Sparkles className="h-5 w-5 text-violet-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium">AI Recap</p>
+                      <p className="text-xs text-muted-foreground">
+                        {recapData?.updatedAt
+                          ? `Updated ${new Date(recapData.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                          : 'Auto-generated summary'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleRefreshRecap}
+                    disabled={refreshRecap.isPending}
+                    title="Refresh recap"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${refreshRecap.isPending ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+                <div className="p-3 rounded-lg bg-background/50 border border-border/50">
+                  {isRecapLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-5/6" />
+                    </div>
+                  ) : recapData?.recap ? (
+                    <p className="text-sm text-foreground leading-relaxed">{recapData.recap}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No recap available yet. Add notes or make changes to generate a summary.
+                    </p>
                   )}
                 </div>
               </div>

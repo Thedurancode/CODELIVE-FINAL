@@ -5,7 +5,7 @@
  * Provides a complete timeline view of all interactions.
  */
 
-import { DataTypes, Model, Optional } from 'sequelize';
+import { DataTypes, Model, Optional, Op } from 'sequelize';
 import sequelize from '../config/database';
 
 export type ActivityType = 'call' | 'email' | 'sms' | 'note' | 'meeting' | 'task' | 'voicemail';
@@ -308,8 +308,8 @@ class ContactActivity
 
     if (options?.startDate || options?.endDate) {
       where.createdAt = {};
-      if (options?.startDate) where.createdAt[sequelize.Sequelize.Op.gte] = options.startDate;
-      if (options?.endDate) where.createdAt[sequelize.Sequelize.Op.lte] = options.endDate;
+      if (options?.startDate) where.createdAt[Op.gte] = options.startDate;
+      if (options?.endDate) where.createdAt[Op.lte] = options.endDate;
     }
 
     const [activities, total] = await Promise.all([
@@ -346,7 +346,7 @@ class ContactActivity
         ],
         group: ['type'],
         raw: true,
-      }) as Promise<Array<{ type: string; count: string }>>,
+      }) as unknown as Promise<Array<{ type: string; count: string }>>,
       ContactActivity.findOne({
         where: { contactId },
         order: [['createdAt', 'DESC']],
@@ -548,7 +548,7 @@ ContactActivity.init(
       { fields: ['createdAt'] },
       { fields: ['contactId', 'type'] },
       { fields: ['contactId', 'createdAt'] },
-      { fields: ['callSid'], unique: true, where: { callSid: { [sequelize.Sequelize.Op.ne]: null } } },
+      { fields: ['callSid'], unique: true, where: { callSid: { [Op.ne]: null } } },
       { fields: ['emailMessageId'] },
       { fields: ['smsSid'] },
     ],

@@ -20,6 +20,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Plus,
   Search,
   MoreHorizontal,
@@ -36,6 +43,7 @@ import {
   XCircle,
   AlertCircle,
   RefreshCw,
+  UserPlus,
 } from 'lucide-react';
 import {
   useProjectContacts,
@@ -45,10 +53,10 @@ import {
   useInviteContactToGitHub,
 } from '@/hooks/use-project-contacts';
 import { useProject } from '@/hooks/use-projects';
-import { useContacts } from '@/hooks/use-contacts';
+import { useContacts, useCreateContact } from '@/hooks/use-contacts';
 import { useSyncTeamContacts } from '@/hooks/use-team-profile';
 import { toast } from 'sonner';
-import type { ProjectContact, Contact, GitHubInviteStatus } from '@/types';
+import type { ProjectContact, Contact, GitHubInviteStatus, ContactType } from '@/types';
 import {
   Tooltip,
   TooltipContent,
@@ -57,6 +65,16 @@ import {
 } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+
+const CONTACT_TYPES: { value: ContactType; label: string }[] = [
+  { value: 'other', label: 'Other' },
+  { value: 'buyer', label: 'Buyer' },
+  { value: 'seller', label: 'Seller' },
+  { value: 'broker', label: 'Broker' },
+  { value: 're_agent', label: 'RE Agent' },
+  { value: 'wholesaler', label: 'Wholesaler' },
+  { value: 'attorney', label: 'Attorney' },
+];
 
 const ROLE_COLORS: Record<string, string> = {
   owner: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
@@ -111,6 +129,16 @@ export function ProjectContactsPanel({ projectId }: ProjectContactsPanelProps) {
   const [role, setRole] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Add mode: 'search' for existing contacts, 'create' for new contact
+  const [addMode, setAddMode] = useState<'search' | 'create'>('search');
+
+  // New contact form state
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactType, setNewContactType] = useState<ContactType>('other');
+  const [newContactCompany, setNewContactCompany] = useState('');
+
   const { data: project } = useProject(projectId);
   const { data: projectContacts, isLoading } = useProjectContacts(projectId);
   const { data: contactsData, isLoading: isLoadingContacts } = useContacts({
@@ -122,12 +150,56 @@ export function ProjectContactsPanel({ projectId }: ProjectContactsPanelProps) {
   const removeContact = useRemoveProjectContact(projectId);
   const inviteToGitHub = useInviteContactToGitHub(projectId);
   const syncTeamContacts = useSyncTeamContacts();
+  const createContact = useCreateContact();
 
   const hasGitHubRepo = !!project?.githubUrl;
 
   const contacts = contactsData?.data || [];
   const existingContactIds = new Set(projectContacts?.map((pc: ProjectContact) => pc.contactId) || []);
   const availableContacts = contacts.filter((c: Contact) => !existingContactIds.has(c.id));
+
+  const resetAddDialog = () => {
+    setSelectedContactId(null);
+    setRole('');
+    setNotes('');
+    setSearchQuery('');
+    setAddMode('search');
+    setNewContactName('');
+    setNewContactEmail('');
+    setNewContactPhone('');
+    setNewContactType('other');
+    setNewContactCompany('');
+  };
+
+  const handleCreateAndAddContact = async () => {
+    if (!newContactName.trim()) {
+      toast.error('Please enter a contact name');
+      return;
+    }
+    try {
+      // First create the contact
+      const newContact = await createContact.mutateAsync({
+        name: newContactName.trim(),
+        email: newContactEmail.trim() || undefined,
+        phone: newContactPhone.trim() || undefined,
+        type: newContactType,
+        company: newContactCompany.trim() || undefined,
+      });
+
+      // Then add it to the project
+      await addContact.mutateAsync({
+        contactId: newContact.id,
+        role: role || undefined,
+        notes: notes || undefined,
+      });
+
+      toast.success('Contact created and added to project');
+      setIsAddDialogOpen(false);
+      resetAddDialog();
+    } catch {
+      toast.error('Failed to create contact');
+    }
+  };
 
   const handleAddContact = async () => {
     if (!selectedContactId) {
@@ -142,10 +214,7 @@ export function ProjectContactsPanel({ projectId }: ProjectContactsPanelProps) {
       });
       toast.success('Contact added to project');
       setIsAddDialogOpen(false);
-      setSelectedContactId(null);
-      setRole('');
-      setNotes('');
-      setSearchQuery('');
+      resetAddDialog();
     } catch {
       toast.error('Failed to add contact');
     }
@@ -262,121 +331,269 @@ export function ProjectContactsPanel({ projectId }: ProjectContactsPanelProps) {
               <DialogTitle className="text-foreground">Add Contact to Project</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search contacts..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-secondary border text-foreground"
-                />
+              {/* Mode Toggle */}
+              <div className="flex gap-2 p-1 bg-secondary rounded-lg">
+                <button
+                  onClick={() => setAddMode('search')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+                    addMode === 'search'
+                      ? 'bg-accent-600 text-white'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Search className="h-4 w-4" />
+                  Search Existing
+                </button>
+                <button
+                  onClick={() => setAddMode('create')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+                    addMode === 'create'
+                      ? 'bg-accent-600 text-white'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Create New
+                </button>
               </div>
 
-              {isLoadingContacts ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : availableContacts.length > 0 ? (
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {availableContacts.map((contact: Contact) => (
-                    <button
-                      key={contact.id}
-                      onClick={() => setSelectedContactId(contact.id)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors ${
-                        selectedContactId === contact.id
-                          ? 'bg-accent-600/20 border-accent-600'
-                          : 'bg-secondary hover:bg-secondary/80'
-                      }`}
-                    >
-                      <p className="font-medium text-foreground">{contact.name}</p>
-                      <p className="text-sm text-muted-foreground">{contact.email || contact.phone || 'No contact info'}</p>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
-                  <p className="text-muted-foreground text-sm">
-                    {searchQuery ? 'No matching contacts found' : 'No contacts available'}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {searchQuery
-                      ? 'Try a different search term'
-                      : 'Sync your team members to make them available as contacts'}
-                  </p>
-                  {!searchQuery && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={handleSyncTeam}
-                      disabled={syncTeamContacts.isPending}
-                    >
-                      {syncTeamContacts.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                      )}
-                      Sync Team Members
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {selectedContactId && (
+              {addMode === 'search' ? (
                 <>
-                  <div>
-                    <Label className="text-muted-foreground text-sm">Role (optional)</Label>
+                  {/* Search Mode */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      placeholder="e.g., Owner, Developer, Reviewer"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="mt-1 bg-secondary border text-foreground"
+                      placeholder="Search contacts..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 bg-secondary border text-foreground"
                     />
                   </div>
-                  <div>
-                    <Label className="text-muted-foreground text-sm">Notes (optional)</Label>
-                    <Textarea
-                      placeholder="Any notes about this contact's involvement..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className="mt-1 bg-secondary border text-foreground min-h-20"
-                    />
+
+                  {isLoadingContacts ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-12 w-full" />
+                      ))}
+                    </div>
+                  ) : availableContacts.length > 0 ? (
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {availableContacts.map((contact: Contact) => (
+                        <button
+                          key={contact.id}
+                          onClick={() => setSelectedContactId(contact.id)}
+                          className={`w-full text-left p-3 rounded-lg transition-colors ${
+                            selectedContactId === contact.id
+                              ? 'bg-accent-600/20 border-accent-600'
+                              : 'bg-secondary hover:bg-secondary/80'
+                          }`}
+                        >
+                          <p className="font-medium text-foreground">{contact.name}</p>
+                          <p className="text-sm text-muted-foreground">{contact.email || contact.phone || 'No contact info'}</p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                      <p className="text-muted-foreground text-sm">
+                        {searchQuery ? 'No matching contacts found' : 'No contacts available'}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {searchQuery
+                          ? 'Try a different search or create a new contact'
+                          : 'Create a new contact or sync team members'}
+                      </p>
+                      <div className="flex gap-2 justify-center mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAddMode('create')}
+                        >
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Create New
+                        </Button>
+                        {!searchQuery && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleSyncTeam}
+                            disabled={syncTeamContacts.isPending}
+                          >
+                            {syncTeamContacts.isPending ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                            )}
+                            Sync Team
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedContactId && (
+                    <>
+                      <div>
+                        <Label className="text-muted-foreground text-sm">Role (optional)</Label>
+                        <Input
+                          placeholder="e.g., Owner, Developer, Reviewer"
+                          value={role}
+                          onChange={(e) => setRole(e.target.value)}
+                          className="mt-1 bg-secondary border text-foreground"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground text-sm">Notes (optional)</Label>
+                        <Textarea
+                          placeholder="Any notes about this contact's involvement..."
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          className="mt-1 bg-secondary border text-foreground min-h-20"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 border text-foreground"
+                      onClick={() => {
+                        setIsAddDialogOpen(false);
+                        resetAddDialog();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="flex-1 bg-accent-600 hover:bg-accent-700 text-white"
+                      onClick={handleAddContact}
+                      disabled={!selectedContactId || addContact.isPending}
+                    >
+                      {addContact.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        'Add Contact'
+                      )}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Create Mode */}
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-muted-foreground text-sm">Name *</Label>
+                      <Input
+                        placeholder="John Doe"
+                        value={newContactName}
+                        onChange={(e) => setNewContactName(e.target.value)}
+                        className="mt-1 bg-secondary border text-foreground"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-muted-foreground text-sm">Email</Label>
+                        <Input
+                          type="email"
+                          placeholder="john@example.com"
+                          value={newContactEmail}
+                          onChange={(e) => setNewContactEmail(e.target.value)}
+                          className="mt-1 bg-secondary border text-foreground"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground text-sm">Phone</Label>
+                        <Input
+                          placeholder="(555) 123-4567"
+                          value={newContactPhone}
+                          onChange={(e) => setNewContactPhone(e.target.value)}
+                          className="mt-1 bg-secondary border text-foreground"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-muted-foreground text-sm">Type</Label>
+                        <Select value={newContactType} onValueChange={(v) => setNewContactType(v as ContactType)}>
+                          <SelectTrigger className="mt-1 bg-secondary border text-foreground">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-secondary border">
+                            {CONTACT_TYPES.map((t) => (
+                              <SelectItem key={t.value} value={t.value} className="text-foreground">
+                                {t.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground text-sm">Company</Label>
+                        <Input
+                          placeholder="Acme Inc"
+                          value={newContactCompany}
+                          onChange={(e) => setNewContactCompany(e.target.value)}
+                          className="mt-1 bg-secondary border text-foreground"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border pt-3 space-y-3">
+                    <p className="text-xs text-muted-foreground">Project Assignment</p>
+                    <div>
+                      <Label className="text-muted-foreground text-sm">Role (optional)</Label>
+                      <Input
+                        placeholder="e.g., Owner, Developer, Reviewer"
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        className="mt-1 bg-secondary border text-foreground"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground text-sm">Notes (optional)</Label>
+                      <Textarea
+                        placeholder="Any notes about this contact's involvement..."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        className="mt-1 bg-secondary border text-foreground min-h-16"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 border text-foreground"
+                      onClick={() => {
+                        setIsAddDialogOpen(false);
+                        resetAddDialog();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="flex-1 bg-accent-600 hover:bg-accent-700 text-white"
+                      onClick={handleCreateAndAddContact}
+                      disabled={!newContactName.trim() || createContact.isPending || addContact.isPending}
+                    >
+                      {createContact.isPending || addContact.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create & Add'
+                      )}
+                    </Button>
                   </div>
                 </>
               )}
-
-              <div className="flex gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="flex-1 border text-foreground"
-                  onClick={() => {
-                    setIsAddDialogOpen(false);
-                    setSelectedContactId(null);
-                    setRole('');
-                    setNotes('');
-                    setSearchQuery('');
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-accent-600 hover:bg-accent-700 text-white"
-                  onClick={handleAddContact}
-                  disabled={!selectedContactId || addContact.isPending}
-                >
-                  {addContact.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    'Add Contact'
-                  )}
-                </Button>
-              </div>
             </div>
           </DialogContent>
         </Dialog>

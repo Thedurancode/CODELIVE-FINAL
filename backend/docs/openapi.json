@@ -444,6 +444,75 @@
             "format": "date-time"
           }
         }
+      },
+      "SpriteService": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workingDir": {
+            "type": "string"
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "stopped",
+              "starting",
+              "stopping",
+              "error"
+            ]
+          },
+          "pid": {
+            "type": "integer",
+            "nullable": true
+          },
+          "port": {
+            "type": "integer",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "stoppedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "exitCode": {
+            "type": "integer",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       }
     }
   },
@@ -647,353 +716,6 @@
         "responses": {
           "200": {
             "description": "Offer analytics data"
-          }
-        }
-      }
-    },
-    "/api/auth/register": {
-      "post": {
-        "summary": "Register a new user",
-        "description": "Create a new user account with email and password using Supabase Auth",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email",
-                  "password",
-                  "name"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 8
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "company": {
-                    "type": "string"
-                  },
-                  "phone": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "User registered successfully"
-          },
-          "400": {
-            "description": "Invalid input or email already exists"
-          }
-        }
-      }
-    },
-    "/api/auth/login": {
-      "post": {
-        "summary": "Login with email and password",
-        "description": "Authenticate user using Supabase Auth",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email",
-                  "password"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string"
-                  },
-                  "password": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Login successful"
-          },
-          "401": {
-            "description": "Invalid credentials"
-          }
-        }
-      }
-    },
-    "/api/auth/refresh": {
-      "post": {
-        "summary": "Refresh access token",
-        "description": "Get a new access token using refresh token",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "refreshToken"
-                ],
-                "properties": {
-                  "refreshToken": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Token refreshed successfully"
-          },
-          "401": {
-            "description": "Invalid refresh token"
-          }
-        }
-      }
-    },
-    "/api/auth/me": {
-      "get": {
-        "summary": "Get current user profile",
-        "description": "Returns the authenticated user's profile",
-        "tags": [
-          "Authentication"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User profile"
-          },
-          "401": {
-            "description": "Not authenticated"
-          }
-        }
-      },
-      "patch": {
-        "summary": "Update current user profile",
-        "description": "Update the authenticated user's profile information",
-        "tags": [
-          "Authentication"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "company": {
-                    "type": "string"
-                  },
-                  "phone": {
-                    "type": "string"
-                  },
-                  "avatar": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Profile updated successfully"
-          },
-          "401": {
-            "description": "Not authenticated"
-          }
-        }
-      }
-    },
-    "/api/auth/password": {
-      "put": {
-        "summary": "Change password",
-        "description": "Update the authenticated user's password",
-        "tags": [
-          "Authentication"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "newPassword"
-                ],
-                "properties": {
-                  "newPassword": {
-                    "type": "string",
-                    "minLength": 8
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Password changed successfully"
-          },
-          "401": {
-            "description": "Not authenticated"
-          }
-        }
-      }
-    },
-    "/api/auth/logout": {
-      "post": {
-        "summary": "Logout",
-        "description": "Sign out the current user",
-        "tags": [
-          "Authentication"
-        ],
-        "responses": {
-          "200": {
-            "description": "Logged out successfully"
-          }
-        }
-      }
-    },
-    "/api/auth/forgot-password": {
-      "post": {
-        "summary": "Send password reset email",
-        "description": "Send a password reset link to the user's email",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Reset email sent"
-          }
-        }
-      }
-    },
-    "/api/auth/magic-link": {
-      "post": {
-        "summary": "Verify magic link token and authenticate user",
-        "description": "Verifies a magic link token from email and creates/authenticates the user.\nIf the user doesn't exist, creates a new account linked to their Fund.\nReturns JWT tokens for immediate access.\n",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "token"
-                ],
-                "properties": {
-                  "token": {
-                    "type": "string",
-                    "description": "The magic link token from the email"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Authentication successful"
-          },
-          "400": {
-            "description": "Invalid or expired token"
-          }
-        }
-      }
-    },
-    "/api/auth/request-magic-link": {
-      "post": {
-        "summary": "Request a new magic link for passwordless login",
-        "description": "Sends a new magic link to the user's email for passwordless login",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Magic link sent (always returns success to prevent enumeration)"
           }
         }
       }
@@ -3199,118 +2921,6 @@
           },
           "500": {
             "description": "Email sending failed"
-          }
-        }
-      }
-    },
-    "/api/auth/local/register": {
-      "post": {
-        "summary": "Register a new user (local auth)",
-        "description": "Create a new user account with email and password using local database",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email",
-                  "password",
-                  "name"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 8
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "company": {
-                    "type": "string"
-                  },
-                  "phone": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "User registered successfully"
-          },
-          "400": {
-            "description": "Invalid input or email already exists"
-          }
-        }
-      }
-    },
-    "/api/auth/local/login": {
-      "post": {
-        "summary": "Login with email and password (local auth)",
-        "description": "Authenticate user using local database",
-        "tags": [
-          "Authentication"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email",
-                  "password"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string"
-                  },
-                  "password": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Login successful"
-          },
-          "401": {
-            "description": "Invalid credentials"
-          }
-        }
-      }
-    },
-    "/api/auth/local/me": {
-      "get": {
-        "summary": "Get current user profile (local auth)",
-        "description": "Returns the authenticated user's profile using local JWT",
-        "tags": [
-          "Authentication"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User profile"
-          },
-          "401": {
-            "description": "Not authenticated"
           }
         }
       }
@@ -7671,6 +7281,400 @@
         }
       }
     },
+    "/api/api-keys": {
+      "get": {
+        "summary": "List API keys",
+        "description": "List all API keys for your organization",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of API keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "keyPrefix": {
+                            "type": "string"
+                          },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "lastUsedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "isActive": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create API key",
+        "description": "Create a new API key. The full key is only returned once at creation time.\nStore it securely as it cannot be retrieved again.\n",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Human-readable name for the key"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Optional description"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "sprites:read",
+                        "sprites:write",
+                        "sprites:execute",
+                        "tasks:read",
+                        "tasks:write",
+                        "files:read",
+                        "files:write",
+                        "chat:read",
+                        "chat:write",
+                        "projects:read",
+                        "projects:write",
+                        "*"
+                      ]
+                    },
+                    "default": [
+                      "sprites:read"
+                    ]
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Optional expiration date"
+                  },
+                  "rateLimit": {
+                    "type": "integer",
+                    "default": 60,
+                    "description": "Requests per minute (1-1000)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API key created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string",
+                          "description": "The full API key (only shown once!)"
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/api-keys/scopes": {
+      "get": {
+        "summary": "Get available scopes",
+        "description": "List all available API key scopes",
+        "tags": [
+          "API Keys"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of available scopes"
+          }
+        }
+      }
+    },
+    "/api/api-keys/{id}": {
+      "get": {
+        "summary": "Get API key details",
+        "description": "Get details of a specific API key (not the actual key value)",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key details"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update API key",
+        "description": "Update API key settings (name, scopes, rate limit, expiration)",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "rateLimit": {
+                    "type": "integer"
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "API key updated"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete API key",
+        "description": "Permanently delete an API key",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key deleted"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        }
+      }
+    },
+    "/api/api-keys/{id}/stats": {
+      "get": {
+        "summary": "Get API key usage stats",
+        "description": "Get usage statistics for an API key",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage statistics"
+          }
+        }
+      }
+    },
+    "/api/api-keys/{id}/revoke": {
+      "post": {
+        "summary": "Revoke API key",
+        "description": "Deactivate an API key (it can no longer be used)",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key revoked"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        }
+      }
+    },
+    "/api/api-keys/{id}/rotate": {
+      "post": {
+        "summary": "Rotate API key",
+        "description": "Create a new API key with the same settings and deactivate the old one.\nThe new key is only shown once - store it securely.\n",
+        "tags": [
+          "API Keys"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key rotated - new key returned"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        }
+      }
+    },
     "/api/audit-logs": {
       "get": {
         "summary": "Query audit logs with filters",
@@ -7992,6 +7996,123 @@
           {
             "bearerAuth": []
           }
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "Register a new user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login with email and password",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "summary": "Refresh access token",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "summary": "Send password reset email",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/magic-link": {
+      "post": {
+        "summary": "Verify magic link token and authenticate user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/request-magic-link": {
+      "post": {
+        "summary": "Request a new magic link for passwordless login",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "summary": "Get current user profile",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Update current user profile",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/auth/password": {
+      "put": {
+        "summary": "Change password",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/auth/local/register": {
+      "post": {
+        "summary": "Register a new user (local auth)",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/local/login": {
+      "post": {
+        "summary": "Login with email and password (local auth)",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/auth/local/me": {
+      "get": {
+        "summary": "Get current user profile (local auth)",
+        "tags": [
+          "Authentication"
         ]
       }
     },
@@ -14723,6 +14844,487 @@
         }
       }
     },
+    "/api/deploy-hooks": {
+      "post": {
+        "summary": "Create a new deploy hook",
+        "description": "Create a deploy hook for automatic deployments when tasks complete or PRs are merged.\n\nSupported providers:\n- **vercel**: Vercel Deploy Hooks (paste from Project Settings > Git > Deploy Hooks)\n- **netlify**: Netlify Build Hooks (paste from Site Settings > Build & Deploy > Build hooks)\n- **custom**: Any webhook URL that accepts POST requests\n",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "projectId",
+                  "name",
+                  "provider",
+                  "webhookUrl"
+                ],
+                "properties": {
+                  "projectId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Display name for the hook",
+                    "example": "Production Deploy"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "vercel",
+                      "netlify",
+                      "custom"
+                    ]
+                  },
+                  "webhookUrl": {
+                    "type": "string",
+                    "description": "The deploy hook URL from your provider"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "preview",
+                      "production"
+                    ],
+                    "default": "preview"
+                  },
+                  "triggers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "task_completed",
+                        "pr_merged",
+                        "manual"
+                      ]
+                    },
+                    "default": [
+                      "task_completed"
+                    ],
+                    "description": "Events that trigger this hook"
+                  },
+                  "branchFilter": {
+                    "type": "string",
+                    "description": "Only trigger for branches matching this pattern (glob)",
+                    "example": "feature/*"
+                  },
+                  "labelFilter": {
+                    "type": "string",
+                    "description": "Only trigger when task has this label",
+                    "example": "deploy"
+                  },
+                  "providerConfig": {
+                    "type": "object",
+                    "description": "Provider-specific configuration",
+                    "properties": {
+                      "customMethod": {
+                        "type": "string",
+                        "enum": [
+                          "GET",
+                          "POST",
+                          "PUT"
+                        ],
+                        "default": "POST"
+                      },
+                      "customHeaders": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hook created"
+          },
+          "400": {
+            "description": "Invalid input"
+          }
+        }
+      },
+      "get": {
+        "summary": "Get all deploy hooks",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "projectId",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of hooks"
+          }
+        }
+      }
+    },
+    "/api/deploy-hooks/{id}": {
+      "get": {
+        "summary": "Get a single hook",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hook details"
+          },
+          "404": {
+            "description": "Hook not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a hook",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "webhookUrl": {
+                    "type": "string"
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "preview",
+                      "production"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "inactive"
+                    ]
+                  },
+                  "triggers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "task_completed",
+                        "pr_merged",
+                        "manual"
+                      ]
+                    }
+                  },
+                  "branchFilter": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "labelFilter": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "providerConfig": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hook updated"
+          },
+          "404": {
+            "description": "Hook not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a hook",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hook deleted"
+          },
+          "404": {
+            "description": "Hook not found"
+          }
+        }
+      }
+    },
+    "/api/deploy-hooks/{id}/toggle": {
+      "post": {
+        "summary": "Toggle hook status (active/inactive)",
+        "description": "Toggle a hook between active and inactive states.\nAlso resets consecutive failure count when re-enabling.\n",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hook toggled"
+          },
+          "404": {
+            "description": "Hook not found"
+          }
+        }
+      }
+    },
+    "/api/deploy-hooks/{id}/trigger": {
+      "post": {
+        "summary": "Manually trigger a deployment",
+        "description": "Manually trigger a deployment via this hook.\nReturns the deployment result from the provider.\n",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deployment triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "deploymentId": {
+                      "type": "string"
+                    },
+                    "deploymentUrl": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "vercel",
+                        "netlify",
+                        "custom"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deploy-hooks/{id}/test": {
+      "post": {
+        "summary": "Test hook connection",
+        "description": "Test if the webhook URL is reachable without triggering an actual deployment.\nUses a HEAD request to check endpoint availability.\n",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/deploy-hooks/stats/{projectId}": {
+      "get": {
+        "summary": "Get deployment statistics for a project",
+        "description": "Returns aggregated deployment statistics across all hooks for a project.\nIncludes total deploys, success rate, and active hook count.\n",
+        "tags": [
+          "Deploy Hooks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalHooks": {
+                      "type": "integer"
+                    },
+                    "activeHooks": {
+                      "type": "integer"
+                    },
+                    "totalDeploys": {
+                      "type": "integer"
+                    },
+                    "successfulDeploys": {
+                      "type": "integer"
+                    },
+                    "failedDeploys": {
+                      "type": "integer"
+                    },
+                    "overallSuccessRate": {
+                      "type": "number",
+                      "description": "Percentage (0-100)"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/email-client/config": {
       "get": {
         "summary": "Get user's email configuration",
@@ -16061,7 +16663,7 @@
     "/api/webhooks/github": {
       "post": {
         "summary": "GitHub webhook receiver",
-        "description": "Receives events from GitHub and triggers sprite task processing.\n\nSupported events:\n- **issues.labeled**: When an issue is labeled with \"CodeLive\" (configurable via SPRITE_TRIGGER_LABEL),\n  the issue is automatically picked up by an available sprite for implementation.\n- **issues.closed**: When an issue is closed, any associated task is marked complete.\n- **pull_request.closed**: When a PR is merged, associated tasks are marked complete.\n\nSetup:\n1. Add webhook to your GitHub repo\n2. URL: https://your-domain.com/api/webhooks/github\n3. Content type: application/json\n4. Secret: Set GITHUB_WEBHOOK_SECRET env var\n5. Events: Issues, Pull requests\n",
+        "description": "Receives events from GitHub and triggers sprite task processing.\n\nSupported events:\n- **issues.labeled**: When an issue is labeled with \"CodeLive\" (configurable via SPRITE_TRIGGER_LABEL),\n  the issue is automatically picked up by an available sprite for implementation.\n- **issues.edited**: When an issue title/body is edited, linked tasks are updated instantly.\n- **issues.closed**: When an issue is closed, any associated task is marked complete.\n- **issue_comment.created/edited**: When someone comments on an issue, the comment is synced to linked tasks.\n- **pull_request.closed**: When a PR is merged, associated tasks are marked complete.\n\nSetup:\n1. Add webhook to your GitHub repo\n2. URL: https://your-domain.com/api/webhooks/github\n3. Content type: application/json\n4. Secret: Set GITHUB_WEBHOOK_SECRET env var\n5. Events: Issues, Issue comments, Pull requests\n",
         "tags": [
           "GitHub Webhooks"
         ],
@@ -16777,6 +17379,409 @@
             "description": "Server error"
           }
         }
+      }
+    },
+    "/api/home-assistant/configs/{id}": {
+      "get": {
+        "summary": "Get a specific configuration",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration details"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a configuration",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration updated"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a configuration",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configuration deleted"
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/states": {
+      "get": {
+        "summary": "Get all entity states",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All entity states"
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/states/{entityId}": {
+      "get": {
+        "summary": "Get a specific entity state",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entityId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity state"
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/entities/{domain}": {
+      "get": {
+        "summary": "Get entities by domain",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "light",
+                "switch",
+                "climate",
+                "media_player",
+                "cover",
+                "fan",
+                "scene",
+                "script",
+                "automation",
+                "sensor",
+                "binary_sensor",
+                "camera",
+                "lock"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entities of the specified domain"
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/services/{domain}/{service}": {
+      "post": {
+        "summary": "Call a Home Assistant service",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entity_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Service called successfully"
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/entities/{entityId}/turn_on": {
+      "post": {
+        "summary": "Turn on an entity",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/home-assistant/configs/{configId}/entities/{entityId}/turn_off": {
+      "post": {
+        "summary": "Turn off an entity",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/home-assistant/configs/{configId}/entities/{entityId}/toggle": {
+      "post": {
+        "summary": "Toggle an entity",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/home-assistant/configs/{configId}/lights/{entityId}/brightness": {
+      "post": {
+        "summary": "Set light brightness",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "brightness"
+                ],
+                "properties": {
+                  "brightness": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 255
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/lights/{entityId}/color": {
+      "post": {
+        "summary": "Set light color",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rgb_color": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  },
+                  "hex_color": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/climate/{entityId}/temperature": {
+      "post": {
+        "summary": "Set climate temperature",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "temperature"
+                ],
+                "properties": {
+                  "temperature": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/home-assistant/configs/{configId}/scenes/{entityId}/activate": {
+      "post": {
+        "summary": "Activate a scene",
+        "tags": [
+          "Home Assistant"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/import-wizard/fields/{importType}": {
@@ -28287,6 +29292,1744 @@
         }
       }
     },
+    "/api/v1/sprites": {
+      "get": {
+        "summary": "List all sprites",
+        "description": "Get all sprites for your organization with optional filtering",
+        "tags": [
+          "Public API - Sprites"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "creating",
+                "initializing",
+                "running",
+                "hibernating",
+                "stopped",
+                "error"
+              ]
+            },
+            "description": "Filter by sprite status"
+          },
+          {
+            "in": "query",
+            "name": "projectId",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project ID"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of sprites"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a sprite",
+        "description": "Create a new sprite for a project",
+        "tags": [
+          "Public API - Sprites"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "projectId",
+                  "repoUrl"
+                ],
+                "properties": {
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "repoUrl": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string",
+                    "default": "main"
+                  },
+                  "startupCommand": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sprite created"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}": {
+      "get": {
+        "summary": "Get a sprite",
+        "description": "Get details of a specific sprite",
+        "tags": [
+          "Public API - Sprites"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sprite details"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/resume": {
+      "post": {
+        "summary": "Resume a sprite",
+        "description": "Resume a stopped or hibernating sprite",
+        "tags": [
+          "Public API - Sprites"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sprite resumed"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/stop": {
+      "post": {
+        "summary": "Stop a sprite",
+        "description": "Stop a running sprite",
+        "tags": [
+          "Public API - Sprites"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sprite stopped"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/settings": {
+      "patch": {
+        "summary": "Update sprite settings",
+        "description": "Update sprite configuration",
+        "tags": [
+          "Public API - Sprites"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "startupCommand": {
+                    "type": "string"
+                  },
+                  "lastShellDirectory": {
+                    "type": "string"
+                  },
+                  "autoShutdownAfterTask": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/execute": {
+      "post": {
+        "summary": "Execute a shell command",
+        "description": "Execute a shell command on a sprite and get the output",
+        "tags": [
+          "Public API - Execute"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "command"
+                ],
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "description": "Shell command to execute"
+                  },
+                  "timeout": {
+                    "type": "integer",
+                    "default": 30000,
+                    "description": "Timeout in milliseconds (max 120000)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command output"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/files": {
+      "get": {
+        "summary": "List files",
+        "description": "List files in a directory on a sprite",
+        "tags": [
+          "Public API - Files"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "schema": {
+              "type": "string",
+              "default": "/home/sprite/project"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of files"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/files/read": {
+      "get": {
+        "summary": "Read a file",
+        "description": "Read the contents of a file on a sprite",
+        "tags": [
+          "Public API - Files"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File contents"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/files/write": {
+      "post": {
+        "summary": "Write a file",
+        "description": "Write contents to a file on a sprite",
+        "tags": [
+          "Public API - Files"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "path",
+                  "content"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File written"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/files/delete": {
+      "delete": {
+        "summary": "Delete a file",
+        "description": "Delete a file on a sprite",
+        "tags": [
+          "Public API - Files"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "summary": "List tasks",
+        "description": "List coding tasks with optional filtering",
+        "tags": [
+          "Public API - Tasks"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "spriteId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "projectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "assigned",
+                "in_progress",
+                "pr_created",
+                "completed",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tasks"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a task",
+        "description": "Create a new coding task for Claude to work on",
+        "tags": [
+          "Public API - Tasks"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "spriteId",
+                  "projectId",
+                  "title",
+                  "description"
+                ],
+                "properties": {
+                  "spriteId": {
+                    "type": "string"
+                  },
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ],
+                    "default": "medium"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task created"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}": {
+      "get": {
+        "summary": "Get a task",
+        "description": "Get details of a specific task",
+        "tags": [
+          "Public API - Tasks"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task details"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}/cancel": {
+      "post": {
+        "summary": "Cancel a task",
+        "description": "Cancel a pending or in-progress task",
+        "tags": [
+          "Public API - Tasks"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task cancelled"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/chat": {
+      "post": {
+        "summary": "Send a chat message",
+        "description": "Send a message to Claude on a sprite",
+        "tags": [
+          "Public API - Chat"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  },
+                  "conversationId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Claude's response"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/chat/history": {
+      "get": {
+        "summary": "Get chat history",
+        "description": "Get conversation history for a sprite",
+        "tags": [
+          "Public API - Chat"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "conversationId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chat history"
+          }
+        }
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "summary": "List projects",
+        "description": "List all projects for your organization",
+        "tags": [
+          "Public API - Projects"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of projects"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}": {
+      "get": {
+        "summary": "Get a project",
+        "description": "Get details of a specific project",
+        "tags": [
+          "Public API - Projects"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project details"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/install": {
+      "post": {
+        "summary": "Install MCP server",
+        "description": "Install and start the MCP server on a sprite",
+        "tags": [
+          "Public API - MCP"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MCP server installed"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/health": {
+      "get": {
+        "summary": "Check MCP health",
+        "description": "Check if the MCP server is running and healthy",
+        "tags": [
+          "Public API - MCP"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MCP health status"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/tools": {
+      "get": {
+        "summary": "List MCP tools",
+        "description": "Get all available MCP tools on a sprite",
+        "tags": [
+          "Public API - MCP"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of MCP tools"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/call": {
+      "post": {
+        "summary": "Call an MCP tool",
+        "description": "Execute an MCP tool on a sprite",
+        "tags": [
+          "Public API - MCP"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tool",
+                  "arguments"
+                ],
+                "properties": {
+                  "tool": {
+                    "type": "string",
+                    "description": "Name of the MCP tool to call"
+                  },
+                  "arguments": {
+                    "type": "object",
+                    "description": "Arguments to pass to the tool"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool execution result"
+          }
+        }
+      }
+    },
+    "/api/v1/mcp-registry/servers": {
+      "get": {
+        "summary": "Search MCP servers",
+        "description": "Search the MCP registry for available servers",
+        "tags": [
+          "Public API - MCP Registry"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search term"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            },
+            "description": "Number of results"
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Pagination cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of MCP servers"
+          }
+        }
+      }
+    },
+    "/api/v1/mcp-registry/servers/popular": {
+      "get": {
+        "summary": "Get popular MCP servers",
+        "description": "Get a list of popular MCP servers from the registry",
+        "tags": [
+          "Public API - MCP Registry"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of popular MCP servers"
+          }
+        }
+      }
+    },
+    "/api/v1/mcp-registry/servers/{name}": {
+      "get": {
+        "summary": "Get MCP server details",
+        "description": "Get details for a specific MCP server from the registry",
+        "tags": [
+          "Public API - MCP Registry"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Server name"
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "schema": {
+              "type": "string",
+              "default": "latest"
+            },
+            "description": "Server version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MCP server details"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/servers": {
+      "get": {
+        "summary": "Get all installed MCP servers for a sprite",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of installed MCP servers"
+          }
+        }
+      },
+      "post": {
+        "summary": "Install MCP server with configuration",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serverName"
+                ],
+                "properties": {
+                  "serverName": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "envVars": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        },
+                        "isSecret": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  },
+                  "autoStart": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server installed successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/servers/{serverName}": {
+      "get": {
+        "summary": "Get a specific MCP server configuration",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Server name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server configuration"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update MCP server configuration",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "autoStart": {
+                    "type": "boolean"
+                  },
+                  "startOrder": {
+                    "type": "integer"
+                  },
+                  "envVars": {
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuration updated"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Uninstall an MCP server",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server uninstalled"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/servers/{serverName}/start": {
+      "post": {
+        "summary": "Start an MCP server",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server started"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/servers/{serverName}/stop": {
+      "post": {
+        "summary": "Stop an MCP server",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server stopped"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/auto-start": {
+      "get": {
+        "summary": "Get auto-start configuration",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Auto-start configuration"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/auto-start/order": {
+      "put": {
+        "summary": "Update auto-start order",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serverOrder"
+                ],
+                "properties": {
+                  "serverOrder": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order updated"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/auto-start/start": {
+      "post": {
+        "summary": "Start all auto-start servers",
+        "tags": [
+          "MCP Configuration"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Servers started"
+          }
+        }
+      }
+    },
+    "/api/v1/mcp-registry/servers/{serverName}/required-env": {
+      "get": {
+        "summary": "Get required environment variables for a server",
+        "tags": [
+          "MCP Registry"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Required environment variables"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/check-updates": {
+      "get": {
+        "summary": "Check for updates for all MCP servers",
+        "description": "Check for available updates for all installed MCP servers on a sprite",
+        "tags": [
+          "Public API - MCP Servers"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Update check results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "servers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "serverName": {
+                                "type": "string"
+                              },
+                              "hasUpdate": {
+                                "type": "boolean"
+                              },
+                              "currentVersion": {
+                                "type": "string"
+                              },
+                              "latestVersion": {
+                                "type": "string"
+                              },
+                              "changelogUrl": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "updatesAvailable": {
+                          "type": "integer"
+                        },
+                        "checkedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/{serverName}/check-update": {
+      "get": {
+        "summary": "Check for update for a single MCP server",
+        "description": "Check if an update is available for a specific installed MCP server",
+        "tags": [
+          "Public API - MCP Servers"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "MCP server name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Update check result"
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/{serverName}/update": {
+      "post": {
+        "summary": "Update a single MCP server",
+        "description": "Update an installed MCP server to the latest version (preserves config)",
+        "tags": [
+          "Public API - MCP Servers"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serverName",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "MCP server name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Update result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "server": {
+                          "type": "object"
+                        },
+                        "previousVersion": {
+                          "type": "string"
+                        },
+                        "newVersion": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sprites/{id}/mcp/update-all": {
+      "post": {
+        "summary": "Update all MCP servers with available updates",
+        "description": "Update all installed MCP servers that have newer versions available",
+        "tags": [
+          "Public API - MCP Servers"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bulk update results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "updated": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "serverName": {
+                                "type": "string"
+                              },
+                              "previousVersion": {
+                                "type": "string"
+                              },
+                              "newVersion": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "failed": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "serverName": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/public-chat/{propertyId}": {
       "get": {
         "summary": "Get public chat info",
@@ -31306,7 +34049,7 @@
     "/api/sprites/{id}/settings": {
       "patch": {
         "summary": "Update sprite settings",
-        "description": "Update configurable sprite settings such as auto-shutdown behavior.\nSettings:\n- **autoShutdownAfterTask**: When true, the sprite will automatically stop after completing a task.\n  This is useful for cost optimization when you only need the sprite for specific tasks.\n",
+        "description": "Update configurable sprite settings such as auto-shutdown behavior and shell persistence.\nSettings:\n- **autoShutdownAfterTask**: When true, the sprite will automatically stop after completing a task.\n  This is useful for cost optimization when you only need the sprite for specific tasks.\n- **startupCommand**: Command to run when a terminal connects (e.g., \"npm run dev\").\n  This restores your development environment after resuming a sprite.\n- **lastShellDirectory**: Last working directory in the shell. The terminal will cd to this\n  directory when connecting. Typically set automatically by the system.\n",
         "tags": [
           "Sprites"
         ],
@@ -31336,6 +34079,18 @@
                   "autoShutdownAfterTask": {
                     "type": "boolean",
                     "description": "Whether to automatically stop the sprite after completing a task"
+                  },
+                  "startupCommand": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Command to run when terminal connects (e.g., \"npm run dev\")",
+                    "example": "npm run dev"
+                  },
+                  "lastShellDirectory": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Last working directory in the shell session",
+                    "example": "/home/user/project/src"
                   }
                 }
               }
@@ -32225,6 +34980,686 @@
         }
       }
     },
+    "/api/sprites/{id}/services": {
+      "get": {
+        "summary": "List all services for a sprite",
+        "description": "Get a list of all services (background processes) configured for the sprite.",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of services",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SpriteService"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new service",
+        "description": "Create a new background service (dev server, database, etc.) for the sprite.",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "command"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Service name (e.g., \"dev-server\", \"postgres\")"
+                  },
+                  "command": {
+                    "type": "string",
+                    "description": "Command to run (e.g., \"npm run dev\")"
+                  },
+                  "args": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Command arguments"
+                  },
+                  "workingDir": {
+                    "type": "string",
+                    "description": "Working directory for the service"
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Environment variables"
+                  },
+                  "autoStart": {
+                    "type": "boolean",
+                    "description": "Start service immediately after creation"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "description": "Port the service listens on (for auto-discovery)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Service created"
+          },
+          "400": {
+            "description": "Name and command required, or sprite not running"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/services/{serviceId}": {
+      "get": {
+        "summary": "Get a specific service",
+        "description": "Get details of a specific service by ID.",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serviceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service details"
+          },
+          "404": {
+            "description": "Sprite or service not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a service",
+        "description": "Delete a service from the sprite. The service will be stopped if running.",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serviceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service deleted"
+          },
+          "404": {
+            "description": "Sprite or service not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/services/{serviceId}/start": {
+      "post": {
+        "summary": "Start a service",
+        "description": "Start a stopped service.",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serviceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service started"
+          },
+          "400": {
+            "description": "Sprite not running"
+          },
+          "404": {
+            "description": "Sprite or service not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/services/{serviceId}/stop": {
+      "post": {
+        "summary": "Stop a service",
+        "description": "Stop a running service.",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serviceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service stopped"
+          },
+          "404": {
+            "description": "Sprite or service not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/services/{serviceId}/restart": {
+      "post": {
+        "summary": "Restart a service",
+        "description": "Restart a service (stop + start).",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serviceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Service ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service restarted"
+          },
+          "400": {
+            "description": "Sprite not running"
+          },
+          "404": {
+            "description": "Sprite or service not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/services/{serviceId}/logs": {
+      "get": {
+        "summary": "Get service logs",
+        "description": "Get logs from a service (stdout and stderr).",
+        "tags": [
+          "Sprites - Services"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          },
+          {
+            "in": "path",
+            "name": "serviceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Service ID"
+          },
+          {
+            "in": "query",
+            "name": "tail",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Number of lines to return from the end"
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return logs since this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "serviceId": {
+                          "type": "string"
+                        },
+                        "logs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "timestamp": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "stream": {
+                                "type": "string",
+                                "enum": [
+                                  "stdout",
+                                  "stderr"
+                                ]
+                              },
+                              "data": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "hasMore": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sprite or service not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/git/status": {
+      "get": {
+        "summary": "Get branch status for a sprite",
+        "description": "Get the current git branch status including commits ahead/behind,\nuncommitted changes, and last commit info.\n",
+        "tags": [
+          "Sprites - Git"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "featureBranch": {
+                          "type": "string"
+                        },
+                        "baseBranch": {
+                          "type": "string"
+                        },
+                        "ahead": {
+                          "type": "integer",
+                          "description": "Commits ahead of base branch"
+                        },
+                        "behind": {
+                          "type": "integer",
+                          "description": "Commits behind base branch"
+                        },
+                        "hasUncommittedChanges": {
+                          "type": "boolean"
+                        },
+                        "lastCommitMessage": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastCommitAuthor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "lastCommitDate": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Sprite not initialized"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/git/push": {
+      "post": {
+        "summary": "Push local commits to remote",
+        "description": "Push any local commits to the remote feature branch.",
+        "tags": [
+          "Sprites - Git"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Push result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "GitHub not configured or sprite not initialized"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/pr": {
+      "get": {
+        "summary": "Get existing pull request for sprite",
+        "description": "Get the existing pull request for the sprite's feature branch, if any.",
+        "tags": [
+          "Sprites - Git"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Sprite ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pull request info (null if none exists)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "number": {
+                          "type": "integer"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "OPEN",
+                            "CLOSED",
+                            "MERGED"
+                          ]
+                        },
+                        "headBranch": {
+                          "type": "string"
+                        },
+                        "baseBranch": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
     "/api/sprite-tasks": {
       "post": {
         "summary": "Create a new task",
@@ -32813,6 +36248,438 @@
           },
           "404": {
             "description": "No available sprite"
+          }
+        }
+      }
+    },
+    "/api/sprite-tasks/{id}/diff": {
+      "get": {
+        "summary": "Get diff for a task's branch",
+        "description": "Returns the git diff between the task's branch and the base branch (main).\nUseful for showing file changes in real-time during task execution.\n",
+        "tags": [
+          "Sprite Tasks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Diff data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "added",
+                              "modified",
+                              "deleted",
+                              "renamed"
+                            ]
+                          },
+                          "additions": {
+                            "type": "integer"
+                          },
+                          "deletions": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "branchName": {
+                      "type": "string"
+                    },
+                    "baseBranch": {
+                      "type": "string"
+                    },
+                    "additions": {
+                      "type": "integer"
+                    },
+                    "deletions": {
+                      "type": "integer"
+                    },
+                    "changedFiles": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/api/sprite-tasks/{id}/sync-status": {
+      "get": {
+        "summary": "Get GitHub issue sync status for a task",
+        "description": "Returns the current sync status between the task and its linked GitHub issue.\nIncludes comment count, current labels, and last sync time.\n",
+        "tags": [
+          "Sprite Tasks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hasLinkedIssue": {
+                      "type": "boolean"
+                    },
+                    "lastSynced": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "issueNumber": {
+                      "type": "integer"
+                    },
+                    "issueUrl": {
+                      "type": "string"
+                    },
+                    "commentCount": {
+                      "type": "integer"
+                    },
+                    "currentLabels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/api/sprite-tasks/{id}/activity": {
+      "get": {
+        "summary": "Get activity timeline for a task",
+        "description": "Returns a merged timeline of task status changes and GitHub issue comments.\nUseful for showing a unified activity view.\n",
+        "tags": [
+          "Sprite Tasks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "status_change",
+                          "comment",
+                          "pr_created",
+                          "error"
+                        ]
+                      },
+                      "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "actor": {
+                        "type": "string"
+                      },
+                      "metadata": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/api/sprite-tasks/{id}/sync": {
+      "post": {
+        "summary": "Force sync a task with its GitHub issue",
+        "description": "Manually triggers a bidirectional sync:\n- Pulls latest issue title/body changes from GitHub\n- Pulls new comments from GitHub\n- Updates issue labels based on task status\n",
+        "tags": [
+          "Sprite Tasks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issueUpdated": {
+                      "type": "boolean"
+                    },
+                    "newComments": {
+                      "type": "integer"
+                    },
+                    "labelsUpdated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/api/sprite-tasks/parse": {
+      "post": {
+        "summary": "Parse issue text into structured task data",
+        "description": "Parses GitHub issue content to extract:\n- Subtasks from checklists\n- Target files from path references\n- Acceptance criteria from relevant sections\n- Priority from labels\n- Technical context from code blocks\n- Generated Claude prompt\n\nUse this to preview parsed data before creating a task.\n",
+        "tags": [
+          "Sprite Tasks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Issue title"
+                  },
+                  "body": {
+                    "type": "string",
+                    "description": "Issue body (markdown)"
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Issue labels for priority detection"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parsed issue data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "subtasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "completed": {
+                            "type": "boolean"
+                          },
+                          "order": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "targetFiles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "acceptanceCriteria": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "priority": {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "urgent"
+                      ]
+                    },
+                    "estimatedComplexity": {
+                      "type": "string",
+                      "enum": [
+                        "trivial",
+                        "simple",
+                        "moderate",
+                        "complex"
+                      ]
+                    },
+                    "prompt": {
+                      "type": "string",
+                      "description": "Generated Claude prompt"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sprite-tasks/parse-github-issue": {
+      "post": {
+        "summary": "Fetch and parse a GitHub issue by number",
+        "description": "Fetches an issue from GitHub and parses it into structured task data.\nReturns parsed data plus original issue metadata.\n",
+        "tags": [
+          "Sprite Tasks"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "projectId",
+                  "issueNumber"
+                ],
+                "properties": {
+                  "projectId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Project with linked GitHub repo"
+                  },
+                  "issueNumber": {
+                    "type": "integer",
+                    "description": "GitHub issue number"
+                  },
+                  "spriteId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Optional sprite to use for fetching"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parsed issue data with GitHub metadata"
+          },
+          "404": {
+            "description": "Issue not found"
           }
         }
       }
@@ -36196,36 +40063,11 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "Dispotree Backend API"
+                      "example": "CodeLive Backend API"
                     },
                     "version": {
                       "type": "string",
-                      "example": "1.0.0"
-                    },
-                    "endpoints": {
-                      "type": "object",
-                      "properties": {
-                        "health": {
-                          "type": "string",
-                          "example": "/api/health"
-                        },
-                        "listings": {
-                          "type": "string",
-                          "example": "/api/listings"
-                        },
-                        "xome": {
-                          "type": "string",
-                          "example": "/api/xome"
-                        },
-                        "hedgefunds": {
-                          "type": "string",
-                          "example": "/api/hedgefunds"
-                        },
-                        "docs": {
-                          "type": "string",
-                          "example": "/api-docs"
-                        }
-                      }
+                      "example": "2.0.0"
                     }
                   }
                 }
@@ -36300,6 +40142,10 @@
     {
       "name": "Deal Notes",
       "description": "Notes on deals with team member attribution"
+    },
+    {
+      "name": "Deploy Hooks",
+      "description": "Vercel/Netlify/custom deployment hook management"
     },
     {
       "name": "Follow-Up Chains",

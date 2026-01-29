@@ -101,7 +101,11 @@ export function useSprite(id: string | null | undefined) {
 /**
  * Fetch sprite for a specific project
  */
-export function useSpriteByProject(projectId: string | null | undefined) {
+export function useSpriteByProject(
+  projectId: string | null | undefined,
+  options?: { enabled?: boolean }
+) {
+  const enabled = options?.enabled;
   return useQuery({
     queryKey: spriteKeys.byProject(projectId ?? ''),
     queryFn: async () => {
@@ -112,7 +116,7 @@ export function useSpriteByProject(projectId: string | null | undefined) {
       console.log('[useSpriteByProject] Sprite for', projectId, ':', sprite);
       return sprite;
     },
-    enabled: !!projectId,
+    enabled: !!projectId && (enabled !== false),
   });
 }
 

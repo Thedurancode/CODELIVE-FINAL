@@ -21,11 +21,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for auth token in cookies (set by client-side)
-  const token = request.cookies.get('dispotree_token')?.value;
+  // Check for Better Auth session cookie
+  // Better Auth uses 'codelive.session_token' based on our cookiePrefix config
+  const sessionToken = request.cookies.get('codelive.session_token')?.value;
 
-  // If no token and trying to access protected route, redirect to login
-  if (!token && !pathname.startsWith('/login')) {
+  // If no session and trying to access protected route, redirect to login
+  if (!sessionToken && !pathname.startsWith('/login')) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }

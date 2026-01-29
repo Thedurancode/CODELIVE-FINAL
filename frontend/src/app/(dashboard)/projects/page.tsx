@@ -791,7 +791,7 @@ export default function ProjectsPage() {
                     <span className="hidden sm:inline">New Project</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-[95vw] sm:max-w-xl p-0 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-[95vw] sm:max-w-2xl p-0 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
@@ -1033,7 +1033,7 @@ export default function ProjectsPage() {
         {/* Edit Dialog - Mobile optimized */}
         {mounted && (
           <Dialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
-            <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-[95vw] sm:max-w-xl p-0 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-[95vw] sm:max-w-2xl p-0 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">

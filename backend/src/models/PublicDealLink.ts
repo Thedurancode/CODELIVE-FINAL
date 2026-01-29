@@ -1,5 +1,6 @@
 import { Model, DataTypes, Optional } from 'sequelize';
 import sequelize from '../config/database';
+import type Property from './Property';
 
 export interface PublicDealSettings {
   showFinancials: boolean;
@@ -44,6 +45,9 @@ class PublicDealLink extends Model<PublicDealLinkAttributes, PublicDealLinkCreat
   public viewCount!: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+
+  // Association
+  public property?: Property;
 
   /**
    * Check if the link is valid (active and not expired)

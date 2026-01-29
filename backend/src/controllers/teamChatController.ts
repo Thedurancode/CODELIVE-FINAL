@@ -55,7 +55,7 @@ export const teamChatController = {
           limit: limit ? parseInt(limit as string) : 50,
           offset: offset ? parseInt(offset as string) : 0,
         });
-      } else if (regularTeamRoles.includes(userRole) || userRole === 'buyer') {
+      } else if (regularTeamRoles.includes(userRole) || (userRole as string) === 'buyer') {
         // Regular team members and buyers see only their conversations
         conversations = await teamCommunicationService.getConversationsForUser(userId, {
           includeArchived: includeArchived === 'true',
@@ -498,7 +498,7 @@ export const teamChatController = {
 
       // Determine sender type based on role
       let senderType: SenderType = 'team';
-      if (userRole === 'buyer') {
+      if ((userRole as string) === 'buyer') {
         senderType = 'buyer';
       }
 
@@ -885,8 +885,8 @@ export const teamChatController = {
         });
       }
 
-      // Cannot change a super_admin's role
-      if (user.role === 'super_admin') {
+      // Cannot change a super_admin's role (legacy role type check)
+      if ((user.role as string) === 'super_admin') {
         return res.status(403).json({
           success: false,
           error: 'Cannot change role of a super_admin',

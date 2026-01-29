@@ -8,6 +8,8 @@ import express from 'express';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
+import { toNodeHandler } from 'better-auth/node';
+import { auth } from './config/auth';
 import { corsOptions } from './middleware/cors';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import healthRoutes from './routes/healthRoutes';
@@ -15,7 +17,7 @@ import aiRoutes from './routes/aiRoutes';
 import agentRoutes from './routes/agentRoutes';
 import knowledgeRoutes from './routes/knowledgeRoutes';
 import documentRoutes from './routes/documentRoutes';
-import authRoutes from './routes/authRoutes';
+// Auth routes handled by Better Auth at /api/auth/*
 import settingsRoutes from './routes/settingsRoutes';
 import openaiRoutes from './routes/openaiRoutes';
 import webhookRoutes from './routes/webhookRoutes';
@@ -40,6 +42,8 @@ import teamMemberRoutes from './routes/teamMemberRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import templateAdminRoutes from './routes/templateAdminRoutes';
 import setupRoutes from './routes/setupRoutes';
+import userRoutes from './routes/userRoutes';
+import homeAssistantRoutes from './routes/homeAssistantRoutes';
 import codingTaskRoutes from './routes/codingTaskRoutes';
 import spritesRoutes from './routes/spritesRoutes';
 import spriteTasksRoutes from './routes/spriteTasksRoutes';
@@ -66,6 +70,7 @@ import { projectService } from './services/ProjectService';
 import { gitHubService } from './services/GitHubService';
 import { projectContactService } from './services/ProjectContactService';
 import { projectNoteService } from './services/ProjectNoteService';
+import { projectRecapService } from './services/ProjectRecapService';
 import { codingTaskService } from './services/CodingTaskService';
 import { conversationTitleService } from './services/ConversationTitleService';
 import { scheduledTaskScheduler } from './services/ScheduledTaskScheduler';
@@ -81,6 +86,8 @@ import { teamCommunicationService } from './services/TeamCommunicationService';
 import { calendarIntegrationService } from './services/agent/CalendarIntegrationService';
 import { realtimeVoiceService } from './services/RealtimeVoiceService';
 import { entitySearchService } from './services/EntitySearchService';
+import { homeAssistantService } from './services/HomeAssistantService';
+import { elevenLabsService } from './services/ElevenLabsService';
 import setupSwagger from './config/swagger';
 import { WebSocketServer, WebSocket } from 'ws';
 import { parse as parseUrl } from 'url';
@@ -109,6 +116,12 @@ process.on('uncaughtException', (error: Error) => {
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+// Trust proxy for production (Fly.io, Railway, etc.)
+// This is required for rate limiting and getting correct client IPs
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', true);
+}
+
 // Skip all Express middleware for WebSocket upgrade paths
 // These are handled directly by the HTTP server's 'upgrade' event
 app.use((req, res, next) => {
@@ -119,6 +132,12 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// CORS must be applied before Better Auth handler
+app.use(corsOptions);
+
+// Better Auth handler - MUST be mounted before express.json()
+app.all('/api/auth/*', toNodeHandler(auth));
 
 // Middleware
 app.use(helmet({
@@ -133,7 +152,6 @@ app.use(helmet({
     },
   },
 }));
-app.use(corsOptions);
 // Capture raw body for webhook signature verification
 app.use(express.json({
   limit: '10mb',
@@ -149,7 +167,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/setup', setupRoutes); // First-run setup (no auth required)
 
 // Routes
-app.use('/api/auth', authRoutes);
+// Note: /api/auth/* routes are handled by Better Auth mounted above
 app.use('/api/ai', aiRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/voice', voiceRoutes);
@@ -178,7 +196,9 @@ app.use('/api/webhooks/manage', webhookManagementRoutes);
 app.use('/api/activity-feed', activityFeedRoutes);
 app.use('/api/entity-search', entitySearchRoutes);
 app.use('/api/team', teamMemberRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/home-assistant', homeAssistantRoutes);
 app.use('/api/coding-tasks', codingTaskRoutes);
 app.use('/api/sprites', spritesRoutes);
 app.use('/api/sprite-tasks', spriteTasksRoutes);
@@ -352,6 +372,7 @@ const startServer = async () => {
       await projectService.initialize();
       await projectContactService.initialize();
       await projectNoteService.initialize();
+      await projectRecapService.initialize();
       await gitHubService.initialize();
       await codingTaskService.initialize();
       logger.info('Project Services initialized successfully');
@@ -433,6 +454,18 @@ const startServer = async () => {
       }
     } catch (stripeError) {
       logger.warn('Stripe Service initialization failed', {}, stripeError);
+    }
+
+    // Initialize ElevenLabs TTS Service
+    try {
+      await elevenLabsService.initialize();
+      if (elevenLabsService.isConfigured()) {
+        logger.info('ElevenLabs TTS Service initialized');
+      } else {
+        logger.warn('ElevenLabs TTS Service disabled (missing ELEVENLABS_API_KEY)');
+      }
+    } catch (elevenLabsError) {
+      logger.warn('ElevenLabs TTS Service initialization failed', {}, elevenLabsError);
     }
 
     // Initialize Team Communication Service
@@ -635,6 +668,14 @@ const startServer = async () => {
       logger.info('GitHub Sync WebSocket Service initialized', { path: '/ws/github-sync' });
     } catch (githubSyncError) {
       logger.warn('GitHub Sync WebSocket Service initialization failed', {}, githubSyncError);
+    }
+
+    // Initialize Home Assistant Service (smart home control)
+    try {
+      await homeAssistantService.initialize();
+      logger.info('Home Assistant Service initialized');
+    } catch (haError) {
+      logger.warn('Home Assistant Service initialization failed', {}, haError);
     }
 
     // Start User Reminder Scheduler

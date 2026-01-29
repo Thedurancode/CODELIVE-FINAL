@@ -13,6 +13,7 @@ import {
   Settings,
   ChevronDown,
   Pin,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DockItem } from './dock-item';
@@ -20,6 +21,7 @@ import { DockAgentsItem } from './dock-agents-item';
 
 const dockItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/chat', label: 'AI Chat', icon: Bot },
   { href: '/activity-feed', label: 'Activity', icon: Activity },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/contacts', label: 'Contacts', icon: Users },
