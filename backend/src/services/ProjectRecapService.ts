@@ -18,33 +18,47 @@ import { logger } from './LoggerService';
 // System prompt for generating recaps - optimized for ElevenLabs voice synthesis
 const RECAP_SYSTEM_PROMPT = `You are a friendly project assistant giving a spoken status update. Write exactly as you would naturally speak it aloud.
 
+DYNAMIC CONTEXT RULES (use these to personalize):
+- Use the "Time context" to adjust your greeting (morning/afternoon/evening/late night)
+- If "Since last recap" shows new activity, highlight what's changed: "Since you last checked in, there's been 2 new notes..."
+- If "No new activity since last recap", acknowledge it: "Nothing new since you last checked..."
+- If "URGENT ITEMS DETECTED", lead with urgency: "Heads up, looks like there's something urgent..."
+- If deadline is approaching (3 days or less), make it prominent
+
 PRIORITY RULES:
-- Lead with the MOST RECENT note first - it's the current state
-- Then briefly recap other recent notes and who wrote them
-- Mention team members by name when summarizing their contributions
-- If the latest note is critical (cancelled, paused, blocked, urgent), emphasize it but still mention prior context
+- If urgent items exist, lead with them
+- Otherwise, lead with the MOST RECENT note first - it's the current state
+- Mention what's NEW since last recap prominently
+- If the latest note is critical (cancelled, paused, blocked, urgent), emphasize it
 
 VOICE STYLE RULES:
 - Write in first person as if you're personally briefing the listener
 - Use contractions naturally (it's, we've, they're, hasn't)
 - Add natural speech rhythm with commas for pauses
-- Start with a warm greeting like "Hey" or "Alright" or "So"
+- Match greeting to time of day (Good morning/afternoon/evening, or "Working late, huh?" for night)
 - Keep sentences short and punchy - easy to speak and hear
 - Spell out abbreviations (PR becomes "pull request")
 - No markdown, bullets, URLs, or special characters
 
 CONTENT TO COVER (3-5 sentences):
-1. Lead with the most recent note and who wrote it
-2. Summarize other recent notes briefly, mentioning each person by name
-3. Reference any commits or code activity
-4. Mention GitHub issues - especially open ones that need attention or recently closed ones
-5. Mention who's on the team if contacts are listed (e.g., "Sarah's on design, John's handling dev")
-6. End with current status and what's next
+1. Time-appropriate greeting + what's new since last recap
+2. Lead with urgent items OR most recent note
+3. Summarize other recent notes briefly, mentioning each person by name
+4. Reference commits and GitHub issues if present
+5. Deadline reminder if approaching
+6. End with current status and momentum
 
-EXAMPLE:
-"Hey, quick update on the dashboard project. Eddie just left a note about cancelling the project, so that's the latest. Before that, Sarah had noted the API integration was done, and John mentioned he fixed the auth bug last week. On the GitHub side, there are two open issues - one's a bug with the login flow, and another for adding dark mode. The login bug was just closed yesterday. On the team, we've got Sarah handling design and John on dev. There were also a few commits from the team on the UI side. So looks like we're wrapping up here."
+EXAMPLES:
+Morning with new activity:
+"Good morning! Since you last checked in yesterday, there's been 2 new notes. Eddie just flagged something as blocked, so heads up on that. Before that, Sarah wrapped up the API work. Deadline's in 3 days, so we're in the home stretch."
 
-Write naturally, like you're chatting with a colleague giving a full recap.`;
+Evening, nothing new:
+"Good evening. Nothing new since you checked earlier today, the project's still humming along in the coding phase. Sarah's last note mentioned the auth flow is done. Looking good for the Friday deadline."
+
+Late night with urgent:
+"Working late, huh? Quick heads up, there's an urgent note from John about being blocked on the database. You might want to check that out. Otherwise, the project's in good shape."
+
+Write naturally, like you're chatting with a colleague giving a personalized update.`;
 
 interface CommitInfo {
   sha: string;
@@ -359,14 +373,104 @@ class ProjectRecapService {
   }
 
   /**
+   * Get time-aware greeting based on hour of day
+   */
+  private getTimeGreeting(): { greeting: string; timeContext: string } {
+    const hour = new Date().getHours();
+    const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+
+    if (hour < 6) {
+      return { greeting: 'burning the midnight oil', timeContext: 'late night' };
+    } else if (hour < 12) {
+      return { greeting: 'Good morning', timeContext: 'morning' };
+    } else if (hour < 17) {
+      return { greeting: 'Good afternoon', timeContext: 'afternoon' };
+    } else if (hour < 21) {
+      return { greeting: 'Good evening', timeContext: 'evening' };
+    } else {
+      return { greeting: 'Working late', timeContext: 'night' };
+    }
+  }
+
+  /**
+   * Detect urgent keywords in notes
+   */
+  private detectUrgency(notes: NoteInfo[]): { hasUrgent: boolean; urgentKeywords: string[] } {
+    const urgentKeywords = ['urgent', 'asap', 'blocked', 'blocker', 'critical', 'deadline', 'overdue', 'priority', 'immediately', 'stuck', 'help'];
+    const foundKeywords: string[] = [];
+
+    for (const note of notes) {
+      const content = note.content.toLowerCase();
+      for (const keyword of urgentKeywords) {
+        if (content.includes(keyword) && !foundKeywords.includes(keyword)) {
+          foundKeywords.push(keyword);
+        }
+      }
+    }
+
+    return { hasUrgent: foundKeywords.length > 0, urgentKeywords: foundKeywords };
+  }
+
+  /**
+   * Calculate activity since last recap
+   */
+  private getActivitySinceLastRecap(
+    project: Project,
+    notes: NoteInfo[],
+    commits: CommitInfo[],
+    issues: IssueInfo[]
+  ): { newNotes: number; newCommits: number; newIssues: number; daysSinceRecap: number | null } {
+    const lastRecap = project.aiRecapUpdatedAt;
+
+    if (!lastRecap) {
+      return { newNotes: notes.length, newCommits: commits.length, newIssues: issues.length, daysSinceRecap: null };
+    }
+
+    const lastRecapDate = new Date(lastRecap);
+    const now = new Date();
+    const daysSinceRecap = Math.floor((now.getTime() - lastRecapDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    const newNotes = notes.filter(n => new Date(n.createdAt) > lastRecapDate).length;
+    const newCommits = commits.filter(c => c.date && new Date(c.date) > lastRecapDate).length;
+    const newIssues = issues.filter(i => new Date(i.updatedAt) > lastRecapDate).length;
+
+    return { newNotes, newCommits, newIssues, daysSinceRecap };
+  }
+
+  /**
    * Build context string for AI from gathered data
    */
   private buildContext(project: Project, notes: NoteInfo[], commits: CommitInfo[], issues: IssueInfo[] = [], contacts: ContactInfo[] = []): string {
     const parts: string[] = [];
 
+    // Time context
+    const { greeting, timeContext } = this.getTimeGreeting();
+    parts.push(`Time context: ${greeting} (${timeContext})`);
+
     // Project info
     parts.push(`Project: ${project.title}`);
     parts.push(`Status: ${this.formatStatus(project.status)}`);
+
+    // Activity since last recap
+    const activity = this.getActivitySinceLastRecap(project, notes, commits, issues);
+    if (activity.daysSinceRecap !== null) {
+      const activityParts: string[] = [];
+      if (activity.newNotes > 0) activityParts.push(`${activity.newNotes} new note${activity.newNotes > 1 ? 's' : ''}`);
+      if (activity.newCommits > 0) activityParts.push(`${activity.newCommits} new commit${activity.newCommits > 1 ? 's' : ''}`);
+      if (activity.newIssues > 0) activityParts.push(`${activity.newIssues} issue update${activity.newIssues > 1 ? 's' : ''}`);
+
+      if (activityParts.length > 0) {
+        parts.push(`Since last recap (${activity.daysSinceRecap === 0 ? 'earlier today' : activity.daysSinceRecap === 1 ? 'yesterday' : `${activity.daysSinceRecap} days ago`}): ${activityParts.join(', ')}`);
+      } else {
+        parts.push(`No new activity since last recap (${activity.daysSinceRecap === 0 ? 'earlier today' : `${activity.daysSinceRecap} days ago`})`);
+      }
+    }
+
+    // Urgency detection
+    const urgency = this.detectUrgency(notes);
+    if (urgency.hasUrgent) {
+      parts.push(`⚠️ URGENT ITEMS DETECTED: Notes mention "${urgency.urgentKeywords.join('", "')}"`);
+    }
 
     if (project.targetEndDate) {
       const daysUntil = project.getDaysUntilDue();

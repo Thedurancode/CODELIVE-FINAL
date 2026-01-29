@@ -605,7 +605,7 @@ export function Header() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>{isPlayingRecap ? 'Stop' : 'Play last recap'}</p>
+              <p>{isPlayingRecap ? 'Stop' : 'Quick Recap'}</p>
             </TooltipContent>
           </Tooltip>
         )}
