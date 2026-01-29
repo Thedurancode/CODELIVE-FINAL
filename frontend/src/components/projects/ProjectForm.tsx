@@ -311,15 +311,15 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
               />
             </div>
 
-            {/* Deployment URL */}
+            {/* Live Link */}
             <div className="space-y-2">
               <Label className="text-muted-foreground text-sm flex items-center gap-2">
                 <Globe className="h-4 w-4" />
-                Deployment URL
+                Live Link
               </Label>
               <Input
                 type="url"
-                placeholder="https://myproject.vercel.app"
+                placeholder="https://myproject.com"
                 value={deploymentUrl}
                 onChange={(e) => setDeploymentUrl(e.target.value)}
                 className="bg-background/50 border-border/50"

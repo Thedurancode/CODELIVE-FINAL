@@ -71,6 +71,7 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  Globe,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -899,6 +900,36 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
 
+              {/* Quick Links Section */}
+              {(project.deploymentUrl || project.githubUrl) && (
+                <div className="flex items-center gap-2">
+                  {project.deploymentUrl && (
+                    <a
+                      href={project.deploymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 p-3 rounded-xl bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 transition-all group flex items-center justify-center gap-2"
+                    >
+                      <Globe className="h-5 w-5 text-green-400" />
+                      <span className="text-sm font-medium text-green-400">Live</span>
+                      <ExternalLink className="h-3 w-3 text-green-400/50 group-hover:text-green-400" />
+                    </a>
+                  )}
+                  {project.githubUrl && (
+                    <a
+                      href={project.githubUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 p-3 rounded-xl bg-muted/50 border border-border/50 hover:bg-muted/70 transition-all group flex items-center justify-center gap-2"
+                    >
+                      <Github className="h-5 w-5 text-foreground" />
+                      <span className="text-sm font-medium">Repo</span>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-foreground" />
+                    </a>
+                  )}
+                </div>
+              )}
+
               {/* AI Recap Section */}
               <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
                 <div className="flex items-center justify-between mb-4">
@@ -1006,23 +1037,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     <p className="text-sm font-medium">{formatDate(project.createdAt)}</p>
                   </div>
 
-                  {project.githubUrl && (
-                    <a
-                      href={project.githubUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block p-3 rounded-lg bg-background/50 border border-border/50 hover:bg-background/80 hover:border-primary/30 transition-all group"
-                    >
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                        <Github className="h-3 w-3" />
-                        Repository
-                      </p>
-                      <p className="text-sm font-medium text-primary group-hover:underline flex items-center gap-1">
-                        {project.githubUrl.replace('https://github.com/', '')}
-                        <ExternalLink className="h-3 w-3 opacity-50" />
-                      </p>
-                    </a>
-                  )}
                 </div>
               </div>
             </div>

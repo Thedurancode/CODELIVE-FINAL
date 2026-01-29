@@ -63,6 +63,7 @@ import {
   Code2,
   Folder,
   Settings,
+  Globe,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import {
@@ -490,6 +491,14 @@ export default function ProjectsPage() {
                           </a>
                         </DropdownMenuItem>
                       )}
+                      {project.deploymentUrl && (
+                        <DropdownMenuItem asChild className="h-10">
+                          <a href={project.deploymentUrl} target="_blank" rel="noopener noreferrer">
+                            <Globe className="mr-2 h-4 w-4 text-green-400" />
+                            <span className="text-green-400">Live Link</span>
+                          </a>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400 h-10">
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -619,6 +628,14 @@ export default function ProjectsPage() {
                                 </DropdownMenuItem>
                               </>
                             )}
+                            {project.deploymentUrl && (
+                              <DropdownMenuItem asChild>
+                                <a href={project.deploymentUrl} target="_blank" rel="noopener noreferrer">
+                                  <Globe className="mr-2 h-4 w-4 text-green-400" />
+                                  <span className="text-green-400">Live Link</span>
+                                </a>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400">
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -697,6 +714,14 @@ export default function ProjectsPage() {
                       </DropdownMenuItem>
                     </>
                   )}
+                  {project.deploymentUrl && (
+                    <DropdownMenuItem asChild className="h-10 sm:h-auto">
+                      <a href={project.deploymentUrl} target="_blank" rel="noopener noreferrer">
+                        <Globe className="mr-2 h-4 w-4 text-green-400" />
+                        <span className="text-green-400">Live Link</span>
+                      </a>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleDelete(project.id)} className="text-red-400 h-10 sm:h-auto">
                     <Trash2 className="mr-2 h-4 w-4" />
@@ -720,6 +745,18 @@ export default function ProjectsPage() {
                 {project.status.replace('_', ' ')}
               </Badge>
               <div className="flex items-center gap-1">
+                {project.deploymentUrl && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                    asChild
+                  >
+                    <a href={project.deploymentUrl} target="_blank" rel="noopener noreferrer" title="Open Live Link">
+                      <Globe className="h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
                 {project.githubUrl && (
                   <SpriteLaunchButton
                     projectId={project.id}
