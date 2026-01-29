@@ -97,14 +97,7 @@ async function autoInviteMemberToGitHub(
 
 export const getProjects = async (req: Request, res: Response) => {
   try {
-    const organizationId = (req as any).user?.organizationId;
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Organization ID is required',
-        timestamp: new Date().toISOString(),
-      });
-    }
+    const userId = (req as any).user?.id;
 
     const {
       page,
@@ -117,7 +110,9 @@ export const getProjects = async (req: Request, res: Response) => {
       sortOrder,
     } = req.query;
 
-    const result = await projectService.getProjects(organizationId, {
+    // Get projects created by user or where user is a member
+    const result = await projectService.getProjects({
+      userId, // Filter by user access
       page: page ? parseInt(page as string, 10) : undefined,
       limit: limit ? parseInt(limit as string, 10) : undefined,
       search: search as string,
@@ -146,9 +141,10 @@ export const getProjects = async (req: Request, res: Response) => {
 export const getProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const organizationId = (req as any).user?.organizationId;
+    const userId = (req as any).user?.id;
 
-    const project = await projectService.getProjectForOrganization(id, organizationId);
+    // Get project by ID (user access check can be added later if needed)
+    const project = await projectService.getProject(id);
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -174,21 +170,16 @@ export const getProject = async (req: Request, res: Response) => {
 export const createProject = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-    const organizationId = (req as any).user?.organizationId;
 
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Organization ID is required',
-        timestamp: new Date().toISOString(),
-      });
-    }
+    console.log('[createProject] Creating project:', { userId, body: req.body });
 
     const project = await projectService.createProject({
       ...req.body,
-      organizationId,
       createdById: userId,
+      organizationId: null, // Legacy field - now uses createdById for access control
     });
+
+    console.log('[createProject] Project created:', project?.id);
 
     res.status(201).json({
       success: true,
@@ -196,6 +187,7 @@ export const createProject = async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    console.error('[createProject] Error:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : String(error),
@@ -207,9 +199,8 @@ export const createProject = async (req: Request, res: Response) => {
 export const updateProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const organizationId = (req as any).user?.organizationId;
 
-    const project = await projectService.updateProject(id, organizationId, req.body);
+    const project = await projectService.updateProject(id, undefined, req.body);
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -235,9 +226,8 @@ export const updateProject = async (req: Request, res: Response) => {
 export const deleteProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const organizationId = (req as any).user?.organizationId;
 
-    const deleted = await projectService.deleteProject(id, organizationId);
+    const deleted = await projectService.deleteProject(id);
     if (!deleted) {
       return res.status(404).json({
         success: false,
@@ -1175,21 +1165,12 @@ export const createGitHubIssueFromNote = async (req: Request, res: Response) => 
 // ============================================================================
 
 /**
- * Get all team members for the organization (for team selector)
+ * Get all team members (for team selector)
+ * Returns all users since organizations were removed
  */
 export const getOrganizationTeamMembers = async (req: Request, res: Response) => {
   try {
-    const organizationId = (req as any).user?.organizationId;
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Organization ID is required',
-        timestamp: new Date().toISOString(),
-      });
-    }
-
     const members = await MarketplaceUser.findAll({
-      where: { organizationId },
       attributes: ['id', 'name', 'email', 'avatar', 'title', 'role', 'isOnline', 'onlineStatus'],
       order: [['name', 'ASC']],
     });
