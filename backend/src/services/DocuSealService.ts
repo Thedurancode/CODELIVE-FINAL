@@ -9,7 +9,12 @@
  * - Track signing status
  * - Download signed documents
  * - Pre-fill form fields
+ * - Configurable API URL via settings (for self-hosted instances)
  */
+
+import { settingsService } from './settingsService';
+import ContractSigner from '../models/ContractSigner';
+import DocuSealSubmission from '../models/DocuSealSubmission';
 
 // Types for DocuSeal API
 export interface DocuSealTemplate {
@@ -130,20 +135,48 @@ class DocuSealService {
 
   /**
    * Initialize the DocuSeal service
+   * Loads API URL from settings (with env var fallback)
    */
-  initialize(): void {
+  async initialize(): Promise<void> {
     this.apiKey = process.env.DOCUSEAL_API_KEY || null;
-    const customUrl = process.env.DOCUSEAL_API_URL;
 
-    if (customUrl) {
-      this.baseUrl = customUrl.replace(/\/$/, ''); // Remove trailing slash
+    // Load API URL from settings (with env var and default fallback)
+    try {
+      const settingsUrl = await settingsService.get<string>('docuseal.apiUrl');
+      const envUrl = process.env.DOCUSEAL_API_URL;
+      const customUrl = settingsUrl || envUrl;
+
+      if (customUrl) {
+        this.baseUrl = customUrl.replace(/\/$/, ''); // Remove trailing slash
+      }
+    } catch (err) {
+      // Settings not available yet, use env var or default
+      const envUrl = process.env.DOCUSEAL_API_URL;
+      if (envUrl) {
+        this.baseUrl = envUrl.replace(/\/$/, '');
+      }
     }
 
     if (this.apiKey) {
       this.initialized = true;
-      console.log('✅ DocuSeal Service initialized');
+      console.log(`✅ DocuSeal Service initialized (${this.baseUrl})`);
     } else {
       console.log('⚠️ DocuSeal Service disabled (missing DOCUSEAL_API_KEY)');
+    }
+  }
+
+  /**
+   * Update API URL at runtime (called when settings change)
+   */
+  async updateApiUrl(): Promise<void> {
+    try {
+      const settingsUrl = await settingsService.get<string>('docuseal.apiUrl');
+      if (settingsUrl) {
+        this.baseUrl = settingsUrl.replace(/\/$/, '');
+        console.log(`📝 DocuSeal API URL updated to: ${this.baseUrl}`);
+      }
+    } catch (err) {
+      console.warn('Failed to update DocuSeal API URL from settings');
     }
   }
 
@@ -494,6 +527,174 @@ class DocuSealService {
     return payload.data.metadata?.pipelineId ||
            payload.data.metadata?.pipeline_id ||
            null;
+  }
+
+  // ==========================================================================
+  // INTEGRATED SUBMISSION + SIGNER CREATION
+  // ==========================================================================
+
+  /**
+   * Create a submission and automatically create ContractSigner records
+   * This is the recommended way to send contracts with signer tracking
+   */
+  async createSubmissionWithSigners(
+    options: CreateSubmissionOptions & {
+      projectId?: string;
+      propertyId?: number;
+      pipelineId?: number;
+      userId?: number;
+      contactIds?: Record<string, string>; // Map of email -> contactId
+    }
+  ): Promise<{
+    submission: DocuSealSubmission;
+    localSubmission: typeof DocuSealSubmission.prototype;
+    signers: typeof ContractSigner.prototype[];
+  }> {
+    // 1. Create submission in DocuSeal
+    const submission = await this.createSubmission(options);
+
+    // 2. Save to local database
+    const localSubmission = await DocuSealSubmission.create({
+      docuSealSubmissionId: submission.id,
+      templateId: options.templateId,
+      templateName: submission.template?.name,
+      projectId: options.projectId,
+      propertyId: options.propertyId,
+      pipelineId: options.pipelineId,
+      userId: options.userId,
+      status: 'sent',
+      submitters: submission.submitters.map(s => ({
+        id: s.id,
+        email: s.email,
+        name: s.name,
+        role: s.role,
+        status: s.status,
+        sentAt: s.sent_at,
+        embedUrl: s.embed_src,
+      })),
+      sentAt: new Date(),
+      expireAt: options.expireAt,
+      metadata: options.metadata,
+    });
+
+    // 3. Create ContractSigner records
+    const signers: typeof ContractSigner.prototype[] = [];
+    for (let i = 0; i < submission.submitters.length; i++) {
+      const submitter = submission.submitters[i];
+      const contactId = options.contactIds?.[submitter.email.toLowerCase()];
+
+      const signer = await ContractSigner.create({
+        submissionId: localSubmission.id,
+        projectId: options.projectId,
+        contactId,
+        docuSealSignerId: submitter.id,
+        email: submitter.email,
+        name: submitter.name,
+        role: submitter.role,
+        status: submitter.status === 'sent' ? 'sent' : 'pending',
+        order: i + 1,
+        sentAt: submitter.sent_at ? new Date(submitter.sent_at) : new Date(),
+        embedUrl: submitter.embed_src,
+      });
+      signers.push(signer);
+    }
+
+    return { submission, localSubmission, signers };
+  }
+
+  /**
+   * Sync signers from a DocuSeal webhook update
+   * Call this when you receive form.completed, form.opened, etc.
+   */
+  async syncSignerFromWebhook(payload: WebhookPayload): Promise<ContractSigner | null> {
+    const { event_type, data } = payload;
+
+    if (!data.submission_id || !data.email) {
+      return null;
+    }
+
+    // Find the local submission
+    const localSubmission = await DocuSealSubmission.findByDocuSealId(data.submission_id);
+    if (!localSubmission) {
+      return null;
+    }
+
+    // Find or create the signer
+    let signer = await ContractSigner.findOne({
+      where: {
+        submissionId: localSubmission.id,
+        email: data.email.toLowerCase(),
+      },
+    });
+
+    if (!signer) {
+      // Create if doesn't exist (edge case)
+      signer = await ContractSigner.create({
+        submissionId: localSubmission.id,
+        projectId: localSubmission.projectId,
+        docuSealSignerId: data.id,
+        email: data.email,
+        name: data.name,
+        role: data.role || 'signer',
+        status: 'pending',
+      });
+    }
+
+    // Update based on event type
+    const updates: Partial<typeof ContractSigner.prototype> = {};
+
+    switch (event_type) {
+      case 'form.viewed':
+        updates.status = 'opened';
+        updates.openedAt = new Date();
+        break;
+      case 'form.completed':
+        updates.status = 'completed';
+        updates.completedAt = new Date();
+        if (data.documents?.[0]?.url) {
+          updates.signedDocumentUrl = data.documents[0].url;
+        }
+        break;
+      case 'form.declined':
+        updates.status = 'declined';
+        updates.declinedAt = new Date();
+        updates.declineReason = data.decline_reason;
+        break;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await signer.update(updates);
+    }
+
+    return signer;
+  }
+
+  /**
+   * Add a signer to an existing contract
+   */
+  async addSigner(options: {
+    submissionId: number; // Local DocuSealSubmission.id
+    email: string;
+    name?: string;
+    role?: string;
+    contactId?: string;
+    order?: number;
+  }): Promise<ContractSigner> {
+    const submission = await DocuSealSubmission.findByPk(options.submissionId);
+    if (!submission) {
+      throw new Error('Submission not found');
+    }
+
+    return ContractSigner.create({
+      submissionId: options.submissionId,
+      projectId: submission.projectId,
+      contactId: options.contactId,
+      email: options.email,
+      name: options.name,
+      role: options.role || 'signer',
+      status: 'pending',
+      order: options.order,
+    });
   }
 }
 

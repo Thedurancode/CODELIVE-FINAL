@@ -19,8 +19,13 @@ export function TeamMemberSelector({
   onChange,
   label = 'Team Members',
 }: TeamMemberSelectorProps) {
-  const { data: teamMembers = [], isLoading } = useTeamMembers();
+  const { data: teamMembersData, isLoading } = useTeamMembers();
   const [search, setSearch] = useState('');
+
+  // Extract array from potentially wrapped response
+  const teamMembers: TeamMember[] = Array.isArray(teamMembersData)
+    ? teamMembersData
+    : ((teamMembersData as any)?.data || []);
 
   // Filter members based on search
   const filteredMembers = useMemo(() => {

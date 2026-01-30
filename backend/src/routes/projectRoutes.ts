@@ -1042,6 +1042,63 @@ router.get('/:id/recap', authenticate, projectController.getProjectRecap);
  */
 router.post('/:id/recap/refresh', authenticate, projectController.refreshProjectRecap);
 
+/**
+ * @swagger
+ * /api/projects/{id}/recap/audio:
+ *   get:
+ *     summary: Get cached TTS audio for project recap
+ *     description: Returns cached audio URL if available, otherwise generates new audio using ElevenLabs and caches it
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: voice
+ *         schema:
+ *           type: string
+ *           default: rachel
+ *         description: ElevenLabs voice key (rachel, adam, sarah, etc.)
+ *       - in: query
+ *         name: regenerate
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Force regenerate audio even if cached
+ *     responses:
+ *       200:
+ *         description: Audio URL for project recap
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     audioUrl:
+ *                       type: string
+ *                       description: URL to the audio file
+ *                     cached:
+ *                       type: boolean
+ *                       description: Whether the audio was served from cache
+ *                     recap:
+ *                       type: string
+ *                       description: The recap text that was converted to audio
+ *       404:
+ *         description: Project not found
+ *       503:
+ *         description: ElevenLabs not configured
+ */
+router.get('/:id/recap/audio', authenticate, projectController.getProjectRecapAudio);
+
 // ============================================================================
 // PROJECT LOGO
 // ============================================================================
@@ -1347,6 +1404,134 @@ router.patch('/:id/members/:memberId', projectController.updateProjectMember);
  *         description: Member removed from project
  */
 router.delete('/:id/members/:memberId', projectController.removeProjectMember);
+
+// ============================================================================
+// PROJECT CONTRACTS (DocuSeal Integration)
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/contracts:
+ *   get:
+ *     summary: Get contracts for a project
+ *     description: Retrieves all DocuSeal contracts/submissions associated with this project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, sent, viewed, partially_signed, completed, declined, expired, archived]
+ *     responses:
+ *       200:
+ *         description: List of project contracts
+ *       404:
+ *         description: Project not found
+ */
+router.get('/:id/contracts', projectController.getProjectContracts);
+
+/**
+ * @swagger
+ * /api/projects/{id}/contracts:
+ *   post:
+ *     summary: Link a contract to a project
+ *     description: Associates an existing DocuSeal submission with this project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - docuSealSubmissionId
+ *             properties:
+ *               docuSealSubmissionId:
+ *                 type: integer
+ *                 description: DocuSeal submission ID to link
+ *     responses:
+ *       200:
+ *         description: Contract linked to project
+ *       404:
+ *         description: Project or submission not found
+ */
+router.post('/:id/contracts', projectController.linkProjectContract);
+
+/**
+ * @swagger
+ * /api/projects/{id}/contracts/{contractId}:
+ *   delete:
+ *     summary: Unlink a contract from a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: contractId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Local DocuSealSubmission ID
+ *     responses:
+ *       200:
+ *         description: Contract unlinked from project
+ *       404:
+ *         description: Contract not found
+ */
+router.delete('/:id/contracts/:contractId', projectController.unlinkProjectContract);
+
+/**
+ * @swagger
+ * /api/projects/{id}/signers:
+ *   get:
+ *     summary: Get all contract signers for a project
+ *     description: Retrieves all signers across all contracts associated with this project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, sent, opened, completed, declined]
+ *         description: Filter by signer status
+ *     responses:
+ *       200:
+ *         description: List of project signers
+ *       404:
+ *         description: Project not found
+ */
+router.get('/:id/signers', projectController.getProjectSigners);
 
 // ============================================================================
 // PROJECT CLIENTS (Client Portal Access)

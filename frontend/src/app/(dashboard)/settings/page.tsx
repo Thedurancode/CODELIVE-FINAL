@@ -23,7 +23,6 @@ import {
   AlertTriangle,
   LogOut,
   Bell,
-  BellOff,
   FileText,
   ChevronRight,
   Wifi,
@@ -37,6 +36,8 @@ import {
   Shield,
   Settings,
   Tv,
+  FileSignature,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAppStore } from '@/stores/app-store';
@@ -47,14 +48,8 @@ import MCPServersSettings from '@/components/settings/MCPServersSettings';
 import TeamManagement from '@/components/settings/TeamManagement';
 import { SpriteSettings } from '@/components/settings/SpriteSettings';
 import TVDisplaySettings from '@/components/settings/TVDisplaySettings';
+import DocuSealSettings from '@/components/settings/DocuSealSettings';
 import { cn } from '@/lib/utils';
-import {
-  isPushSupported,
-  isSubscribedToPush,
-  enablePushNotifications,
-  unsubscribeFromPush,
-  getNotificationPermission,
-} from '@/lib/push-notifications';
 
 // Settings sections configuration
 const settingsSections = [
@@ -62,6 +57,7 @@ const settingsSections = [
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'tv', label: 'TV Display', icon: Tv },
+  { id: 'docuseal', label: 'DocuSeal', icon: FileSignature },
   { id: 'email', label: 'Email', icon: Mail },
   { id: 'team', label: 'Team', icon: Users },
   { id: 'agents', label: 'AI Agents', icon: Bot },
@@ -85,51 +81,6 @@ export default function SettingsPage() {
   const { theme, setTheme } = useAppStore();
   const [activeSection, setActiveSection] = useState('connections');
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushSupported, setPushSupported] = useState(false);
-  const [pushPermission, setPushPermission] = useState<NotificationPermission | 'unsupported'>('default');
-  const [pushLoading, setPushLoading] = useState(false);
-
-  // Check push notification status on mount
-  useEffect(() => {
-    const checkPushStatus = async () => {
-      const supported = isPushSupported();
-      setPushSupported(supported);
-      setPushPermission(getNotificationPermission());
-
-      if (supported) {
-        const subscribed = await isSubscribedToPush();
-        setPushEnabled(subscribed);
-      }
-    };
-    checkPushStatus();
-  }, []);
-
-  const handlePushToggle = async (enabled: boolean) => {
-    setPushLoading(true);
-    try {
-      if (enabled) {
-        const success = await enablePushNotifications();
-        if (success) {
-          setPushEnabled(true);
-          setPushPermission('granted');
-          toast.success('Push notifications enabled');
-        } else {
-          toast.error('Failed to enable push notifications. Check browser permissions.');
-        }
-      } else {
-        const success = await unsubscribeFromPush();
-        if (success) {
-          setPushEnabled(false);
-          toast.success('Push notifications disabled');
-        }
-      }
-    } catch (error) {
-      toast.error('Failed to update push notification settings');
-    } finally {
-      setPushLoading(false);
-    }
-  };
 
   const toggleSecret = (key: string) => {
     setShowSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -254,37 +205,6 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Push Notifications */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border/50">
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center',
-                    pushEnabled ? 'bg-primary/20' : 'bg-muted'
-                  )}>
-                    {pushEnabled ? (
-                      <Bell className="h-5 w-5 text-primary" />
-                    ) : (
-                      <BellOff className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium">Push Notifications</p>
-                    <p className="text-xs text-muted-foreground">
-                      {!pushSupported
-                        ? 'Not supported in this browser'
-                        : pushPermission === 'denied'
-                        ? 'Blocked by browser - check site permissions'
-                        : 'Get notified when you receive new messages'}
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={pushEnabled}
-                  onCheckedChange={handlePushToggle}
-                  disabled={!pushSupported || pushPermission === 'denied' || pushLoading}
-                />
-              </div>
-
               <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border/50">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
@@ -322,6 +242,30 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground">Configure the slideshow for your TV display mode</p>
             </div>
             <TVDisplaySettings />
+          </div>
+        );
+
+      case 'docuseal':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold flex items-center gap-2">
+                <FileSignature className="h-5 w-5" />
+                DocuSeal
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Configure DocuSeal e-signature integration for contracts.{' '}
+                <a
+                  href="https://docuseal.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  Learn more <ExternalLink className="h-3 w-3" />
+                </a>
+              </p>
+            </div>
+            <DocuSealSettings />
           </div>
         );
 

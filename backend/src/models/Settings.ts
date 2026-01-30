@@ -9,7 +9,7 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 
 export type SettingType = 'boolean' | 'number' | 'string' | 'json';
-export type SettingCategory = 'enrichment' | 'scoring' | 'notifications' | 'marketplace' | 'api' | 'general' | 'voice' | 'mcp';
+export type SettingCategory = 'enrichment' | 'scoring' | 'notifications' | 'marketplace' | 'api' | 'general' | 'voice' | 'mcp' | 'docuseal';
 
 interface SettingsAttributes {
   key: string;
@@ -70,7 +70,7 @@ Settings.init(
       defaultValue: 'string',
     },
     category: {
-      type: DataTypes.ENUM('enrichment', 'scoring', 'notifications', 'marketplace', 'api', 'general', 'voice', 'mcp'),
+      type: DataTypes.ENUM('enrichment', 'scoring', 'notifications', 'marketplace', 'api', 'general', 'voice', 'mcp', 'docuseal'),
       allowNull: false,
       defaultValue: 'general',
     },
@@ -245,6 +245,28 @@ export const DEFAULT_SETTINGS: Omit<SettingsCreationAttributes, 'createdAt' | 'u
     type: 'json',
     category: 'mcp',
     description: 'MCP server configurations with connection details',
+  },
+  // DocuSeal e-signature settings
+  {
+    key: 'docuseal.apiUrl',
+    value: 'https://api.docuseal.com',
+    type: 'string',
+    category: 'docuseal',
+    description: 'DocuSeal API URL (use default for cloud, custom URL for self-hosted)',
+  },
+  {
+    key: 'docuseal.apiKey',
+    value: '',
+    type: 'string',
+    category: 'docuseal',
+    description: 'DocuSeal API key for authentication',
+  },
+  {
+    key: 'docuseal.enabled',
+    value: true,
+    type: 'boolean',
+    category: 'docuseal',
+    description: 'Enable DocuSeal e-signature integration',
   },
 ];
 

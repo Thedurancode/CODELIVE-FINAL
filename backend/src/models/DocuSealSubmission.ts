@@ -34,6 +34,7 @@ export interface DocuSealSubmissionAttributes {
   templateName?: string;
   propertyId?: number;
   pipelineId?: number;
+  projectId?: string; // UUID for project association
   userId?: number;
   status: SubmissionStatus;
   submitters: SubmitterRecord[];
@@ -78,6 +79,7 @@ class DocuSealSubmission
   declare templateName?: string;
   declare propertyId?: number;
   declare pipelineId?: number;
+  declare projectId?: string;
   declare userId?: number;
   declare status: SubmissionStatus;
   declare submitters: SubmitterRecord[];
@@ -120,6 +122,16 @@ class DocuSealSubmission
   static async findByPropertyId(propertyId: number): Promise<DocuSealSubmission[]> {
     return DocuSealSubmission.findAll({
       where: { propertyId },
+      order: [['createdAt', 'DESC']],
+    });
+  }
+
+  /**
+   * Find all submissions for a project
+   */
+  static async findByProjectId(projectId: string): Promise<DocuSealSubmission[]> {
+    return DocuSealSubmission.findAll({
+      where: { projectId },
       order: [['createdAt', 'DESC']],
     });
   }
@@ -540,6 +552,15 @@ DocuSealSubmission.init(
       onDelete: 'SET NULL',
       field: 'pipeline_id',
     },
+    projectId: {
+      type: DataTypes.UUID,
+      references: {
+        model: 'projects',
+        key: 'id',
+      },
+      onDelete: 'SET NULL',
+      field: 'project_id',
+    },
     userId: {
       type: DataTypes.INTEGER,
       references: {
@@ -638,6 +659,7 @@ DocuSealSubmission.init(
       { unique: true, fields: ['docuseal_submission_id'] },
       { fields: ['property_id'] },
       { fields: ['pipeline_id'] },
+      { fields: ['project_id'] },
       { fields: ['user_id'] },
       { fields: ['status'] },
       { fields: ['state'] },

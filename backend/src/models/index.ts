@@ -79,6 +79,7 @@ import ComplianceWorkflow, { ComplianceWorkflowExecution } from './ComplianceWor
 
 // Contract Models
 import DocuSealSubmission from './DocuSealSubmission';
+import ContractSigner from './ContractSigner';
 
 // Broker-Mediated Compliance Models
 import BrokerProfile from './BrokerProfile';
@@ -561,6 +562,56 @@ DocuSealSubmission.belongsTo(MarketplaceUser, {
   foreignKey: 'userId',
   as: 'user',
   constraints: false,
+});
+
+// DocuSealSubmission -> Project (optional)
+DocuSealSubmission.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+  constraints: false,
+});
+
+// Project -> DocuSealSubmission (one-to-many)
+Project.hasMany(DocuSealSubmission, {
+  foreignKey: 'projectId',
+  as: 'contracts',
+});
+
+// ============================================================================
+// CONTRACT SIGNER ASSOCIATIONS
+// ============================================================================
+
+// DocuSealSubmission -> ContractSigner (one-to-many)
+DocuSealSubmission.hasMany(ContractSigner, {
+  foreignKey: 'submissionId',
+  as: 'signers',
+  onDelete: 'CASCADE',
+});
+ContractSigner.belongsTo(DocuSealSubmission, {
+  foreignKey: 'submissionId',
+  as: 'submission',
+});
+
+// Contact -> ContractSigner (one-to-many)
+Contact.hasMany(ContractSigner, {
+  foreignKey: 'contactId',
+  as: 'contractSignings',
+  onDelete: 'SET NULL',
+});
+ContractSigner.belongsTo(Contact, {
+  foreignKey: 'contactId',
+  as: 'contact',
+});
+
+// Project -> ContractSigner (one-to-many, denormalized for queries)
+Project.hasMany(ContractSigner, {
+  foreignKey: 'projectId',
+  as: 'contractSigners',
+  onDelete: 'SET NULL',
+});
+ContractSigner.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
 });
 
 // ============================================================================
@@ -1638,6 +1689,7 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         ComplianceWorkflow,
         ComplianceWorkflowExecution,
         DocuSealSubmission,
+        ContractSigner,
         // Broker-Mediated Compliance Models
         BrokerProfile,
         BrokerAssistant,
@@ -1810,6 +1862,7 @@ export {
   ComplianceWorkflowExecution,
   // Contract Models
   DocuSealSubmission,
+  ContractSigner,
   // Broker-Mediated Compliance Models
   BrokerProfile,
   BrokerAssistant,
@@ -1958,6 +2011,7 @@ export default {
   ComplianceReportSchedule,
   // Contract Models
   DocuSealSubmission,
+  ContractSigner,
   // Broker-Mediated Compliance Models
   BrokerProfile,
   BrokerAssistant,

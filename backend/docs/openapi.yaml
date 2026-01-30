@@ -17058,6 +17058,32 @@ paths:
       responses:
         '200':
           description: List of tags with counts
+  /api/projects/recap/all:
+    post:
+      summary: Get AI-generated recap of all recent projects
+      description: >-
+        Returns a voice-optimized summary of recent project activity across all
+        projects
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userName:
+                  type: string
+                  description: User name for personalization
+                limit:
+                  type: number
+                  default: 3
+                  description: Number of recent projects to include
+      responses:
+        '200':
+          description: All projects recap
   /api/projects/{id}:
     get:
       summary: Get a single project
@@ -17531,6 +17557,121 @@ paths:
           description: Project has no GitHub repository linked
         '404':
           description: Project or note not found
+  /api/projects/{id}/recap:
+    get:
+      summary: Get AI-generated project recap
+      description: >-
+        Returns the current AI-generated activity recap for the project.
+        Generates a new one if missing or stale.
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Project recap
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      projectId:
+                        type: string
+                      recap:
+                        type: string
+                        description: AI-generated project activity summary
+                      updatedAt:
+                        type: string
+                        format: date-time
+        '404':
+          description: Project not found
+  /api/projects/{id}/recap/refresh:
+    post:
+      summary: Force refresh the project recap
+      description: Bypasses cache and generates a new AI recap immediately
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Refreshed project recap
+        '404':
+          description: Project not found
+  /api/projects/{id}/recap/audio:
+    get:
+      summary: Get cached TTS audio for project recap
+      description: >-
+        Returns cached audio URL if available, otherwise generates new audio
+        using ElevenLabs and caches it
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: voice
+          schema:
+            type: string
+            default: rachel
+          description: ElevenLabs voice key (rachel, adam, sarah, etc.)
+        - in: query
+          name: regenerate
+          schema:
+            type: boolean
+            default: false
+          description: Force regenerate audio even if cached
+      responses:
+        '200':
+          description: Audio URL for project recap
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      audioUrl:
+                        type: string
+                        description: URL to the audio file
+                      cached:
+                        type: boolean
+                        description: Whether the audio was served from cache
+                      recap:
+                        type: string
+                        description: The recap text that was converted to audio
+        '404':
+          description: Project not found
+        '503':
+          description: ElevenLabs not configured
   /api/projects/{id}/logo:
     post:
       summary: Upload project logo
@@ -17803,6 +17944,97 @@ paths:
       responses:
         '200':
           description: Member removed from project
+  /api/projects/{id}/contracts:
+    get:
+      summary: Get contracts for a project
+      description: >-
+        Retrieves all DocuSeal contracts/submissions associated with this
+        project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - pending
+              - sent
+              - viewed
+              - partially_signed
+              - completed
+              - declined
+              - expired
+              - archived
+      responses:
+        '200':
+          description: List of project contracts
+        '404':
+          description: Project not found
+    post:
+      summary: Link a contract to a project
+      description: Associates an existing DocuSeal submission with this project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - docuSealSubmissionId
+              properties:
+                docuSealSubmissionId:
+                  type: integer
+                  description: DocuSeal submission ID to link
+      responses:
+        '200':
+          description: Contract linked to project
+        '404':
+          description: Project or submission not found
+  /api/projects/{id}/contracts/{contractId}:
+    delete:
+      summary: Unlink a contract from a project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: contractId
+          required: true
+          schema:
+            type: integer
+          description: Local DocuSealSubmission ID
+      responses:
+        '200':
+          description: Contract unlinked from project
+        '404':
+          description: Contract not found
   /api/projects/{id}/clients:
     get:
       summary: List clients for a project
@@ -24857,6 +25089,69 @@ paths:
       responses:
         '200':
           description: Template document URLs
+  /api/users/me:
+    get:
+      summary: Get current user profile
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+    patch:
+      summary: Update current user profile
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                title:
+                  type: string
+      responses:
+        '200':
+          description: Profile updated successfully
+  /api/users/me/avatar:
+    post:
+      summary: Upload user avatar
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Avatar uploaded successfully
+        '400':
+          description: No file uploaded
+    delete:
+      summary: Delete user avatar
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Avatar deleted successfully
   /api/voice/chat:
     post:
       summary: Voice chat with AI agent
@@ -24935,6 +25230,53 @@ paths:
       description: >-
         Returns whether the realtime voice WebSocket service is available and
         tool count
+      tags:
+        - Voice
+  /api/voice/elevenlabs/speak:
+    post:
+      summary: Convert text to speech using ElevenLabs
+      description: Generate high-quality, realistic speech from text using ElevenLabs TTS
+      tags:
+        - Voice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  description: Text to convert to speech (max 5000 chars)
+                voice:
+                  type: string
+                  default: rachel
+                  description: Voice key name (e.g., rachel, adam, sarah)
+                stability:
+                  type: number
+                  default: 0.5
+                  description: Voice stability (0-1)
+                similarityBoost:
+                  type: number
+                  default: 0.75
+                  description: Voice similarity boost (0-1)
+      responses:
+        '200':
+          description: Audio data URL
+        '503':
+          description: ElevenLabs not configured
+  /api/voice/elevenlabs/voices:
+    get:
+      summary: Get available ElevenLabs voices
+      tags:
+        - Voice
+  /api/voice/elevenlabs/status:
+    get:
+      summary: Check ElevenLabs service status
       tags:
         - Voice
   /api/webhooks/manage:

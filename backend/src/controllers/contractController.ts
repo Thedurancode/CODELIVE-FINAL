@@ -7,6 +7,7 @@
 
 import { Request, Response } from 'express';
 import DocuSealSubmission, { SubmitterRecord, SubmissionStatus } from '../models/DocuSealSubmission';
+import ContractSigner from '../models/ContractSigner';
 import Property from '../models/Property';
 import Contact from '../models/Contact';
 import StateDocumentTemplate from '../models/StateDocumentTemplate';
@@ -1219,6 +1220,249 @@ export async function triggerScheduler(req: Request, res: Response) {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to trigger scheduler',
+    });
+  }
+}
+
+// ============================================================================
+// CONTRACT SIGNER OPERATIONS
+// ============================================================================
+
+/**
+ * Get all signers for a contract
+ */
+export async function getContractSigners(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    const signers = await ContractSigner.findAll({
+      where: { submissionId: Number(id) },
+      include: [
+        {
+          model: Contact,
+          as: 'contact',
+          attributes: ['id', 'name', 'email', 'phone'],
+          required: false,
+        },
+      ],
+      order: [['order', 'ASC'], ['createdAt', 'ASC']],
+    });
+
+    res.json({
+      success: true,
+      data: signers,
+    });
+  } catch (error) {
+    console.error('Error getting contract signers:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get signers',
+    });
+  }
+}
+
+/**
+ * Add a signer to a contract
+ */
+export async function addContractSigner(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { email, name, role, contactId, order, phone } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'email is required',
+      });
+    }
+
+    const submission = await DocuSealSubmission.findByPk(Number(id));
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contract not found',
+      });
+    }
+
+    // Check if signer already exists
+    const existing = await ContractSigner.findOne({
+      where: {
+        submissionId: Number(id),
+        email: email.toLowerCase(),
+      },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        error: 'Signer with this email already exists for this contract',
+      });
+    }
+
+    const signer = await ContractSigner.create({
+      submissionId: Number(id),
+      projectId: submission.projectId,
+      contactId,
+      email: email.toLowerCase(),
+      name,
+      phone,
+      role: role || 'signer',
+      status: 'pending',
+      order,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: signer,
+    });
+  } catch (error) {
+    console.error('Error adding contract signer:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to add signer',
+    });
+  }
+}
+
+/**
+ * Update a signer
+ */
+export async function updateContractSigner(req: Request, res: Response) {
+  try {
+    const { signerId } = req.params;
+    const { email, name, role, contactId, order, phone } = req.body;
+
+    const signer = await ContractSigner.findByPk(Number(signerId));
+    if (!signer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Signer not found',
+      });
+    }
+
+    // Update allowed fields
+    if (email) signer.email = email.toLowerCase();
+    if (name !== undefined) signer.name = name;
+    if (phone !== undefined) signer.phone = phone;
+    if (role) signer.role = role;
+    if (contactId !== undefined) signer.contactId = contactId;
+    if (order !== undefined) signer.order = order;
+
+    await signer.save();
+
+    res.json({
+      success: true,
+      data: signer,
+    });
+  } catch (error) {
+    console.error('Error updating contract signer:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to update signer',
+    });
+  }
+}
+
+/**
+ * Remove a signer
+ */
+export async function removeContractSigner(req: Request, res: Response) {
+  try {
+    const { signerId } = req.params;
+
+    const signer = await ContractSigner.findByPk(Number(signerId));
+    if (!signer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Signer not found',
+      });
+    }
+
+    // Don't allow removing completed signers
+    if (signer.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot remove a signer who has already signed',
+      });
+    }
+
+    await signer.destroy();
+
+    res.json({
+      success: true,
+      message: 'Signer removed',
+    });
+  } catch (error) {
+    console.error('Error removing contract signer:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to remove signer',
+    });
+  }
+}
+
+/**
+ * Send reminder to a specific signer
+ */
+export async function sendSignerReminder(req: Request, res: Response) {
+  try {
+    const { signerId } = req.params;
+
+    const signer = await ContractSigner.findByPk(Number(signerId));
+    if (!signer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Signer not found',
+      });
+    }
+
+    // Check signer status
+    if (signer.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Signer has already completed signing',
+      });
+    }
+
+    if (signer.status === 'declined') {
+      return res.status(400).json({
+        success: false,
+        error: 'Signer has declined to sign',
+      });
+    }
+
+    if (!docuSealService.isReady()) {
+      return res.status(503).json({
+        success: false,
+        error: 'DocuSeal service not configured',
+      });
+    }
+
+    // Send reminder via DocuSeal if we have the DocuSeal signer ID
+    if (signer.docuSealSignerId) {
+      try {
+        await docuSealService.resendEmail(signer.docuSealSignerId);
+      } catch (e) {
+        console.warn(`Could not resend email to signer ${signer.email}:`, e);
+      }
+    }
+
+    // Record reminder sent
+    await signer.recordReminderSent();
+
+    res.json({
+      success: true,
+      data: {
+        email: signer.email,
+        reminderCount: signer.reminderCount,
+        lastReminderAt: signer.lastReminderAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error sending signer reminder:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send reminder',
     });
   }
 }

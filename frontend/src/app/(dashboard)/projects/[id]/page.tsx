@@ -72,6 +72,7 @@ import {
   Volume2,
   VolumeX,
   Globe,
+  FileSignature,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -90,6 +91,9 @@ import { ProjectActivityFeed } from '@/components/projects/ProjectActivityFeed';
 import { SpriteLaunchButton, SpritePanel, SpriteTaskQueuePanel, SpriteFileBrowser, SpriteMcpPanel } from '@/components/sprites';
 import { SpriteChatPanel } from '@/components/sprites/SpriteChatPanel';
 import { useSpriteByProject } from '@/hooks/use-sprites';
+import { useProjectContracts, getContractStatusColor, getContractStatusLabel, type ProjectContract } from '@/hooks/use-project-contracts';
+import { ProjectSignersPanel } from '@/components/contracts/ProjectSignersPanel';
+import { ContractSignersPanel } from '@/components/contracts/ContractSignersPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
@@ -134,6 +138,150 @@ function formatDate(dateString: string | null | undefined) {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+// Project Contracts Section Component
+function ProjectContractsSection({ projectId }: { projectId: string }) {
+  const { data: contractsData, isLoading, error, refetch } = useProjectContracts(projectId);
+
+  // Extract array from potentially wrapped response
+  const contracts: ProjectContract[] = Array.isArray(contractsData)
+    ? contractsData
+    : ((contractsData as any)?.data || []);
+
+  if (isLoading) {
+    return (
+      <Card className="bg-card border">
+        <CardContent className="flex items-center justify-center py-10">
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    console.error('[ProjectContracts] Error:', error);
+    return (
+      <Card className="bg-card border">
+        <CardContent className="flex flex-col items-center justify-center py-10 gap-3">
+          <AlertCircle className="h-8 w-8 text-red-500" />
+          <p className="text-muted-foreground">Failed to load contracts</p>
+          <p className="text-xs text-muted-foreground/70">{(error as Error)?.message || 'Unknown error'}</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="bg-card border">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-medium text-foreground flex items-center gap-2">
+            <FileSignature className="h-5 w-5" />
+            Contracts
+          </CardTitle>
+          <Badge variant="secondary">{contracts?.length || 0} contracts</Badge>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!contracts || contracts.length === 0 ? (
+          <div className="text-center py-8">
+            <FileSignature className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+            <p className="text-muted-foreground">No contracts associated with this project</p>
+            <p className="text-xs text-muted-foreground/70 mt-2">
+              Link DocuSeal contracts to track e-signatures for this project
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {contracts.map((contract: ProjectContract) => (
+              <div
+                key={contract.id}
+                className="p-4 rounded-lg bg-muted/30 border border-border/50 hover:border-border transition-colors"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium truncate">
+                        {contract.templateName || `Contract #${contract.docuSealSubmissionId}`}
+                      </h4>
+                      <Badge
+                        variant="outline"
+                        className={getContractStatusColor(contract.status)}
+                      >
+                        {getContractStatusLabel(contract.status)}
+                      </Badge>
+                    </div>
+                    {contract.documentCategory && (
+                      <p className="text-xs text-muted-foreground mb-2">{contract.documentCategory}</p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      {contract.sentAt && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Sent {new Date(contract.sentAt).toLocaleDateString()}
+                        </span>
+                      )}
+                      {contract.submitters && contract.submitters.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {contract.submitters.length} signer{contract.submitters.length > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                    {/* Submitters Progress */}
+                    {contract.submitters && contract.submitters.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {contract.submitters.map((submitter, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-background/50"
+                          >
+                            {submitter.status === 'completed' ? (
+                              <CheckCircle2 className="h-3 w-3 text-green-500" />
+                            ) : submitter.status === 'declined' ? (
+                              <XCircle className="h-3 w-3 text-red-500" />
+                            ) : (
+                              <Clock className="h-3 w-3 text-muted-foreground" />
+                            )}
+                            <span className="truncate max-w-[120px]">
+                              {submitter.name || submitter.email}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {contract.combinedDocumentUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                      >
+                        <a
+                          href={contract.combinedDocumentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-1" />
+                          View
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -218,7 +366,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const canClone = collaboratorAccess?.isCollaborator ?? false;
 
   // Client Portal hooks
-  const { data: projectClients, refetch: refetchClients } = useProjectClients(id);
+  const { data: projectClientsData, refetch: refetchClients } = useProjectClients(id);
+  const clientsList = Array.isArray(projectClientsData) ? projectClientsData : (projectClientsData?.data || []);
   const generateInvite = useGenerateInvite();
   const revokeClientAccess = useRevokeClientAccess();
 
@@ -325,23 +474,27 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setIsLoadingAudio(true);
 
     try {
-      // First, generate a fresh recap with the user's name for personalization
-      const freshRecap = await refreshRecap.mutateAsync({
-        projectId: id,
-        userName: user?.name || undefined
-      });
-      const textToSpeak = freshRecap?.recap;
+      // Use the new cached audio endpoint - it handles caching server-side
+      // This saves ElevenLabs credits by reusing cached audio when the recap hasn't changed
+      const response = await api.get<{
+        audioUrl: string;
+        cached: boolean;
+        recap: string;
+        warning?: string;
+      }>(`/api/projects/${id}/recap/audio?voice=rachel`);
 
-      if (!textToSpeak) {
-        toast.error('No recap available to play');
-        setIsLoadingAudio(false);
-        return;
-      }
+      if (response?.audioUrl) {
+        // Log whether we used cached audio or generated new
+        if (response.cached) {
+          console.log('[RecapAudio] Using cached audio');
+        } else {
+          console.log('[RecapAudio] Generated new audio');
+        }
 
-      // Check if we have cached audio for this exact recap text
-      if (recapAudioCacheRef.current?.text === textToSpeak) {
-        // Use cached audio - no change in recap
-        const audio = new Audio(recapAudioCacheRef.current.audioUrl);
+        // Update local cache for immediate replay
+        recapAudioCacheRef.current = { text: response.recap, audioUrl: response.audioUrl };
+
+        const audio = new Audio(response.audioUrl);
         audioRef.current = audio;
 
         audio.onplay = () => {
@@ -358,47 +511,20 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           audioRef.current = null;
           // Cache might be stale, clear it
           recapAudioCacheRef.current = null;
-          toast.error('Failed to play cached audio');
-        };
-
-        await audio.play();
-        return;
-      }
-
-      // Recap changed - generate new audio with ElevenLabs
-      const response = await api.post<{ audio: string; voice: string }>('/api/voice/elevenlabs/speak', {
-        text: textToSpeak,
-        voice: 'rachel', // Pre-made ElevenLabs voice (calm American female)
-      });
-
-      if (response?.audio) {
-        // Cache the new audio
-        recapAudioCacheRef.current = { text: textToSpeak, audioUrl: response.audio };
-
-        const audio = new Audio(response.audio);
-        audioRef.current = audio;
-
-        audio.onplay = () => {
-          setIsPlayingRecap(true);
-          setIsLoadingAudio(false);
-        };
-        audio.onended = () => {
-          setIsPlayingRecap(false);
-          audioRef.current = null;
-        };
-        audio.onerror = () => {
-          setIsPlayingRecap(false);
-          setIsLoadingAudio(false);
-          audioRef.current = null;
           toast.error('Failed to play audio');
         };
 
         await audio.play();
         return;
       }
-    } catch (error) {
-      // ElevenLabs not available, fall back to browser TTS
-      console.log('ElevenLabs not available, using browser TTS:', error);
+    } catch (error: unknown) {
+      // Check if it's a quota or service error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('quota') || errorMessage.includes('credits')) {
+        toast.error('ElevenLabs quota exceeded. Using browser speech instead.');
+      } else {
+        console.log('ElevenLabs not available, using browser TTS:', error);
+      }
     }
 
     setIsLoadingAudio(false);
@@ -406,6 +532,26 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     // Fallback to browser speech synthesis
     if (typeof window === 'undefined' || !window.speechSynthesis) {
       toast.error('Speech synthesis not available');
+      return;
+    }
+
+    // Get recap text for browser TTS fallback
+    let textToSpeak = recapAudioCacheRef.current?.text;
+    if (!textToSpeak) {
+      try {
+        const freshRecap = await refreshRecap.mutateAsync({
+          projectId: id,
+          userName: user?.name || undefined
+        });
+        textToSpeak = freshRecap?.recap;
+      } catch {
+        toast.error('Failed to load recap');
+        return;
+      }
+    }
+
+    if (!textToSpeak) {
+      toast.error('No recap available to play');
       return;
     }
 
@@ -535,8 +681,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           )}
           <div>
             <h1 className="text-xl font-bold text-foreground">{project.title}</h1>
-            <Badge variant="outline" className={`${STATUS_COLORS[project.status]} text-xs mt-1`}>
-              {project.status.replace('_', ' ')}
+            <Badge variant="outline" className={`${STATUS_COLORS[project.status || 'active']} text-xs mt-1`}>
+              {(project.status || 'active').replace('_', ' ')}
             </Badge>
           </div>
         </div>
@@ -584,6 +730,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             <StickyNote className="h-4 w-4 mr-2" />
             Add Note
           </Button>
+
+          {/* New Issue Button */}
+          {project.githubUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-orange-500/40 text-orange-400 hover:bg-orange-500/10 hover:text-orange-300 hover:border-orange-400/60"
+              onClick={() => setIsNewIssueDialogOpen(true)}
+            >
+              <CirclePlus className="h-4 w-4 mr-2" />
+              New Issue
+            </Button>
+          )}
 
           {/* Primary action: Open Terminal / Launch Agent */}
           {project.githubUrl && (
@@ -749,6 +908,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <Users className="h-4 w-4 mr-2" />
                 Contacts
               </TabsTrigger>
+              <TabsTrigger value="contracts" className="data-[state=active]:bg-secondary">
+                <FileSignature className="h-4 w-4 mr-2" />
+                Contracts
+              </TabsTrigger>
             </TabsList>
 
             {project.githubUrl && (
@@ -858,6 +1021,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="contracts">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <ProjectContractsSection projectId={id} />
+                <ProjectSignersPanel projectId={id} />
+              </div>
+            </TabsContent>
           </Tabs>
         </div>
 
@@ -929,50 +1099,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   )}
                 </div>
               )}
-
-              {/* AI Recap Section */}
-              <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center">
-                      <Sparkles className="h-5 w-5 text-violet-500" />
-                    </div>
-                    <div>
-                      <p className="font-medium">AI Recap</p>
-                      <p className="text-xs text-muted-foreground">
-                        {recapData?.updatedAt
-                          ? `Updated ${new Date(recapData.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-                          : 'Auto-generated summary'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={handleRefreshRecap}
-                    disabled={refreshRecap.isPending}
-                    title="Refresh recap"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${refreshRecap.isPending ? 'animate-spin' : ''}`} />
-                  </Button>
-                </div>
-                <div className="p-3 rounded-lg bg-background/50 border border-border/50">
-                  {isRecapLoading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-4 w-5/6" />
-                    </div>
-                  ) : recapData?.recap ? (
-                    <p className="text-sm text-foreground leading-relaxed">{recapData.recap}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">
-                      No recap available yet. Add notes or make changes to generate a summary.
-                    </p>
-                  )}
-                </div>
-              </div>
 
               {/* Activity Feed Section */}
               <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
@@ -1330,11 +1456,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             {/* Active Clients Section */}
             <div className="space-y-4 border-t pt-4">
               <h3 className="text-sm font-medium">
-                Active Clients ({projectClients?.filter(c => c.status === 'active').length || 0})
+                Active Clients ({clientsList.filter(c => c.status === 'active').length})
               </h3>
-              {projectClients && projectClients.length > 0 ? (
+              {clientsList.length > 0 ? (
                 <div className="space-y-2">
-                  {projectClients.map((client) => (
+                  {clientsList.map((client) => (
                     <div
                       key={client.id}
                       className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg"

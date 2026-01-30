@@ -80,7 +80,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/category/:category', async (req: Request, res: Response) => {
   try {
     const category = req.params.category as SettingCategory;
-    const validCategories = ['enrichment', 'scoring', 'notifications', 'marketplace', 'api', 'general'];
+    const validCategories = ['enrichment', 'scoring', 'notifications', 'marketplace', 'api', 'general', 'docuseal'];
 
     if (!validCategories.includes(category)) {
       return res.status(400).json({

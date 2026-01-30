@@ -18,6 +18,10 @@ import { gitHubService } from '../services/GitHubService';
 import type { ProjectStatus } from '../models/Project';
 import ProjectMember from '../models/ProjectMember';
 import { MarketplaceUser } from '../models';
+import DocuSealSubmission from '../models/DocuSealSubmission';
+import ContractSigner from '../models/ContractSigner';
+import Contact from '../models/Contact';
+import { docuSealService } from '../services/DocuSealService';
 
 // Permission mapping for project roles to GitHub permissions
 type GitHubPermission = 'pull' | 'push' | 'admin' | 'maintain' | 'triage';
@@ -1599,6 +1603,383 @@ export const getAllProjectsRecap = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[getAllProjectsRecap] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT RECAP AUDIO (Cached TTS)
+// ============================================================================
+
+/**
+ * Get cached TTS audio for project recap
+ * Generates and caches audio using ElevenLabs if not already cached
+ */
+export const getProjectRecapAudio = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const voice = (req.query.voice as string) || 'rachel';
+    const regenerate = req.query.regenerate === 'true';
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Import services dynamically to avoid circular dependencies
+    const { elevenLabsService } = await import('../services/ElevenLabsService');
+    const { supabaseStorageService } = await import('../services/SupabaseStorageService');
+    const Project = (await import('../models/Project')).default;
+
+    // Check if ElevenLabs is configured
+    if (!elevenLabsService.isConfigured()) {
+      return res.status(503).json({
+        success: false,
+        error: 'ElevenLabs TTS not configured. Add ELEVENLABS_API_KEY to enable.',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Get project
+    const project = await Project.findByPk(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Check if we have a cached audio URL and user doesn't want to regenerate
+    if (project.aiRecapAudioUrl && !regenerate) {
+      return res.json({
+        success: true,
+        data: {
+          audioUrl: project.aiRecapAudioUrl,
+          cached: true,
+          recap: project.aiRecap,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Get or generate the recap text
+    let recapText = project.aiRecap;
+    if (!recapText) {
+      // Generate recap first
+      recapText = await projectRecapService.getRecap(id);
+      if (!recapText) {
+        return res.status(404).json({
+          success: false,
+          error: 'Could not generate project recap',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Generate TTS audio
+    console.log(`[RecapAudio] Generating TTS for project ${id} with voice: ${voice}`);
+    const voiceData = elevenLabsService.getVoice(voice);
+    const audioBuffer = await elevenLabsService.textToSpeech(recapText, {
+      voiceId: voiceData?.id,
+    });
+
+    // Upload to Supabase Storage
+    const timestamp = Date.now();
+    const storagePath = `recap-audio/${id}/${timestamp}.mp3`;
+    const uploadResult = await supabaseStorageService.uploadToPath(
+      audioBuffer,
+      storagePath,
+      'audio/mpeg'
+    );
+
+    if (!uploadResult.success) {
+      // If storage upload fails, return the audio as base64 (fallback)
+      console.warn('[RecapAudio] Storage upload failed, returning base64:', uploadResult.error);
+      const base64Audio = audioBuffer.toString('base64');
+      return res.json({
+        success: true,
+        data: {
+          audioUrl: `data:audio/mpeg;base64,${base64Audio}`,
+          cached: false,
+          recap: recapText,
+          warning: 'Audio could not be cached, returned as base64',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Save the audio URL to the project
+    await project.update({
+      aiRecapAudioUrl: uploadResult.url,
+    });
+
+    console.log(`[RecapAudio] Audio cached for project ${id}: ${uploadResult.url}`);
+
+    res.json({
+      success: true,
+      data: {
+        audioUrl: uploadResult.url,
+        cached: false,
+        recap: recapText,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[getProjectRecapAudio] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT CONTRACTS (DocuSeal Integration)
+// ============================================================================
+
+/**
+ * Get contracts associated with a project
+ */
+export const getProjectContracts = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.query;
+
+    // Verify project exists
+    const project = await projectService.getProject(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Build where clause
+    const where: Record<string, unknown> = { projectId: id };
+    if (status) {
+      where.status = status;
+    }
+
+    const contracts = await DocuSealSubmission.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
+    });
+
+    res.json({
+      success: true,
+      data: contracts,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Link an existing DocuSeal submission to a project
+ */
+export const linkProjectContract = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { docuSealSubmissionId } = req.body;
+
+    if (!docuSealSubmissionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'docuSealSubmissionId is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Verify project exists
+    const project = await projectService.getProject(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Find the submission by DocuSeal ID
+    let submission = await DocuSealSubmission.findByDocuSealId(docuSealSubmissionId);
+
+    // If not found locally, try to fetch from DocuSeal API and create local record
+    if (!submission) {
+      if (!docuSealService.isReady()) {
+        return res.status(400).json({
+          success: false,
+          error: 'DocuSeal service is not configured',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      try {
+        const dsSubmission = await docuSealService.getSubmission(docuSealSubmissionId);
+
+        // Create local record
+        submission = await DocuSealSubmission.create({
+          docuSealSubmissionId: dsSubmission.id,
+          templateId: dsSubmission.template.id,
+          templateName: dsSubmission.template.name,
+          projectId: id,
+          status: dsSubmission.status === 'pending' ? 'pending' :
+                  dsSubmission.status === 'completed' ? 'completed' :
+                  dsSubmission.status === 'expired' ? 'expired' :
+                  dsSubmission.status === 'archived' ? 'archived' : 'pending',
+          submitters: dsSubmission.submitters.map((s) => ({
+            id: s.id,
+            email: s.email,
+            name: s.name,
+            role: s.role,
+            status: s.status,
+            sentAt: s.sent_at,
+            openedAt: s.opened_at,
+            completedAt: s.completed_at,
+          })),
+          auditLogUrl: dsSubmission.audit_log_url,
+          combinedDocumentUrl: dsSubmission.combined_document_url,
+          sentAt: dsSubmission.created_at ? new Date(dsSubmission.created_at) : undefined,
+          completedAt: dsSubmission.completed_at ? new Date(dsSubmission.completed_at) : undefined,
+          expireAt: dsSubmission.expire_at ? new Date(dsSubmission.expire_at) : undefined,
+        });
+      } catch (err) {
+        return res.status(404).json({
+          success: false,
+          error: 'DocuSeal submission not found',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      // Update existing submission with project ID
+      await submission.update({ projectId: id });
+    }
+
+    res.json({
+      success: true,
+      data: submission,
+      message: 'Contract linked to project',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Unlink a contract from a project
+ */
+export const unlinkProjectContract = async (req: Request, res: Response) => {
+  try {
+    const { id, contractId } = req.params;
+
+    // Find the submission
+    const submission = await DocuSealSubmission.findByPk(parseInt(contractId, 10));
+
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contract not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (submission.projectId !== id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Contract is not linked to this project',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Remove project link (don't delete the submission)
+    await submission.update({ projectId: null });
+
+    res.json({
+      success: true,
+      message: 'Contract unlinked from project',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get all contract signers for a project
+ */
+export const getProjectSigners = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.query;
+
+    const where: any = { projectId: id };
+    if (status) {
+      where.status = status;
+    }
+
+    const signers = await ContractSigner.findAll({
+      where,
+      include: [
+        {
+          model: Contact,
+          as: 'contact',
+          attributes: ['id', 'name', 'email', 'phone'],
+          required: false,
+        },
+        {
+          model: DocuSealSubmission,
+          as: 'submission',
+          attributes: ['id', 'templateName', 'status', 'sentAt', 'completedAt'],
+          required: false,
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Calculate stats
+    const stats = {
+      total: signers.length,
+      pending: signers.filter(s => s.status === 'pending').length,
+      sent: signers.filter(s => s.status === 'sent').length,
+      opened: signers.filter(s => s.status === 'opened').length,
+      completed: signers.filter(s => s.status === 'completed').length,
+      declined: signers.filter(s => s.status === 'declined').length,
+      completionRate: signers.length > 0
+        ? Math.round((signers.filter(s => s.status === 'completed').length / signers.length) * 100)
+        : 0,
+    };
+
+    res.json({
+      success: true,
+      data: signers,
+      stats,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : String(error),

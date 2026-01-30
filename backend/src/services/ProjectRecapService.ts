@@ -193,6 +193,7 @@ class ProjectRecapService {
         await project.update({
           aiRecap: defaultRecap,
           aiRecapUpdatedAt: new Date(),
+          aiRecapAudioUrl: null, // Invalidate cached audio
         });
         return defaultRecap;
       }
@@ -214,10 +215,11 @@ class ProjectRecapService {
         { model: 'gpt-4o-mini', temperature: 0.3 }
       );
 
-      // Save to project
+      // Save to project (clear cached audio since text changed)
       await project.update({
         aiRecap: recap,
         aiRecapUpdatedAt: new Date(),
+        aiRecapAudioUrl: null, // Invalidate cached audio
       });
 
       return recap;
@@ -229,6 +231,7 @@ class ProjectRecapService {
       await project.update({
         aiRecap: fallbackRecap,
         aiRecapUpdatedAt: new Date(),
+        aiRecapAudioUrl: null, // Invalidate cached audio
       });
       return fallbackRecap;
     }

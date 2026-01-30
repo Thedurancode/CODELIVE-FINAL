@@ -8,7 +8,7 @@ class ApiError extends Error {
 }
 
 // List of endpoints that return paginated responses (don't unwrap data.data)
-const PAGINATED_ENDPOINTS = ['/api/listings', '/api/hedgefunds', '/api/contacts', '/api/buyers', '/api/email-client/folders', '/api/reminders', '/api/tasks', '/api/projects'];
+const PAGINATED_ENDPOINTS = ['/api/listings', '/api/hedgefunds', '/api/contacts', '/api/buyers', '/api/email-client/folders', '/api/reminders', '/api/tasks', '/api/projects', '/api/contracts'];
 
 async function fetchApi<T>(
   endpoint: string,
@@ -36,9 +36,9 @@ async function fetchApi<T>(
     throw new ApiError(res.status, data.error || data.message || 'API Error');
   }
 
-  // For paginated endpoints, return the whole response (includes data + pagination)
+  // For paginated endpoints, return the whole response (includes data + pagination/stats)
   // For other endpoints, unwrap data.data if it exists
-  // Match exact path or path with query params (e.g., /api/reminders or /api/reminders?page=1)
+  // Only match EXACT paths (e.g., /api/projects but NOT /api/projects/123)
   const basePath = endpoint.split('?')[0];
   const isPaginated = PAGINATED_ENDPOINTS.includes(basePath);
   if (isPaginated) {

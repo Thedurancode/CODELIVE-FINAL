@@ -357,11 +357,16 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const autoStartRef = useRef(false);
 
-  const { data: notes, isLoading } = useProjectNotes(projectId);
+  const { data: notesData, isLoading } = useProjectNotes(projectId);
   const createNote = useCreateProjectNote(projectId);
   const updateNote = useUpdateProjectNote(projectId);
   const deleteNote = useDeleteProjectNote(projectId);
   const createGitHubIssue = useCreateGitHubIssueFromNote(projectId);
+
+  // Extract array from potentially wrapped response
+  const notes: ProjectNote[] = Array.isArray(notesData)
+    ? notesData
+    : ((notesData as any)?.data || []);
 
   // Initialize speech recognition
   const initSpeechRecognition = useCallback(() => {

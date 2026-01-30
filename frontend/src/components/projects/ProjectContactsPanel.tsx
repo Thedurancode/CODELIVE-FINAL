@@ -140,7 +140,7 @@ export function ProjectContactsPanel({ projectId }: ProjectContactsPanelProps) {
   const [newContactCompany, setNewContactCompany] = useState('');
 
   const { data: project } = useProject(projectId);
-  const { data: projectContacts, isLoading } = useProjectContacts(projectId);
+  const { data: projectContactsData, isLoading } = useProjectContacts(projectId);
   const { data: contactsData, isLoading: isLoadingContacts } = useContacts({
     search: searchQuery,
     limit: 10,
@@ -154,8 +154,12 @@ export function ProjectContactsPanel({ projectId }: ProjectContactsPanelProps) {
 
   const hasGitHubRepo = !!project?.githubUrl;
 
+  // Extract arrays from potentially wrapped responses
+  const projectContacts: ProjectContact[] = Array.isArray(projectContactsData)
+    ? projectContactsData
+    : ((projectContactsData as any)?.data || []);
   const contacts = contactsData?.data || [];
-  const existingContactIds = new Set(projectContacts?.map((pc: ProjectContact) => pc.contactId) || []);
+  const existingContactIds = new Set(projectContacts.map((pc: ProjectContact) => pc.contactId));
   const availableContacts = contacts.filter((c: Contact) => !existingContactIds.has(c.id));
 
   const resetAddDialog = () => {

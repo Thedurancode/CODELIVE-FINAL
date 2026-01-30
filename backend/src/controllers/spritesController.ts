@@ -112,11 +112,21 @@ export const listSprites = async (req: Request, res: Response) => {
 export const getSpriteByProject = async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;
+    const userId = (req as any).user?.id;
     const organizationId = (req as any).user?.organizationId;
 
-    // Verify project belongs to organization
+    // Verify project exists and user has access (check by org or creator)
+    const { Op } = require('sequelize');
     const project = await Project.findOne({
-      where: { id: projectId, organizationId },
+      where: {
+        id: projectId,
+        [Op.or]: [
+          { organizationId },
+          { createdById: userId },
+          // Also allow if organizationId is null (legacy projects)
+          { organizationId: null },
+        ],
+      },
     });
 
     if (!project) {
@@ -151,14 +161,6 @@ export const createSprite = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     const organizationId = (req as any).user?.organizationId;
 
-    if (!organizationId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Organization ID is required',
-        timestamp: new Date().toISOString(),
-      });
-    }
-
     const { projectId, branch, initScript, cpus, memoryMb } = req.body;
 
     if (!projectId) {
@@ -169,9 +171,17 @@ export const createSprite = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify project belongs to organization and has a GitHub URL
+    // Verify project exists and user has access (check by org or creator)
+    const { Op } = require('sequelize');
     const project = await Project.findOne({
-      where: { id: projectId, organizationId },
+      where: {
+        id: projectId,
+        [Op.or]: [
+          { organizationId },
+          { createdById: userId },
+          { organizationId: null },
+        ],
+      },
     });
 
     if (!project) {

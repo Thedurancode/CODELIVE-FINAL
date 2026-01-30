@@ -297,6 +297,114 @@ router.get('/analytics/decline-reasons', authenticate, contractController.getDec
 router.get('/analytics/timeline', authenticate, contractController.getTimelineAnalytics);
 
 // =============================================================================
+// CONTRACT SIGNERS
+// =============================================================================
+
+/**
+ * @swagger
+ * /api/contracts/{id}/signers:
+ *   get:
+ *     summary: Get all signers for a contract
+ *     tags: [Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+router.get('/:id/signers', authenticate, contractController.getContractSigners);
+
+/**
+ * @swagger
+ * /api/contracts/{id}/signers:
+ *   post:
+ *     summary: Add a signer to a contract
+ *     tags: [Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               contactId:
+ *                 type: string
+ *               order:
+ *                 type: integer
+ */
+router.post('/:id/signers', authenticate, contractController.addContractSigner);
+
+/**
+ * @swagger
+ * /api/contracts/signers/{signerId}:
+ *   patch:
+ *     summary: Update a signer
+ *     tags: [Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: signerId
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+router.patch('/signers/:signerId', authenticate, contractController.updateContractSigner);
+
+/**
+ * @swagger
+ * /api/contracts/signers/{signerId}:
+ *   delete:
+ *     summary: Remove a signer
+ *     tags: [Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: signerId
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+router.delete('/signers/:signerId', authenticate, contractController.removeContractSigner);
+
+/**
+ * @swagger
+ * /api/contracts/signers/{signerId}/remind:
+ *   post:
+ *     summary: Send reminder to a specific signer
+ *     tags: [Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: signerId
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+router.post('/signers/:signerId/remind', authenticate, reminderLimiter, contractController.sendSignerReminder);
+
+// =============================================================================
 // SCHEDULER CONTROL (Admin only)
 // =============================================================================
 

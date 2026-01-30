@@ -36,6 +36,7 @@ interface ProjectAttributes {
   // AI-generated recap
   aiRecap: string | null;
   aiRecapUpdatedAt: Date | null;
+  aiRecapAudioUrl: string | null; // Cached TTS audio URL
 
   // Timestamps
   createdAt: Date;
@@ -60,6 +61,7 @@ interface ProjectCreationAttributes
     | 'metadata'
     | 'aiRecap'
     | 'aiRecapUpdatedAt'
+    | 'aiRecapAudioUrl'
     | 'createdAt'
     | 'updatedAt'
   > {}
@@ -88,6 +90,7 @@ class Project
 
   declare aiRecap: string | null;
   declare aiRecapUpdatedAt: Date | null;
+  declare aiRecapAudioUrl: string | null;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -253,6 +256,12 @@ Project.init(
       allowNull: true,
       field: 'ai_recap_updated_at',
       comment: 'When the AI recap was last updated',
+    },
+    aiRecapAudioUrl: {
+      type: DataTypes.STRING(2048),
+      allowNull: true,
+      field: 'ai_recap_audio_url',
+      comment: 'Cached TTS audio URL for the recap',
     },
     createdAt: {
       type: DataTypes.DATE,

@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
-import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
-import { ServiceWorkerRegistration } from '@/components/pwa/ServiceWorkerRegistration';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -48,7 +46,6 @@ export const metadata: Metadata = {
       { rel: 'mask-icon', url: '/Dispotree-icon.png', color: '#a12d32' },
     ],
   },
-  manifest: '/site.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -87,10 +84,8 @@ export default function RootLayout({
         <link rel="apple-touch-startup-image" href="/apple-touch-icon.png" />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <ServiceWorkerRegistration />
         <Providers>
           {children}
-          <PWAInstallPrompt />
         </Providers>
       </body>
     </html>

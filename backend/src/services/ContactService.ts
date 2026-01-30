@@ -196,12 +196,9 @@ class ContactService {
   async createContact(userId: string, data: CreateContactData): Promise<Contact> {
     const organizationId = await this.getOrganizationId(userId);
 
-    if (!organizationId) {
-      throw new Error('User must belong to an organization to create contacts');
-    }
-
+    // Allow users without organization to create personal contacts
     const contact = await Contact.create({
-      organizationId,
+      organizationId: organizationId || null,
       createdById: userId,
       type: data.type || 'other',
       name: data.name,
@@ -222,10 +219,11 @@ class ContactService {
       console.warn('[ContactService] Failed to index contact for search:', err.message);
     });
 
-    // Log activity
-    MarketplaceUser.findByPk(userId).then((user) => {
-      activityFeedService.createActivity({
-        organizationId,
+    // Log activity (only if user has organization)
+    if (organizationId) {
+      MarketplaceUser.findByPk(userId).then((user) => {
+        activityFeedService.createActivity({
+          organizationId,
         eventType: 'buyer_created', // Using buyer_created as generic contact event
         actor: {
           type: 'user',
@@ -243,7 +241,8 @@ class ContactService {
         details: { type: data.type, company: data.company },
         importance: 'normal',
       });
-    }).catch(() => {}); // Non-blocking
+      }).catch(() => {}); // Non-blocking
+    }
 
     return contact;
   }
