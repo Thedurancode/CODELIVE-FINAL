@@ -159,11 +159,19 @@ import ContactNote from './ContactNote';
 import Project from './Project';
 import ProjectContact from './ProjectContact';
 import ProjectNote from './ProjectNote';
+import ProjectNoteAudio from './ProjectNoteAudio';
+import ProjectEnvVariable from './ProjectEnvVariable';
+import ProjectBrandAsset from './ProjectBrandAsset';
 import ProjectMember from './ProjectMember';
 import ProjectClient from './ProjectClient';
 
 // Deal Team Member Models
 import DealTeamMember from './DealTeamMember';
+
+// Meeting Models
+import Meeting from './Meeting';
+import MeetingParticipant from './MeetingParticipant';
+import MeetingRoom from './MeetingRoom';
 
 // Agent Feature Models
 import ScheduledTask from './ScheduledTask';
@@ -1262,6 +1270,105 @@ ProjectNote.belongsTo(Organization, {
   as: 'organization',
 });
 
+// Project -> ProjectNoteAudio (one-to-many)
+Project.hasMany(ProjectNoteAudio, {
+  foreignKey: 'projectId',
+  as: 'audioNotes',
+  onDelete: 'CASCADE',
+});
+ProjectNoteAudio.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// MarketplaceUser -> ProjectNoteAudio (one-to-many, author)
+MarketplaceUser.hasMany(ProjectNoteAudio, {
+  foreignKey: 'userId',
+  as: 'projectAudioNotes',
+  onDelete: 'CASCADE',
+});
+ProjectNoteAudio.belongsTo(MarketplaceUser, {
+  foreignKey: 'userId',
+  as: 'author',
+});
+
+// Organization -> ProjectNoteAudio (one-to-many)
+Organization.hasMany(ProjectNoteAudio, {
+  foreignKey: 'organizationId',
+  as: 'projectAudioNotes',
+  onDelete: 'CASCADE',
+});
+ProjectNoteAudio.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
+// Project -> ProjectEnvVariable (one-to-many)
+Project.hasMany(ProjectEnvVariable, {
+  foreignKey: 'projectId',
+  as: 'envVariables',
+  onDelete: 'CASCADE',
+});
+ProjectEnvVariable.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// MarketplaceUser -> ProjectEnvVariable (one-to-many, author)
+MarketplaceUser.hasMany(ProjectEnvVariable, {
+  foreignKey: 'userId',
+  as: 'projectEnvVariables',
+  onDelete: 'CASCADE',
+});
+ProjectEnvVariable.belongsTo(MarketplaceUser, {
+  foreignKey: 'userId',
+  as: 'author',
+});
+
+// Organization -> ProjectEnvVariable (one-to-many)
+Organization.hasMany(ProjectEnvVariable, {
+  foreignKey: 'organizationId',
+  as: 'projectEnvVariables',
+  onDelete: 'CASCADE',
+});
+ProjectEnvVariable.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
+// Project -> ProjectBrandAsset (one-to-many)
+Project.hasMany(ProjectBrandAsset, {
+  foreignKey: 'projectId',
+  as: 'brandAssets',
+  onDelete: 'CASCADE',
+});
+ProjectBrandAsset.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// MarketplaceUser -> ProjectBrandAsset (one-to-many, author)
+MarketplaceUser.hasMany(ProjectBrandAsset, {
+  foreignKey: 'userId',
+  as: 'projectBrandAssets',
+  onDelete: 'CASCADE',
+});
+ProjectBrandAsset.belongsTo(MarketplaceUser, {
+  foreignKey: 'userId',
+  as: 'author',
+});
+
+// Organization -> ProjectBrandAsset (one-to-many)
+Organization.hasMany(ProjectBrandAsset, {
+  foreignKey: 'organizationId',
+  as: 'projectBrandAssets',
+  onDelete: 'CASCADE',
+});
+ProjectBrandAsset.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
 // Project -> Task (one-to-many)
 Project.hasMany(Task, {
   foreignKey: 'projectId',
@@ -1271,6 +1378,92 @@ Project.hasMany(Task, {
 Task.belongsTo(Project, {
   foreignKey: 'projectId',
   as: 'project',
+});
+
+// =============================================================================
+// MEETING ASSOCIATIONS
+// =============================================================================
+
+// Meeting -> Organization
+Meeting.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+Organization.hasMany(Meeting, {
+  foreignKey: 'organizationId',
+  as: 'meetings',
+});
+
+// Meeting -> MarketplaceUser (creator)
+Meeting.belongsTo(MarketplaceUser, {
+  foreignKey: 'createdById',
+  as: 'creator',
+});
+MarketplaceUser.hasMany(Meeting, {
+  foreignKey: 'createdById',
+  as: 'createdMeetings',
+});
+
+// Meeting -> Project (optional)
+Meeting.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+Project.hasMany(Meeting, {
+  foreignKey: 'projectId',
+  as: 'meetings',
+});
+
+// Meeting -> MeetingParticipant (one-to-many)
+Meeting.hasMany(MeetingParticipant, {
+  foreignKey: 'meetingId',
+  as: 'participants',
+  onDelete: 'CASCADE',
+});
+MeetingParticipant.belongsTo(Meeting, {
+  foreignKey: 'meetingId',
+  as: 'meeting',
+});
+
+// MeetingParticipant -> MarketplaceUser (optional)
+MeetingParticipant.belongsTo(MarketplaceUser, {
+  foreignKey: 'userId',
+  as: 'user',
+});
+MarketplaceUser.hasMany(MeetingParticipant, {
+  foreignKey: 'userId',
+  as: 'meetingParticipations',
+});
+
+// MeetingParticipant -> Contact (optional)
+MeetingParticipant.belongsTo(Contact, {
+  foreignKey: 'contactId',
+  as: 'contact',
+});
+Contact.hasMany(MeetingParticipant, {
+  foreignKey: 'contactId',
+  as: 'meetingParticipations',
+});
+
+// Meeting -> MeetingRoom (one-to-one)
+Meeting.hasOne(MeetingRoom, {
+  foreignKey: 'meetingId',
+  as: 'room',
+  onDelete: 'CASCADE',
+});
+MeetingRoom.belongsTo(Meeting, {
+  foreignKey: 'meetingId',
+  as: 'meeting',
+});
+
+// Meeting self-reference for recurring meetings
+Meeting.belongsTo(Meeting, {
+  foreignKey: 'parentMeetingId',
+  as: 'parentMeeting',
+});
+Meeting.hasMany(Meeting, {
+  foreignKey: 'parentMeetingId',
+  as: 'recurringInstances',
 });
 
 // Project <-> MarketplaceUser (many-to-many through ProjectMember)
@@ -1753,6 +1946,9 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         Project,
         ProjectContact,
         ProjectNote,
+        ProjectNoteAudio,
+        ProjectEnvVariable,
+        ProjectBrandAsset,
         ProjectMember,
         // Coding Task Models
         CodingTask,
@@ -1763,6 +1959,10 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         SpriteMcpServer,
         // Client Portal Models
         ProjectClient,
+        // Meeting Models
+        Meeting,
+        MeetingParticipant,
+        MeetingRoom,
       ];
       for (const model of mlModels) {
         try {
@@ -1932,6 +2132,9 @@ export {
   Project,
   ProjectContact,
   ProjectNote,
+  ProjectNoteAudio,
+  ProjectEnvVariable,
+  ProjectBrandAsset,
   ProjectMember,
   ProjectClient,
   // Deal Team Member Models
@@ -1947,6 +2150,10 @@ export {
   SpriteMcpServer,
   // Deploy Hook Models
   DeployHook,
+  // Meeting Models
+  Meeting,
+  MeetingParticipant,
+  MeetingRoom,
 };
 
 export default {
@@ -2079,6 +2286,9 @@ export default {
   Project,
   ProjectContact,
   ProjectNote,
+  ProjectNoteAudio,
+  ProjectEnvVariable,
+  ProjectBrandAsset,
   ProjectMember,
   ProjectClient,
   // Persona & User Modeling
@@ -2096,6 +2306,10 @@ export default {
   ApiKey,
   // Home Assistant Models
   HomeAssistantConfig,
+  // Meeting Models
+  Meeting,
+  MeetingParticipant,
+  MeetingRoom,
   syncDatabase,
   testConnection,
 };

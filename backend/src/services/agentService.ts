@@ -3078,6 +3078,142 @@ Summary:`;
         }
       ),
 
+      // Send property report to any contact by email
+      tool(
+        async ({ propertyAddress, contactEmail, contactName, reportType, customMessage }) => {
+          try {
+            const { Property, Contact } = await import('../models');
+            const { emailService } = await import('./emailService');
+
+            // Find property by address
+            let property = null;
+            if (propertyAddress) {
+              property = await Property.findOne({
+                where: {
+                  [Op.or]: [
+                    { address: { [Op.iLike]: `%${propertyAddress}%` } },
+                  ],
+                },
+              });
+            }
+
+            // Try to find contact if only name provided
+            let email = contactEmail;
+            let name = contactName || 'there';
+            if (!email && contactName) {
+              const contact = await Contact.findOne({
+                where: {
+                  [Op.or]: [
+                    { name: { [Op.iLike]: `%${contactName}%` } },
+                    { firstName: { [Op.iLike]: `%${contactName}%` } },
+                    { lastName: { [Op.iLike]: `%${contactName}%` } },
+                  ],
+                },
+              });
+              if (contact) {
+                email = contact.email;
+                name = contact.name || `${contact.firstName} ${contact.lastName}`.trim();
+              }
+            }
+
+            if (!email) {
+              return JSON.stringify({
+                success: false,
+                error: 'No email address provided or found for the contact. Please provide an email address.',
+              });
+            }
+
+            // Build property report
+            let propertyDetails = null;
+            if (property) {
+              const p = property as any;
+              propertyDetails = {
+                address: p.address || 'N/A',
+                city: p.city,
+                state: p.state,
+                zip: p.zip,
+                price: p.mlsListingPrice || p.buyItNowPrice || p.purchaseContractPrice,
+                bedrooms: p.bedroomCount,
+                bathrooms: p.bathroomCount,
+                sqft: p.livingSpaceSqFt,
+                yearBuilt: p.yearBuilt,
+                propertyType: p.propertyType,
+                condition: p.condition,
+                arv: p.arv,
+                rehabCost: p.rehabCost,
+                description: p.propertyListingDescription,
+              };
+            }
+
+            const subject = property
+              ? `Property Report: ${propertyDetails?.address}, ${propertyDetails?.city}, ${propertyDetails?.state}`
+              : `Property Report from Dispotree`;
+
+            // Try to send email if email service is available
+            let emailSent = false;
+            try {
+              if (emailService && emailService.isReady && emailService.isReady()) {
+                await emailService.sendEmail({
+                  to: email,
+                  subject,
+                  html: `
+                    <h2>Property Report</h2>
+                    <p>Hi ${name},</p>
+                    ${customMessage ? `<p>${customMessage}</p>` : ''}
+                    ${propertyDetails ? `
+                      <h3>Property Details</h3>
+                      <ul>
+                        <li><strong>Address:</strong> ${propertyDetails.address}, ${propertyDetails.city}, ${propertyDetails.state} ${propertyDetails.zip}</li>
+                        <li><strong>Price:</strong> $${propertyDetails.price?.toLocaleString() || 'N/A'}</li>
+                        <li><strong>Beds/Baths:</strong> ${propertyDetails.bedrooms || 'N/A'} / ${propertyDetails.bathrooms || 'N/A'}</li>
+                        <li><strong>Sq Ft:</strong> ${propertyDetails.sqft?.toLocaleString() || 'N/A'}</li>
+                        <li><strong>Year Built:</strong> ${propertyDetails.yearBuilt || 'N/A'}</li>
+                        <li><strong>Property Type:</strong> ${propertyDetails.propertyType || 'N/A'}</li>
+                        <li><strong>Condition:</strong> ${propertyDetails.condition || 'N/A'}</li>
+                        ${propertyDetails.arv ? `<li><strong>ARV:</strong> $${propertyDetails.arv.toLocaleString()}</li>` : ''}
+                        ${propertyDetails.rehabCost ? `<li><strong>Rehab Cost:</strong> $${propertyDetails.rehabCost.toLocaleString()}</li>` : ''}
+                      </ul>
+                      ${propertyDetails.description ? `<p><strong>Description:</strong> ${propertyDetails.description}</p>` : ''}
+                    ` : '<p>No property details available.</p>'}
+                    <p>Best regards,<br>Dispotree</p>
+                  `,
+                });
+                emailSent = true;
+              }
+            } catch (emailError) {
+              console.warn('Email send failed:', emailError);
+            }
+
+            return JSON.stringify({
+              success: true,
+              emailSent,
+              recipient: { name, email },
+              subject,
+              property: propertyDetails,
+              message: emailSent
+                ? `Property report sent to ${name} at ${email}`
+                : `Property report prepared for ${name} (${email}). Email service not configured - would send: ${subject}`,
+            });
+          } catch (error) {
+            return JSON.stringify({
+              success: false,
+              error: `Error sending property report: ${error}`,
+            });
+          }
+        },
+        {
+          name: 'send_property_report',
+          description: 'Send a property report to any contact via email. Use this when user says things like "send the property report to Steve" or "email the deal details to the attorney".',
+          schema: z.object({
+            propertyAddress: z.string().optional().describe('Property address to include in report'),
+            contactEmail: z.string().optional().describe('Email address to send to (e.g., steve@aol.com)'),
+            contactName: z.string().optional().describe('Contact name - will look up email if not provided'),
+            reportType: z.enum(['summary', 'detailed', 'investment']).optional().default('summary').describe('Type of report'),
+            customMessage: z.string().optional().describe('Custom message to include in the email'),
+          }),
+        }
+      ),
+
       // ============================================================
       // KNOWLEDGE BASE TOOLS
       // ============================================================
@@ -11039,6 +11175,7 @@ When the user says "it", "this property", "the deal", "that buyer", "this contac
         scrape_website: 'Scraping website...',
         map_website: 'Mapping website...',
         send_deal_to_fund: 'Sending to fund...',
+        send_property_report: 'Sending property report...',
         search_knowledge: 'Searching knowledge base...',
         get_property_valuation: 'Getting property valuation...',
         get_skip_trace: 'Running skip trace...',

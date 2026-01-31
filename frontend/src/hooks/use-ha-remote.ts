@@ -194,12 +194,15 @@ export function useHARemoteController(roomCode?: string) {
     }
 
     if (wsRef.current) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: 'ha-unsubscribe',
-          timestamp: new Date().toISOString(),
-        })
-      );
+      // Only send unsubscribe if WebSocket is actually open
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'ha-unsubscribe',
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
       wsRef.current.close();
       wsRef.current = null;
     }

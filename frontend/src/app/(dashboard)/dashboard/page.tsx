@@ -15,11 +15,17 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Video,
+  MapPin,
+  Phone,
+  Link2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { format, isToday, isTomorrow } from 'date-fns';
 import { useProjects } from '@/hooks/use-projects';
 import { useTasks } from '@/hooks/use-tasks';
-import type { Project, Task } from '@/types';
+import { useUpcomingMeetings } from '@/hooks/use-meetings';
+import type { Project, Task, Meeting, MeetingType } from '@/types';
 
 const statusColors: Record<string, string> = {
   active: 'bg-green-500/10 text-green-500 border-green-500/20',
@@ -36,11 +42,31 @@ const taskStatusIcons: Record<string, React.ReactNode> = {
   blocked: <AlertCircle className="h-4 w-4 text-red-500" />,
 };
 
+const meetingTypeIcons: Record<MeetingType, React.ReactNode> = {
+  video: <Video className="h-4 w-4 text-blue-500" />,
+  in_person: <MapPin className="h-4 w-4 text-green-500" />,
+  phone: <Phone className="h-4 w-4 text-purple-500" />,
+  external_link: <Link2 className="h-4 w-4 text-orange-500" />,
+};
+
+const getMeetingTimeDisplay = (startTime: string) => {
+  const date = new Date(startTime);
+  if (isToday(date)) {
+    return `Today at ${format(date, 'h:mm a')}`;
+  }
+  if (isTomorrow(date)) {
+    return `Tomorrow at ${format(date, 'h:mm a')}`;
+  }
+  return format(date, 'MMM d, h:mm a');
+};
+
 export default function DashboardPage() {
   const { data: projectsData, isLoading: projectsLoading } = useProjects({ limit: 5 });
   const { data: tasksData, isLoading: tasksLoading } = useTasks({ limit: 5, status: ['pending', 'in_progress'] });
+  const { data: meetingsData, isLoading: meetingsLoading } = useUpcomingMeetings(5);
 
   const recentProjects = projectsData?.data || [];
+  const upcomingMeetings = meetingsData?.data || [];
   const totalProjects = projectsData?.pagination?.total || 0;
   const activeProjects = recentProjects.filter((p: Project) => p.status === 'active').length;
 
@@ -218,6 +244,65 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming Meetings */}
+      <Card className="bg-card border">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-foreground">Upcoming Meetings</CardTitle>
+          <Link href="/meetings">
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+              View All
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {meetingsLoading ? (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full" />
+              ))}
+            </div>
+          ) : upcomingMeetings.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {upcomingMeetings.map((meeting: Meeting) => (
+                <Link
+                  key={meeting.id}
+                  href="/meetings"
+                  className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                >
+                  <div className="mt-0.5">
+                    {meetingTypeIcons[meeting.meetingType]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {meeting.title}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {getMeetingTimeDisplay(meeting.scheduledAt)}
+                    </p>
+                    {meeting.status === 'in_progress' && (
+                      <Badge variant="outline" className="mt-1 bg-green-500/10 text-green-500 border-green-500/20">
+                        In Progress
+                      </Badge>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Video className="h-8 w-8 text-muted-foreground mb-2" />
+              <p className="text-muted-foreground">No upcoming meetings</p>
+              <Link href="/meetings">
+                <Button variant="link" className="text-accent-400 mt-2">
+                  Schedule a meeting
+                </Button>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
       <Card className="bg-card border">

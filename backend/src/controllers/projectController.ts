@@ -12,7 +12,11 @@ import { Request, Response } from 'express';
 import { projectService } from '../services/ProjectService';
 import { projectContactService } from '../services/ProjectContactService';
 import { projectNoteService } from '../services/ProjectNoteService';
+import { projectNoteAudioService } from '../services/ProjectNoteAudioService';
+import { projectEnvVariableService } from '../services/ProjectEnvVariableService';
+import { projectBrandAssetService } from '../services/ProjectBrandAssetService';
 import { projectRecapService } from '../services/ProjectRecapService';
+import type { BrandAssetType, BrandAssetVariant } from '../models/ProjectBrandAsset';
 import { taskService } from '../services/TaskService';
 import { gitHubService } from '../services/GitHubService';
 import type { ProjectStatus } from '../models/Project';
@@ -735,6 +739,422 @@ export const deleteProjectNote = async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'Note deleted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if ((error as Error).message.includes('Only the author')) {
+      return res.status(403).json({
+        success: false,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT AUDIO NOTES
+// ============================================================================
+
+export const getProjectAudioNotes = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const audioNotes = await projectNoteAudioService.getAudioNotesForProject(id, organizationId);
+
+    res.json({
+      success: true,
+      data: audioNotes,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const createProjectAudioNote = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const file = req.file;
+
+    console.log('[createProjectAudioNote] Request:', { projectId: id, userId, hasFile: !!file });
+
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No audio file provided',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // If user has no organization, get it from the project
+    let noteOrganizationId = organizationId;
+    if (!noteOrganizationId) {
+      const project = await projectService.getProject(id);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      noteOrganizationId = project.organizationId;
+    }
+
+    // Get language parameter from request body
+    const { language } = req.body;
+
+    // Read file buffer
+    const fs = await import('fs');
+    const audioBuffer = fs.readFileSync(file.path);
+
+    // Create audio note (will upload to Supabase and start transcription)
+    const audioNote = await projectNoteAudioService.createAudioNote({
+      projectId: id,
+      userId,
+      organizationId: noteOrganizationId,
+      audioBuffer,
+      originalFilename: file.originalname,
+      mimeType: file.mimetype,
+      language: language || undefined,
+    });
+
+    // Clean up temp file
+    fs.unlink(file.path, () => {});
+
+    console.log('[createProjectAudioNote] Audio note created:', audioNote?.id);
+
+    res.status(201).json({
+      success: true,
+      data: audioNote,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[createProjectAudioNote] Error:', error);
+
+    // Clean up temp file on error
+    if (req.file?.path) {
+      const fs = await import('fs');
+      fs.unlink(req.file.path, () => {});
+    }
+
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const getProjectAudioNote = async (req: Request, res: Response) => {
+  try {
+    const { id, audioId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const audioNote = await projectNoteAudioService.getAudioNoteById(
+      parseInt(audioId, 10),
+      organizationId
+    );
+
+    if (!audioNote) {
+      return res.status(404).json({
+        success: false,
+        error: 'Audio note not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: audioNote,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const deleteProjectAudioNote = async (req: Request, res: Response) => {
+  try {
+    const { id, audioId } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+
+    const deleted = await projectNoteAudioService.deleteAudioNote(
+      parseInt(audioId, 10),
+      userId,
+      organizationId
+    );
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Audio note not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Audio note deleted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if ((error as Error).message.includes('Only the author')) {
+      return res.status(403).json({
+        success: false,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const retryAudioNoteTranscription = async (req: Request, res: Response) => {
+  try {
+    const { id, audioId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const audioNote = await projectNoteAudioService.retryTranscription(
+      parseInt(audioId, 10),
+      organizationId
+    );
+
+    if (!audioNote) {
+      return res.status(404).json({
+        success: false,
+        error: 'Audio note not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: audioNote,
+      message: 'Transcription retry started',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT ENVIRONMENT VARIABLES
+// ============================================================================
+
+export const getProjectEnvVariables = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const envVariables = await projectEnvVariableService.getEnvVariablesForProject(id, organizationId);
+
+    res.json({
+      success: true,
+      data: envVariables,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const createProjectEnvVariable = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const { name, value, description } = req.body;
+
+    if (!name || !value) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name and value are required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // If user has no organization, get it from the project
+    let envOrganizationId = organizationId;
+    if (!envOrganizationId) {
+      const project = await projectService.getProject(id);
+      if (!project) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      envOrganizationId = project.organizationId;
+    }
+
+    const envVariable = await projectEnvVariableService.createEnvVariable({
+      projectId: id,
+      userId,
+      organizationId: envOrganizationId,
+      name,
+      value,
+      description,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: envVariable,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const getProjectEnvVariableValue = async (req: Request, res: Response) => {
+  try {
+    const { id, envId } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const value = await projectEnvVariableService.getDecryptedValue(
+      parseInt(envId, 10),
+      organizationId
+    );
+
+    if (value === null) {
+      return res.status(404).json({
+        success: false,
+        error: 'Environment variable not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { value },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const updateProjectEnvVariable = async (req: Request, res: Response) => {
+  try {
+    const { id, envId } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const { name, value, description } = req.body;
+
+    const envVariable = await projectEnvVariableService.updateEnvVariable(
+      parseInt(envId, 10),
+      userId,
+      organizationId,
+      { name, value, description }
+    );
+
+    if (!envVariable) {
+      return res.status(404).json({
+        success: false,
+        error: 'Environment variable not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: envVariable,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if ((error as Error).message.includes('Only the author')) {
+      return res.status(403).json({
+        success: false,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const deleteProjectEnvVariable = async (req: Request, res: Response) => {
+  try {
+    const { id, envId } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+
+    const deleted = await projectEnvVariableService.deleteEnvVariable(
+      parseInt(envId, 10),
+      userId,
+      organizationId
+    );
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Environment variable not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Environment variable deleted successfully',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -1984,6 +2404,224 @@ export const getProjectSigners = async (req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : String(error),
       timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// =============================================================================
+// BRAND ASSETS
+// =============================================================================
+
+/**
+ * Get all brand assets for a project
+ */
+export const getProjectBrandAssets = async (req: Request, res: Response) => {
+  try {
+    const { id: projectId } = req.params;
+    const { assetType, variant } = req.query;
+    const user = (req as any).user;
+
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const assets = await projectBrandAssetService.getBrandAssetsForProject(
+      projectId,
+      user.organizationId,
+      {
+        assetType: assetType as BrandAssetType | undefined,
+        variant: variant as BrandAssetVariant | undefined,
+      }
+    );
+
+    res.json({ success: true, data: assets });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
+ * Create a new brand asset
+ */
+export const createProjectBrandAsset = async (req: Request, res: Response) => {
+  try {
+    const { id: projectId } = req.params;
+    const { name, description, assetType, variant, isPrimary } = req.body;
+    const user = (req as any).user;
+    const file = req.file;
+
+    if (!user?.id || !user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    if (!file) {
+      return res.status(400).json({ success: false, error: 'File is required' });
+    }
+
+    if (!name || !assetType) {
+      return res.status(400).json({ success: false, error: 'Name and assetType are required' });
+    }
+
+    const asset = await projectBrandAssetService.createBrandAsset({
+      projectId,
+      userId: user.id,
+      organizationId: user.organizationId,
+      name,
+      description,
+      assetType: assetType as BrandAssetType,
+      variant: (variant as BrandAssetVariant) || 'default',
+      file: {
+        buffer: file.buffer,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+      },
+      isPrimary: isPrimary === 'true' || isPrimary === true,
+    });
+
+    res.status(201).json({ success: true, data: asset });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
+ * Get a single brand asset
+ */
+export const getProjectBrandAsset = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+    const user = (req as any).user;
+
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const asset = await projectBrandAssetService.getBrandAssetById(
+      parseInt(assetId, 10),
+      user.organizationId
+    );
+
+    if (!asset) {
+      return res.status(404).json({ success: false, error: 'Asset not found' });
+    }
+
+    res.json({ success: true, data: asset });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
+ * Update a brand asset
+ */
+export const updateProjectBrandAsset = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+    const { name, description, assetType, variant, isPrimary, sortOrder } = req.body;
+    const user = (req as any).user;
+
+    if (!user?.id || !user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const asset = await projectBrandAssetService.updateBrandAsset(
+      parseInt(assetId, 10),
+      user.id,
+      user.organizationId,
+      {
+        name,
+        description,
+        assetType,
+        variant,
+        isPrimary,
+        sortOrder,
+      }
+    );
+
+    if (!asset) {
+      return res.status(404).json({ success: false, error: 'Asset not found' });
+    }
+
+    res.json({ success: true, data: asset });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Only the author')) {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
+ * Delete a brand asset
+ */
+export const deleteProjectBrandAsset = async (req: Request, res: Response) => {
+  try {
+    const { assetId } = req.params;
+    const user = (req as any).user;
+
+    if (!user?.id || !user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const deleted = await projectBrandAssetService.deleteBrandAsset(
+      parseInt(assetId, 10),
+      user.id,
+      user.organizationId
+    );
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Asset not found' });
+    }
+
+    res.json({ success: true, message: 'Asset deleted' });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('Only the author')) {
+      return res.status(403).json({ success: false, error: error.message });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
+ * Reorder brand assets
+ */
+export const reorderProjectBrandAssets = async (req: Request, res: Response) => {
+  try {
+    const { id: projectId } = req.params;
+    const { assetIds } = req.body;
+    const user = (req as any).user;
+
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    if (!Array.isArray(assetIds)) {
+      return res.status(400).json({ success: false, error: 'assetIds must be an array' });
+    }
+
+    await projectBrandAssetService.reorderBrandAssets(projectId, user.organizationId, assetIds);
+
+    res.json({ success: true, message: 'Assets reordered' });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 };

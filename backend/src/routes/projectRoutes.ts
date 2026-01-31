@@ -9,7 +9,7 @@ import rateLimit from 'express-rate-limit';
 import * as projectController from '../controllers/projectController';
 import { clientPortalController } from '../controllers/clientPortalController';
 import { authenticate } from '../middleware/auth';
-import { uploadSingle } from '../middleware/upload';
+import { uploadSingle, uploadAudio } from '../middleware/upload';
 
 const router = Router();
 
@@ -973,6 +973,322 @@ router.delete('/:id/notes/:noteId', projectController.deleteProjectNote);
 router.post('/:id/notes/:noteId/github-issue', projectController.createGitHubIssueFromNote);
 
 // ============================================================================
+// PROJECT AUDIO NOTES (Transcribed Audio)
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/audio-notes:
+ *   get:
+ *     summary: Get audio notes for a project
+ *     description: Returns all audio recordings with their transcripts for a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: List of audio notes with transcripts
+ */
+router.get('/:id/audio-notes', authenticate, projectController.getProjectAudioNotes);
+
+/**
+ * @swagger
+ * /api/projects/{id}/audio-notes:
+ *   post:
+ *     summary: Upload an audio recording for transcription
+ *     description: Upload audio file that will be automatically transcribed using Whisper
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - audio
+ *             properties:
+ *               audio:
+ *                 type: string
+ *                 format: binary
+ *                 description: Audio file (webm, mp3, wav, etc.)
+ *     responses:
+ *       201:
+ *         description: Audio note created, transcription started
+ */
+router.post('/:id/audio-notes', authenticate, uploadAudio, projectController.createProjectAudioNote);
+
+/**
+ * @swagger
+ * /api/projects/{id}/audio-notes/{audioId}:
+ *   get:
+ *     summary: Get a specific audio note
+ *     description: Returns a single audio note with signed URL for playback
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: audioId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Audio note with signed playback URL
+ *       404:
+ *         description: Audio note not found
+ */
+router.get('/:id/audio-notes/:audioId', authenticate, projectController.getProjectAudioNote);
+
+/**
+ * @swagger
+ * /api/projects/{id}/audio-notes/{audioId}:
+ *   delete:
+ *     summary: Delete an audio note (author only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: audioId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Audio note deleted
+ *       403:
+ *         description: Only the author can delete this audio note
+ *       404:
+ *         description: Audio note not found
+ */
+router.delete('/:id/audio-notes/:audioId', authenticate, projectController.deleteProjectAudioNote);
+
+/**
+ * @swagger
+ * /api/projects/{id}/audio-notes/{audioId}/retranscribe:
+ *   post:
+ *     summary: Retry transcription for a failed audio note
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: audioId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Transcription retry started
+ *       404:
+ *         description: Audio note not found
+ */
+router.post('/:id/audio-notes/:audioId/retranscribe', authenticate, projectController.retryAudioNoteTranscription);
+
+// ============================================================================
+// PROJECT ENVIRONMENT VARIABLES (Secure Secrets)
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/env-variables:
+ *   get:
+ *     summary: Get environment variables for a project
+ *     description: Returns all env variables (without values) for a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: List of environment variables (values hidden)
+ */
+router.get('/:id/env-variables', authenticate, projectController.getProjectEnvVariables);
+
+/**
+ * @swagger
+ * /api/projects/{id}/env-variables:
+ *   post:
+ *     summary: Create a new environment variable
+ *     description: Store an encrypted environment variable for the project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - value
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Variable name (will be uppercased)
+ *               value:
+ *                 type: string
+ *                 description: The secret value to store
+ *               description:
+ *                 type: string
+ *                 description: Optional description
+ *     responses:
+ *       201:
+ *         description: Environment variable created
+ */
+router.post('/:id/env-variables', authenticate, projectController.createProjectEnvVariable);
+
+/**
+ * @swagger
+ * /api/projects/{id}/env-variables/{envId}/value:
+ *   get:
+ *     summary: Get the decrypted value of an environment variable
+ *     description: Returns the actual secret value (use with caution)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: envId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Decrypted value
+ *       404:
+ *         description: Environment variable not found
+ */
+router.get('/:id/env-variables/:envId/value', authenticate, projectController.getProjectEnvVariableValue);
+
+/**
+ * @swagger
+ * /api/projects/{id}/env-variables/{envId}:
+ *   patch:
+ *     summary: Update an environment variable (author only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: envId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               value:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Environment variable updated
+ *       403:
+ *         description: Only the author can update
+ *       404:
+ *         description: Environment variable not found
+ */
+router.patch('/:id/env-variables/:envId', authenticate, projectController.updateProjectEnvVariable);
+
+/**
+ * @swagger
+ * /api/projects/{id}/env-variables/{envId}:
+ *   delete:
+ *     summary: Delete an environment variable (author only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: envId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Environment variable deleted
+ *       403:
+ *         description: Only the author can delete
+ *       404:
+ *         description: Environment variable not found
+ */
+router.delete('/:id/env-variables/:envId', authenticate, projectController.deleteProjectEnvVariable);
+
+// ============================================================================
 // PROJECT AI RECAP
 // ============================================================================
 
@@ -1637,5 +1953,225 @@ router.post('/:id/clients/invite', clientPortalController.generateInvite);
  *         description: Client not found
  */
 router.delete('/:id/clients/:clientId', clientPortalController.revokeClientAccess);
+
+// ============================================================================
+// BRAND ASSETS
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/brand-assets:
+ *   get:
+ *     summary: Get all brand assets for a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: assetType
+ *         schema:
+ *           type: string
+ *           enum: [logo, icon, banner, favicon, watermark, background, other]
+ *       - in: query
+ *         name: variant
+ *         schema:
+ *           type: string
+ *           enum: [default, light, dark, monochrome, colored, transparent]
+ *     responses:
+ *       200:
+ *         description: List of brand assets
+ */
+router.get('/:id/brand-assets', projectController.getProjectBrandAssets);
+
+/**
+ * @swagger
+ * /api/projects/{id}/brand-assets:
+ *   post:
+ *     summary: Upload a new brand asset
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *               - name
+ *               - assetType
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               assetType:
+ *                 type: string
+ *                 enum: [logo, icon, banner, favicon, watermark, background, other]
+ *               variant:
+ *                 type: string
+ *                 enum: [default, light, dark, monochrome, colored, transparent]
+ *               isPrimary:
+ *                 type: boolean
+ *     responses:
+ *       201:
+ *         description: Brand asset created
+ */
+router.post('/:id/brand-assets', uploadSingle, projectController.createProjectBrandAsset);
+
+/**
+ * @swagger
+ * /api/projects/{id}/brand-assets/{assetId}:
+ *   get:
+ *     summary: Get a single brand asset
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: assetId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Brand asset details
+ *       404:
+ *         description: Asset not found
+ */
+router.get('/:id/brand-assets/:assetId', projectController.getProjectBrandAsset);
+
+/**
+ * @swagger
+ * /api/projects/{id}/brand-assets/{assetId}:
+ *   patch:
+ *     summary: Update a brand asset
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: assetId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               assetType:
+ *                 type: string
+ *                 enum: [logo, icon, banner, favicon, watermark, background, other]
+ *               variant:
+ *                 type: string
+ *                 enum: [default, light, dark, monochrome, colored, transparent]
+ *               isPrimary:
+ *                 type: boolean
+ *               sortOrder:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: Brand asset updated
+ *       404:
+ *         description: Asset not found
+ */
+router.patch('/:id/brand-assets/:assetId', projectController.updateProjectBrandAsset);
+
+/**
+ * @swagger
+ * /api/projects/{id}/brand-assets/{assetId}:
+ *   delete:
+ *     summary: Delete a brand asset
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: assetId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Brand asset deleted
+ *       404:
+ *         description: Asset not found
+ */
+router.delete('/:id/brand-assets/:assetId', projectController.deleteProjectBrandAsset);
+
+/**
+ * @swagger
+ * /api/projects/{id}/brand-assets/reorder:
+ *   post:
+ *     summary: Reorder brand assets
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - assetIds
+ *             properties:
+ *               assetIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: Assets reordered
+ */
+router.post('/:id/brand-assets/reorder', projectController.reorderProjectBrandAssets);
 
 export default router;

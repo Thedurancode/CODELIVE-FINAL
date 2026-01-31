@@ -17,6 +17,7 @@ import {
   Calendar,
   FolderKanban,
   Tv,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -28,6 +29,7 @@ const navItems = [
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/contacts', label: 'Contacts', icon: Users },
   { href: '/calls', label: 'Calls', icon: Phone },
+  { href: '/meetings', label: 'Meetings', icon: Video },
   { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/email', label: 'Email', icon: Mail },
   { href: '/tv-display', label: 'TV Display', icon: Tv },

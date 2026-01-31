@@ -54,6 +54,20 @@ const ALLOWED_MIME_TYPES = [
   'application/x-zip-compressed',
 ];
 
+// Audio file types (for voice notes and transcription)
+const ALLOWED_AUDIO_TYPES = [
+  'audio/webm',
+  'audio/mp3',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/wav',
+  'audio/ogg',
+  'audio/flac',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+];
+
 // File filter
 const fileFilter = (
   req: Express.Request,
@@ -95,5 +109,38 @@ export const uploadFields = upload.fields([
   { name: 'disclosure', maxCount: 5 },
   { name: 'other', maxCount: 10 },
 ]);
+
+// Audio file filter
+const audioFileFilter = (
+  req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  // Check both by mimetype and file extension
+  const isAudioMime = ALLOWED_AUDIO_TYPES.includes(file.mimetype);
+  const isAudioExt = file.originalname.match(/\.(webm|mp3|mp4|m4a|wav|ogg|flac|aac)$/i);
+
+  if (isAudioMime || isAudioExt) {
+    cb(null, true);
+  } else {
+    cb(new Error(`File type ${file.mimetype} is not allowed for audio. Allowed: webm, mp3, mp4, m4a, wav, ogg, flac, aac`));
+  }
+};
+
+// Max audio file size: 25MB (Whisper limit)
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024;
+
+// Audio upload instance
+export const audioUpload = multer({
+  storage,
+  fileFilter: audioFileFilter,
+  limits: {
+    fileSize: MAX_AUDIO_SIZE,
+    files: 1,
+  },
+});
+
+// Single audio file upload
+export const uploadAudio = audioUpload.single('audio');
 
 export default upload;

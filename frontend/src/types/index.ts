@@ -332,6 +332,79 @@ export interface ProjectNote {
   };
 }
 
+export type TranscriptionStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface ProjectAudioNote {
+  id: number;
+  projectId: string;
+  userId: string;
+  organizationId: string;
+  audioUrl: string;
+  audioStoragePath: string;
+  duration: number | null;
+  transcript: string | null;
+  transcriptionStatus: TranscriptionStatus;
+  transcriptionError: string | null;
+  transcriptionLanguage?: string | null;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt: string;
+  updatedAt: string;
+  author?: {
+    id: string;
+    name?: string;
+    email?: string;
+  };
+}
+
+export interface ProjectEnvVariable {
+  id: number;
+  projectId: string;
+  userId: string;
+  organizationId: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author?: {
+    id: string;
+    name?: string;
+    email?: string;
+  };
+  // Note: value is intentionally NOT included for security
+}
+
+// Brand Asset types
+export type BrandAssetType = 'logo' | 'icon' | 'banner' | 'favicon' | 'watermark' | 'background' | 'other';
+export type BrandAssetVariant = 'default' | 'light' | 'dark' | 'monochrome' | 'colored' | 'transparent';
+
+export interface ProjectBrandAsset {
+  id: number;
+  projectId: string;
+  userId: string;
+  organizationId: string;
+  name: string;
+  description: string | null;
+  assetType: BrandAssetType;
+  variant: BrandAssetVariant;
+  storageUrl: string;
+  mimeType: string;
+  fileSize: number;
+  width: number | null;
+  height: number | null;
+  isPrimary: boolean;
+  sortOrder: number;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  author?: {
+    id: string;
+    name?: string;
+    email?: string;
+  };
+}
+
 export interface ProjectFilters {
   page?: number;
   limit?: number;
@@ -461,4 +534,185 @@ export interface ReminderStats {
   dueSoon: number;
   byPriority: Record<ReminderPriority, number>;
   byLinkType: Record<ReminderLinkType, number>;
+}
+
+// Meeting Types
+export type MeetingStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
+export type MeetingType = 'video' | 'in_person' | 'phone' | 'external_link';
+export type RecurrencePattern = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'custom';
+export type ParticipantRole = 'host' | 'co_host' | 'presenter' | 'attendee';
+export type RsvpStatus = 'pending' | 'accepted' | 'declined' | 'tentative' | 'no_response';
+export type AttendanceStatus = 'not_joined' | 'joined' | 'left' | 'no_show';
+export type RoomStatus = 'pending' | 'active' | 'ended' | 'failed';
+
+export interface Meeting {
+  id: string;
+  organizationId: string;
+  createdById: string;
+  projectId: string | null;
+  title: string;
+  description: string | null;
+  meetingType: MeetingType;
+  status: MeetingStatus;
+  scheduledAt: string;
+  duration: number;
+  timezone: string;
+  endedAt: string | null;
+  location: string | null;
+  externalLink: string | null;
+  videoRoomId: string | null;
+  recurrence: RecurrencePattern;
+  recurrenceRule: string | null;
+  recurrenceEndDate: string | null;
+  parentMeetingId: string | null;
+  reminderSent: boolean;
+  reminderMinutesBefore: number;
+  notes: string | null;
+  agenda: string | null;
+  recordingUrl: string | null;
+  transcriptUrl: string | null;
+  calendarEventId: string | null;
+  calendarProvider: string | null;
+  tags: string[];
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  creator?: { id: string; name?: string; email?: string };
+  project?: { id: string; title: string };
+  participants?: MeetingParticipant[];
+  room?: MeetingRoom;
+}
+
+export interface MeetingParticipant {
+  id: number;
+  meetingId: string;
+  organizationId: string;
+  userId: string | null;
+  contactId: string | null;
+  email: string;
+  name: string;
+  phone: string | null;
+  role: ParticipantRole;
+  rsvpStatus: RsvpStatus;
+  attendanceStatus: AttendanceStatus;
+  invitedAt: string;
+  respondedAt: string | null;
+  joinedAt: string | null;
+  leftAt: string | null;
+  emailInviteSent: boolean;
+  emailReminderSent: boolean;
+  canShareScreen: boolean;
+  canUnmute: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: { id: string; name?: string; email?: string; avatar?: string };
+  contact?: { id: string; name: string; email?: string; phone?: string };
+}
+
+export interface MeetingRoom {
+  id: string;
+  meetingId: string;
+  organizationId: string;
+  roomName: string;
+  roomSid: string | null;
+  status: RoomStatus;
+  startedAt: string | null;
+  endedAt: string | null;
+  maxParticipants: number;
+  currentParticipants: number;
+  totalParticipantsJoined: number;
+  recordingEnabled: boolean;
+  recordingStartedAt: string | null;
+  recordingUrl: string | null;
+  recordingDuration: number | null;
+  backgroundUrl: string | null;
+  logoUrl: string | null;
+  welcomeMessage: string | null;
+  waitingRoomEnabled: boolean;
+  chatEnabled: boolean;
+  screenShareEnabled: boolean;
+  participantVideoEnabled: boolean;
+  participantAudioEnabled: boolean;
+  provider: string;
+  providerMetadata: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeetingFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: MeetingStatus | MeetingStatus[];
+  meetingType?: MeetingType | MeetingType[];
+  projectId?: string;
+  upcoming?: boolean;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+}
+
+export interface CreateMeetingInput {
+  title: string;
+  description?: string;
+  meetingType?: MeetingType;
+  scheduledAt: string;
+  duration?: number;
+  timezone?: string;
+  projectId?: string;
+  location?: string;
+  externalLink?: string;
+  recurrence?: RecurrencePattern;
+  recurrenceRule?: string;
+  recurrenceEndDate?: string;
+  reminderMinutesBefore?: number;
+  agenda?: string;
+  tags?: string[];
+  participants?: Array<{
+    email: string;
+    name: string;
+    userId?: string;
+    contactId?: string;
+    role?: ParticipantRole;
+    phone?: string;
+  }>;
+  roomSettings?: {
+    recordingEnabled?: boolean;
+    waitingRoomEnabled?: boolean;
+    maxParticipants?: number;
+    backgroundUrl?: string;
+    logoUrl?: string;
+    welcomeMessage?: string;
+  };
+}
+
+export interface UpdateMeetingInput {
+  title?: string;
+  description?: string;
+  meetingType?: MeetingType;
+  status?: MeetingStatus;
+  scheduledAt?: string;
+  duration?: number;
+  timezone?: string;
+  projectId?: string | null;
+  location?: string;
+  externalLink?: string;
+  recurrence?: RecurrencePattern;
+  recurrenceRule?: string;
+  recurrenceEndDate?: string;
+  reminderMinutesBefore?: number;
+  agenda?: string;
+  notes?: string;
+  tags?: string[];
+}
+
+export interface MeetingRoomToken {
+  token: string;
+  roomName: string;
+  roomUrl: string;
+  participantName: string;
+  participantId: string;
 }

@@ -73,6 +73,9 @@ import {
   VolumeX,
   Globe,
   FileSignature,
+  Key,
+  Palette,
+  Video,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -83,6 +86,8 @@ import type { Project, ProjectStatus } from '@/types';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { ProjectContactsPanel } from '@/components/projects/ProjectContactsPanel';
 import { ProjectNotesPanel } from '@/components/projects/ProjectNotesPanel';
+import { ProjectEnvVariablesPanel } from '@/components/projects/ProjectEnvVariablesPanel';
+import { ProjectBrandPanel } from '@/components/projects/ProjectBrandPanel';
 import { ProjectTasksPanel } from '@/components/projects/ProjectTasksPanel';
 import { GitHubRepoPanel } from '@/components/projects/GitHubRepoPanel';
 import { StartCodingTaskDialog } from '@/components/projects/StartCodingTaskDialog';
@@ -94,9 +99,118 @@ import { useSpriteByProject } from '@/hooks/use-sprites';
 import { useProjectContracts, getContractStatusColor, getContractStatusLabel, type ProjectContract } from '@/hooks/use-project-contracts';
 import { ProjectSignersPanel } from '@/components/contracts/ProjectSignersPanel';
 import { ContractSignersPanel } from '@/components/contracts/ContractSignersPanel';
+import { ProjectMeetingsPanel } from '@/components/projects/ProjectMeetingsPanel';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
+
+// Audio Waveform Visualizer for Recap Playback
+function RecapWaveform({ analyser, isPlaying }: { analyser: AnalyserNode | null; isPlaying: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
+
+  useEffect(() => {
+    if (!analyser || !canvasRef.current || !isPlaying) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      // Clear canvas when not playing
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+      }
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const draw = () => {
+      animationRef.current = requestAnimationFrame(draw);
+
+      analyser.getByteFrequencyData(dataArray);
+
+      // Clear with fade effect
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw bars with violet gradient (matching recap button color)
+      const barCount = 48;
+      const barWidth = (canvas.width / barCount) - 2;
+      const barSpacing = 2;
+      const cornerRadius = 2;
+
+      for (let i = 0; i < barCount; i++) {
+        // Sample from frequency data
+        const dataIndex = Math.floor((i / barCount) * bufferLength);
+        const value = dataArray[dataIndex];
+        const barHeight = Math.max(4, (value / 255) * canvas.height * 0.85);
+
+        // Violet gradient based on amplitude
+        const intensity = value / 255;
+        const hue = 265 + intensity * 35; // Purple to pink
+        const saturation = 70 + intensity * 25;
+        const lightness = 55 + intensity * 20;
+
+        // Add glow effect for high amplitudes
+        if (intensity > 0.6) {
+          ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.8)`;
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${0.75 + intensity * 0.25})`;
+
+        // Draw rounded bar from center
+        const x = i * (barWidth + barSpacing);
+        const y = (canvas.height - barHeight) / 2;
+
+        // Draw rounded rectangle
+        ctx.beginPath();
+        ctx.roundRect(x, y, barWidth, barHeight, cornerRadius);
+        ctx.fill();
+      }
+
+      // Reset shadow
+      ctx.shadowBlur = 0;
+    };
+
+    draw();
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [analyser, isPlaying]);
+
+  if (!isPlaying) return null;
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-500/30">
+      <canvas
+        ref={canvasRef}
+        width={240}
+        height={48}
+        className="rounded-md bg-black/30"
+      />
+      <div className="flex items-center gap-2">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+        </span>
+        <span className="text-xs font-medium text-violet-400">Speaking...</span>
+      </div>
+    </div>
+  );
+}
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   active: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -308,6 +422,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recapAudioCacheRef = useRef<{ text: string; audioUrl: string } | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const [recapAnalyser, setRecapAnalyser] = useState<AnalyserNode | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -319,6 +436,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
       }
       // Also cancel browser speech synthesis if active
       if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -464,6 +585,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         audioRef.current.pause();
         audioRef.current = null;
       }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      setRecapAnalyser(null);
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
@@ -495,20 +621,51 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         recapAudioCacheRef.current = { text: response.recap, audioUrl: response.audioUrl };
 
         const audio = new Audio(response.audioUrl);
+        audio.crossOrigin = 'anonymous'; // Required for audio analysis
         audioRef.current = audio;
 
+        // Set up audio context and analyser for waveform visualization
+        const setupAudioAnalyser = () => {
+          try {
+            const audioContext = new AudioContext();
+            const source = audioContext.createMediaElementSource(audio);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 128;
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+            audioContextRef.current = audioContext;
+            analyserRef.current = analyser;
+            setRecapAnalyser(analyser);
+          } catch (e) {
+            console.log('[RecapAudio] Could not set up audio analyser:', e);
+          }
+        };
+
         audio.onplay = () => {
+          if (!audioContextRef.current) {
+            setupAudioAnalyser();
+          }
           setIsPlayingRecap(true);
           setIsLoadingAudio(false);
         };
         audio.onended = () => {
           setIsPlayingRecap(false);
           audioRef.current = null;
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+          setRecapAnalyser(null);
         };
         audio.onerror = () => {
           setIsPlayingRecap(false);
           setIsLoadingAudio(false);
           audioRef.current = null;
+          if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+          }
+          setRecapAnalyser(null);
           // Cache might be stale, clear it
           recapAudioCacheRef.current = null;
           toast.error('Failed to play audio');
@@ -689,35 +846,39 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Action buttons row - Consolidated */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Play Recap - Voice button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className={isPlayingRecap
-              ? "bg-violet-500/20 border-violet-500/40 text-violet-400 hover:bg-violet-500/30"
-              : "hover:bg-violet-500/10 hover:text-violet-400 hover:border-violet-500/40"
-            }
-            onClick={handlePlayRecap}
-            disabled={isLoadingAudio}
-            title={isPlayingRecap ? "Stop playback" : "Generate and play fresh AI recap"}
-          >
-            {isLoadingAudio ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : isPlayingRecap ? (
-              <>
-                <VolumeX className="h-4 w-4 mr-2" />
-                Stop
-              </>
-            ) : (
-              <>
-                <Volume2 className="h-4 w-4 mr-2" />
-                Play Recap
-              </>
-            )}
-          </Button>
+          {/* Play Recap - Voice button with waveform */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className={isPlayingRecap
+                ? "bg-violet-500/20 border-violet-500/40 text-violet-400 hover:bg-violet-500/30"
+                : "hover:bg-violet-500/10 hover:text-violet-400 hover:border-violet-500/40"
+              }
+              onClick={handlePlayRecap}
+              disabled={isLoadingAudio}
+              title={isPlayingRecap ? "Stop playback" : "Generate and play fresh AI recap"}
+            >
+              {isLoadingAudio ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : isPlayingRecap ? (
+                <>
+                  <VolumeX className="h-4 w-4 mr-2" />
+                  Stop
+                </>
+              ) : (
+                <>
+                  <Volume2 className="h-4 w-4 mr-2" />
+                  Play Recap
+                </>
+              )}
+            </Button>
+            {/* Waveform visualization when playing */}
+            <RecapWaveform analyser={recapAnalyser} isPlaying={isPlayingRecap} />
+          </div>
 
           {/* Add Note - Primary Action */}
           <Button
@@ -908,9 +1069,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <Users className="h-4 w-4 mr-2" />
                 Contacts
               </TabsTrigger>
+              <TabsTrigger value="meetings" className="data-[state=active]:bg-secondary">
+                <Video className="h-4 w-4 mr-2" />
+                Meetings
+              </TabsTrigger>
               <TabsTrigger value="contracts" className="data-[state=active]:bg-secondary">
                 <FileSignature className="h-4 w-4 mr-2" />
                 Contracts
+              </TabsTrigger>
+              <TabsTrigger value="secrets" className="data-[state=active]:bg-secondary">
+                <Key className="h-4 w-4 mr-2" />
+                Secrets
+              </TabsTrigger>
+              <TabsTrigger value="brand" className="data-[state=active]:bg-secondary">
+                <Palette className="h-4 w-4 mr-2" />
+                Brand
               </TabsTrigger>
             </TabsList>
 
@@ -1022,11 +1195,30 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </Card>
             </TabsContent>
 
+            <TabsContent value="meetings">
+              <Card className="bg-card border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg font-medium text-foreground">Meetings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ProjectMeetingsPanel projectId={id} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="contracts">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ProjectContractsSection projectId={id} />
                 <ProjectSignersPanel projectId={id} />
               </div>
+            </TabsContent>
+
+            <TabsContent value="secrets">
+              <ProjectEnvVariablesPanel projectId={id} />
+            </TabsContent>
+
+            <TabsContent value="brand">
+              <ProjectBrandPanel projectId={id} />
             </TabsContent>
           </Tabs>
         </div>

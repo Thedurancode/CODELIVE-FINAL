@@ -35,6 +35,16 @@ import {
   AlertTriangle,
   Merge,
   Copy,
+  Play,
+  Pause,
+  Upload,
+  FileAudio,
+  RefreshCw,
+  AlertCircle,
+  Download,
+  Search,
+  Languages,
+  Clock,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -43,14 +53,27 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   useProjectNotes,
   useCreateProjectNote,
   useUpdateProjectNote,
   useDeleteProjectNote,
   useCreateGitHubIssueFromNote,
 } from '@/hooks/use-project-notes';
+import {
+  useProjectAudioNotes,
+  useCreateProjectAudioNote,
+  useDeleteProjectAudioNote,
+  useRetryAudioNoteTranscription,
+} from '@/hooks/use-project-audio-notes';
 import { toast } from 'sonner';
-import type { ProjectNote } from '@/types';
+import type { ProjectNote, ProjectAudioNote } from '@/types';
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -261,6 +284,172 @@ interface NoteThread {
   notes: ProjectNote[];
 }
 
+// Language options for transcription
+const TRANSCRIPTION_LANGUAGES = [
+  { code: 'auto', label: 'Auto-detect' },
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'it', label: 'Italian' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'hi', label: 'Hindi' },
+] as const;
+
+// Maximum file size for audio uploads (50MB)
+const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_RECORDING_DURATION = 600; // 10 minutes in seconds
+
+// Highlight search query in text
+function highlightSearchMatch(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return text;
+
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+
+  return parts.map((part, i) =>
+    regex.test(part) ? (
+      <mark key={i} className="bg-yellow-500/40 text-foreground rounded px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    )
+  );
+}
+
+// Export transcript to different formats
+function exportTranscript(
+  audioNote: ProjectAudioNote,
+  format: 'txt' | 'srt' | 'json'
+): void {
+  if (!audioNote.transcript) return;
+
+  let content: string;
+  let filename: string;
+  let mimeType: string;
+
+  const timestamp = new Date(audioNote.createdAt).toISOString().split('T')[0];
+  const baseName = audioNote.originalFilename?.replace(/\.[^.]+$/, '') || 'transcript';
+
+  switch (format) {
+    case 'txt':
+      content = audioNote.transcript;
+      filename = `${baseName}-${timestamp}.txt`;
+      mimeType = 'text/plain';
+      break;
+
+    case 'srt':
+      // Simple SRT format (single subtitle block)
+      content = `1\n00:00:00,000 --> ${formatSrtTime(audioNote.duration || 0)}\n${audioNote.transcript}\n`;
+      filename = `${baseName}-${timestamp}.srt`;
+      mimeType = 'application/x-subrip';
+      break;
+
+    case 'json':
+      content = JSON.stringify({
+        filename: audioNote.originalFilename,
+        duration: audioNote.duration,
+        transcribedAt: audioNote.updatedAt,
+        language: audioNote.transcriptionLanguage || 'auto',
+        transcript: audioNote.transcript,
+      }, null, 2);
+      filename = `${baseName}-${timestamp}.json`;
+      mimeType = 'application/json';
+      break;
+
+    default:
+      return;
+  }
+
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function formatSrtTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+}
+
+// Audio Waveform Visualizer Component
+function AudioWaveform({ analyser, isRecording }: { analyser: AnalyserNode | null; isRecording: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
+
+  useEffect(() => {
+    if (!analyser || !canvasRef.current || !isRecording) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const draw = () => {
+      animationRef.current = requestAnimationFrame(draw);
+
+      analyser.getByteFrequencyData(dataArray);
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height;
+
+        // Gradient from accent color to red based on amplitude
+        const hue = 340 + (dataArray[i] / 255) * 60;
+        ctx.fillStyle = `hsla(${hue}, 80%, 50%, 0.8)`;
+
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        x += barWidth + 1;
+      }
+    };
+
+    draw();
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [analyser, isRecording]);
+
+  if (!isRecording) return null;
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={200}
+      height={50}
+      className="rounded-lg bg-black/30"
+    />
+  );
+}
+
 function groupNotesIntoThreads(notes: ProjectNote[]): NoteThread[] {
   if (!notes || notes.length === 0) return [];
 
@@ -357,16 +546,47 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const autoStartRef = useRef(false);
 
+  // Audio recording state
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isAudioDialogOpen, setIsAudioDialogOpen] = useState(false);
+  const [transcriptionLanguage, setTranscriptionLanguage] = useState('auto');
+  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Audio playback state
+  const [playingAudioId, setPlayingAudioId] = useState<number | null>(null);
+  const [playbackProgress, setPlaybackProgress] = useState<Record<number, number>>({});
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Search/filter state for transcripts
+  const [transcriptSearchQuery, setTranscriptSearchQuery] = useState('');
+
   const { data: notesData, isLoading } = useProjectNotes(projectId);
+  const { data: audioNotesData, isLoading: isLoadingAudio } = useProjectAudioNotes(projectId);
   const createNote = useCreateProjectNote(projectId);
   const updateNote = useUpdateProjectNote(projectId);
   const deleteNote = useDeleteProjectNote(projectId);
   const createGitHubIssue = useCreateGitHubIssueFromNote(projectId);
 
+  // Audio note hooks
+  const createAudioNote = useCreateProjectAudioNote(projectId);
+  const deleteAudioNote = useDeleteProjectAudioNote(projectId);
+  const retryTranscription = useRetryAudioNoteTranscription(projectId);
+
   // Extract array from potentially wrapped response
   const notes: ProjectNote[] = Array.isArray(notesData)
     ? notesData
     : ((notesData as any)?.data || []);
+
+  // Extract audio notes array
+  const audioNotes: ProjectAudioNote[] = Array.isArray(audioNotesData)
+    ? audioNotesData
+    : ((audioNotesData as any)?.data || []);
 
   // Initialize speech recognition
   const initSpeechRecognition = useCallback(() => {
@@ -484,8 +704,202 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
       if (recognitionRef.current) {
         recognitionRef.current.abort();
       }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
     };
   }, []);
+
+  // Audio recording functions
+  const startRecordingAudio = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Set up audio context for waveform visualization
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      audioContextRef.current = audioContext;
+      setAudioAnalyser(analyser);
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+        setAudioAnalyser(null);
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+        // Check file size
+        if (audioBlob.size > MAX_AUDIO_FILE_SIZE) {
+          toast.error(`Recording is too large (${(audioBlob.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 50MB.`);
+          return;
+        }
+
+        // Upload the audio with language preference
+        try {
+          await createAudioNote.mutateAsync({ file: audioBlob, language: transcriptionLanguage });
+          toast.success('Audio uploaded, transcription started');
+          setIsAudioDialogOpen(false);
+        } catch (error: any) {
+          console.error('Failed to upload audio:', error);
+          toast.error(error?.message || 'Failed to upload audio');
+        }
+      };
+
+      mediaRecorder.start(1000); // Collect data every second
+      setIsRecordingAudio(true);
+      setRecordingTime(0);
+
+      // Update recording time with auto-stop at max duration
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          if (prev >= MAX_RECORDING_DURATION - 1) {
+            toast.warning('Maximum recording duration reached (10 minutes)');
+            stopRecordingAudio();
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      toast.error('Could not access microphone. Please check permissions.');
+    }
+  }, [createAudioNote, transcriptionLanguage]);
+
+  const stopRecordingAudio = useCallback(() => {
+    if (mediaRecorderRef.current && isRecordingAudio) {
+      mediaRecorderRef.current.stop();
+      setIsRecordingAudio(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      setAudioAnalyser(null);
+    }
+  }, [isRecordingAudio]);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['audio/webm', 'audio/mp3', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/m4a'];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(webm|mp3|mp4|m4a|wav|ogg)$/i)) {
+      toast.error('Please upload a valid audio file (webm, mp3, wav, m4a, ogg)');
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_AUDIO_FILE_SIZE) {
+      toast.error(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 50MB.`);
+      return;
+    }
+
+    try {
+      await createAudioNote.mutateAsync({ file, language: transcriptionLanguage });
+      toast.success('Audio uploaded, transcription started');
+      setIsAudioDialogOpen(false);
+    } catch (error: any) {
+      console.error('Failed to upload audio:', error);
+      toast.error(error?.message || 'Failed to upload audio');
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [createAudioNote, transcriptionLanguage]);
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const toggleAudioPlayback = (audioNote: ProjectAudioNote) => {
+    if (playingAudioId === audioNote.id) {
+      // Stop current playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setPlayingAudioId(null);
+    } else {
+      // Stop previous playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      // Start new playback
+      const audio = new Audio(audioNote.audioUrl);
+
+      audio.ontimeupdate = () => {
+        if (audio.duration) {
+          setPlaybackProgress(prev => ({
+            ...prev,
+            [audioNote.id]: (audio.currentTime / audio.duration) * 100,
+          }));
+        }
+      };
+
+      audio.onended = () => {
+        setPlayingAudioId(null);
+        setPlaybackProgress(prev => ({ ...prev, [audioNote.id]: 0 }));
+      };
+
+      audio.onerror = () => {
+        toast.error('Failed to play audio. The file may have expired.');
+        setPlayingAudioId(null);
+      };
+
+      audio.play().catch(() => {
+        toast.error('Failed to play audio. Please try again.');
+        setPlayingAudioId(null);
+      });
+
+      audioRef.current = audio;
+      setPlayingAudioId(audioNote.id);
+    }
+  };
+
+  const handleDeleteAudioNote = async (audioId: number) => {
+    if (!confirm('Delete this audio recording?')) return;
+    try {
+      await deleteAudioNote.mutateAsync(audioId);
+      toast.success('Audio note deleted');
+    } catch {
+      toast.error('Failed to delete audio note');
+    }
+  };
+
+  const handleRetryTranscription = async (audioId: number) => {
+    try {
+      await retryTranscription.mutateAsync(audioId);
+      toast.success('Transcription retry started');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to retry transcription');
+    }
+  };
 
   const handleCreate = async () => {
     stopListening();
@@ -638,9 +1052,142 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-muted-foreground">
-          {notes?.length || 0} Note{notes?.length !== 1 ? 's' : ''}
+          {notes?.length || 0} Note{notes?.length !== 1 ? 's' : ''}{audioNotes?.length > 0 && ` + ${audioNotes.length} Audio`}
         </h3>
         <div className="flex gap-2">
+          {/* Record Audio Button */}
+          <Dialog open={isAudioDialogOpen} onOpenChange={(open) => {
+            if (!open && isRecordingAudio) {
+              stopRecordingAudio();
+            }
+            setIsAudioDialogOpen(open);
+          }}>
+            <DialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border text-foreground"
+              >
+                <FileAudio className="h-4 w-4 mr-1" />
+                Record
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-foreground flex items-center gap-2">
+                  <FileAudio className="h-5 w-5" />
+                  Audio Recording
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Record or upload an audio file. It will be automatically transcribed.
+                </p>
+
+                {/* Language Selection */}
+                <div className="flex items-center gap-3">
+                  <Languages className="h-4 w-4 text-muted-foreground" />
+                  <Select
+                    value={transcriptionLanguage}
+                    onValueChange={setTranscriptionLanguage}
+                  >
+                    <SelectTrigger className="flex-1 bg-secondary border">
+                      <SelectValue placeholder="Select language" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-secondary border">
+                      {TRANSCRIPTION_LANGUAGES.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Recording Controls */}
+                <div className="flex flex-col items-center gap-4 py-6">
+                  {isRecordingAudio ? (
+                    <>
+                      {/* Waveform Visualization */}
+                      <AudioWaveform analyser={audioAnalyser} isRecording={isRecordingAudio} />
+
+                      <div className="flex items-center gap-2 text-red-400">
+                        <span className="h-3 w-3 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-2xl font-mono">{formatDuration(recordingTime)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          / {formatDuration(MAX_RECORDING_DURATION)}
+                        </span>
+                      </div>
+
+                      {/* Progress bar for recording duration */}
+                      <div className="w-full h-1 bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-red-500 transition-all duration-1000"
+                          style={{ width: `${(recordingTime / MAX_RECORDING_DURATION) * 100}%` }}
+                        />
+                      </div>
+
+                      <Button
+                        variant="destructive"
+                        size="lg"
+                        onClick={stopRecordingAudio}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <Square className="h-5 w-5 mr-2" />
+                        Stop Recording
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        size="lg"
+                        onClick={startRecordingAudio}
+                        disabled={createAudioNote.isPending}
+                        className="bg-accent-600 hover:bg-accent-700 text-white"
+                      >
+                        {createAudioNote.isPending ? (
+                          <>
+                            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="h-5 w-5 mr-2" />
+                            Start Recording
+                          </>
+                        )}
+                      </Button>
+
+                      <div className="text-center text-muted-foreground text-sm">or</div>
+
+                      {/* File Upload */}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="audio/*,.webm,.mp3,.wav,.m4a,.ogg"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={createAudioNote.isPending}
+                        className="border text-foreground"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Audio File
+                      </Button>
+
+                      <p className="text-xs text-muted-foreground text-center">
+                        Max file size: 50MB | Max duration: 10 minutes
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           {/* Voice Note Button - Auto-starts dictation */}
           <Button
             size="sm"
@@ -764,6 +1311,207 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
         </div>
       </div>
 
+      {/* Audio Notes Section */}
+      {audioNotes && audioNotes.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileAudio className="h-4 w-4 text-accent-400" />
+              <span className="text-sm font-medium text-muted-foreground">Audio Recordings</span>
+            </div>
+            {/* Search transcripts */}
+            <div className="relative w-48">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search transcripts..."
+                value={transcriptSearchQuery}
+                onChange={(e) => setTranscriptSearchQuery(e.target.value)}
+                className="h-8 pl-7 text-xs bg-secondary border"
+              />
+            </div>
+          </div>
+          {audioNotes
+            .filter((note) =>
+              !transcriptSearchQuery ||
+              note.transcript?.toLowerCase().includes(transcriptSearchQuery.toLowerCase()) ||
+              note.originalFilename?.toLowerCase().includes(transcriptSearchQuery.toLowerCase())
+            )
+            .map((audioNote) => (
+            <Card key={audioNote.id} className="bg-secondary/50 border border-accent-500/30">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    {/* Audio Player Controls */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleAudioPlayback(audioNote)}
+                        disabled={!audioNote.audioUrl}
+                        className="h-10 w-10 rounded-full p-0 border-accent-500/50 flex-shrink-0"
+                      >
+                        {playingAudioId === audioNote.id ? (
+                          <Pause className="h-5 w-5 text-accent-400" />
+                        ) : (
+                          <Play className="h-5 w-5 text-accent-400 ml-0.5" />
+                        )}
+                      </Button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground truncate">{audioNote.originalFilename}</span>
+                          {audioNote.duration && (
+                            <span className="text-xs text-muted-foreground/60 flex-shrink-0">
+                              {formatDuration(audioNote.duration)}
+                            </span>
+                          )}
+                          {audioNote.transcriptionLanguage && audioNote.transcriptionLanguage !== 'auto' && (
+                            <span className="text-xs bg-accent-500/20 text-accent-400 px-1.5 py-0.5 rounded flex-shrink-0">
+                              {TRANSCRIPTION_LANGUAGES.find(l => l.code === audioNote.transcriptionLanguage)?.label || audioNote.transcriptionLanguage}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Playback Progress Bar */}
+                        {playingAudioId === audioNote.id && (
+                          <div className="mt-2 w-full h-1 bg-secondary rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-accent-500 transition-all duration-200"
+                              style={{ width: `${playbackProgress[audioNote.id] || 0}%` }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Transcription Status */}
+                        <div className="mt-1">
+                          {audioNote.transcriptionStatus === 'pending' && (
+                            <span className="text-xs text-yellow-400 flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Queued for transcription...
+                            </span>
+                          )}
+                          {audioNote.transcriptionStatus === 'processing' && (
+                            <span className="text-xs text-blue-400 flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Transcribing audio...
+                            </span>
+                          )}
+                          {audioNote.transcriptionStatus === 'failed' && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-red-400 flex items-center gap-1">
+                                <AlertCircle className="h-3 w-3" />
+                                {audioNote.transcriptionError || 'Transcription failed'}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRetryTranscription(audioNote.id)}
+                                className="h-6 px-2 text-xs text-accent-400 hover:text-accent-300"
+                              >
+                                <RefreshCw className="h-3 w-3 mr-1" />
+                                Retry
+                              </Button>
+                            </div>
+                          )}
+                          {audioNote.transcriptionStatus === 'completed' && audioNote.transcript && (
+                            <span className="text-xs text-green-400 flex items-center gap-1">
+                              Transcribed successfully
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Transcript */}
+                    {audioNote.transcriptionStatus === 'completed' && audioNote.transcript && (
+                      <div className="p-3 bg-background/50 rounded-lg border border-border/50">
+                        <p className="text-sm text-foreground whitespace-pre-wrap">
+                          {highlightSearchMatch(audioNote.transcript, transcriptSearchQuery)}
+                        </p>
+                        {/* Export buttons */}
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/30">
+                          <span className="text-xs text-muted-foreground">Export:</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => exportTranscript(audioNote, 'txt')}
+                          >
+                            TXT
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => exportTranscript(audioNote, 'srt')}
+                          >
+                            SRT
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => exportTranscript(audioNote, 'json')}
+                          >
+                            JSON
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => {
+                              navigator.clipboard.writeText(audioNote.transcript || '');
+                              toast.success('Transcript copied to clipboard');
+                            }}
+                          >
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copy
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Metadata */}
+                    <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
+                      <span>{audioNote.author?.name || 'Unknown'}</span>
+                      <span>•</span>
+                      <span>{formatDate(audioNote.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-secondary border">
+                      {audioNote.transcriptionStatus === 'failed' && (
+                        <DropdownMenuItem
+                          onClick={() => handleRetryTranscription(audioNote.id)}
+                          className="text-foreground cursor-pointer"
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Retry Transcription
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteAudioNote(audioNote.id)}
+                        className="text-red-400 cursor-pointer"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Text Notes Section */}
       {notes && notes.length > 0 ? (
         <div className="space-y-4">
           {groupNotesIntoThreads(notes).map((thread) => (
@@ -917,12 +1665,12 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
             </div>
           ))}
         </div>
-      ) : (
+      ) : audioNotes.length === 0 && (
         <Card className="bg-secondary/50 border">
           <CardContent className="flex flex-col items-center justify-center py-8">
             <StickyNote className="h-10 w-10 text-muted-foreground mb-3" />
             <p className="text-muted-foreground text-sm">No notes yet</p>
-            <p className="text-muted-foreground text-xs">Add notes to keep track of project details</p>
+            <p className="text-muted-foreground text-xs">Add notes or record audio to keep track of project details</p>
           </CardContent>
         </Card>
       )}

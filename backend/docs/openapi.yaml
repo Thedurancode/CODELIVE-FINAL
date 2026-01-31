@@ -9090,6 +9090,88 @@ paths:
       responses:
         '200':
           description: Pending request details or null
+  /api/contracts/{id}/signers:
+    get:
+      summary: Get all signers for a contract
+      tags:
+        - Contracts
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+    post:
+      summary: Add a signer to a contract
+      tags:
+        - Contracts
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                name:
+                  type: string
+                role:
+                  type: string
+                contactId:
+                  type: string
+                order:
+                  type: integer
+  /api/contracts/signers/{signerId}:
+    patch:
+      summary: Update a signer
+      tags:
+        - Contracts
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: signerId
+          required: true
+          schema:
+            type: integer
+    delete:
+      summary: Remove a signer
+      tags:
+        - Contracts
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: signerId
+          required: true
+          schema:
+            type: integer
+  /api/contracts/signers/{signerId}/remind:
+    post:
+      summary: Send reminder to a specific signer
+      tags:
+        - Contracts
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: signerId
+          required: true
+          schema:
+            type: integer
   /api/conversations:
     get:
       summary: List user's conversations
@@ -17557,6 +17639,270 @@ paths:
           description: Project has no GitHub repository linked
         '404':
           description: Project or note not found
+  /api/projects/{id}/audio-notes:
+    get:
+      summary: Get audio notes for a project
+      description: Returns all audio recordings with their transcripts for a project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of audio notes with transcripts
+    post:
+      summary: Upload an audio recording for transcription
+      description: Upload audio file that will be automatically transcribed using Whisper
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - audio
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: Audio file (webm, mp3, wav, etc.)
+      responses:
+        '201':
+          description: Audio note created, transcription started
+  /api/projects/{id}/audio-notes/{audioId}:
+    get:
+      summary: Get a specific audio note
+      description: Returns a single audio note with signed URL for playback
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: audioId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Audio note with signed playback URL
+        '404':
+          description: Audio note not found
+    delete:
+      summary: Delete an audio note (author only)
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: audioId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Audio note deleted
+        '403':
+          description: Only the author can delete this audio note
+        '404':
+          description: Audio note not found
+  /api/projects/{id}/audio-notes/{audioId}/retranscribe:
+    post:
+      summary: Retry transcription for a failed audio note
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: audioId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Transcription retry started
+        '404':
+          description: Audio note not found
+  /api/projects/{id}/env-variables:
+    get:
+      summary: Get environment variables for a project
+      description: Returns all env variables (without values) for a project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of environment variables (values hidden)
+    post:
+      summary: Create a new environment variable
+      description: Store an encrypted environment variable for the project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - value
+              properties:
+                name:
+                  type: string
+                  description: Variable name (will be uppercased)
+                value:
+                  type: string
+                  description: The secret value to store
+                description:
+                  type: string
+                  description: Optional description
+      responses:
+        '201':
+          description: Environment variable created
+  /api/projects/{id}/env-variables/{envId}/value:
+    get:
+      summary: Get the decrypted value of an environment variable
+      description: Returns the actual secret value (use with caution)
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: envId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Decrypted value
+        '404':
+          description: Environment variable not found
+  /api/projects/{id}/env-variables/{envId}:
+    patch:
+      summary: Update an environment variable (author only)
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: envId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                value:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Environment variable updated
+        '403':
+          description: Only the author can update
+        '404':
+          description: Environment variable not found
+    delete:
+      summary: Delete an environment variable (author only)
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: envId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Environment variable deleted
+        '403':
+          description: Only the author can delete
+        '404':
+          description: Environment variable not found
   /api/projects/{id}/recap:
     get:
       summary: Get AI-generated project recap
@@ -18035,6 +18381,37 @@ paths:
           description: Contract unlinked from project
         '404':
           description: Contract not found
+  /api/projects/{id}/signers:
+    get:
+      summary: Get all contract signers for a project
+      description: Retrieves all signers across all contracts associated with this project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Project ID
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - pending
+              - sent
+              - opened
+              - completed
+              - declined
+          description: Filter by signer status
+      responses:
+        '200':
+          description: List of project signers
+        '404':
+          description: Project not found
   /api/projects/{id}/clients:
     get:
       summary: List clients for a project
@@ -18124,6 +18501,234 @@ paths:
           description: Client access revoked
         '404':
           description: Client not found
+  /api/projects/{id}/brand-assets:
+    get:
+      summary: Get all brand assets for a project
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: assetType
+          schema:
+            type: string
+            enum:
+              - logo
+              - icon
+              - banner
+              - favicon
+              - watermark
+              - background
+              - other
+        - in: query
+          name: variant
+          schema:
+            type: string
+            enum:
+              - default
+              - light
+              - dark
+              - monochrome
+              - colored
+              - transparent
+      responses:
+        '200':
+          description: List of brand assets
+    post:
+      summary: Upload a new brand asset
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - name
+                - assetType
+              properties:
+                file:
+                  type: string
+                  format: binary
+                name:
+                  type: string
+                description:
+                  type: string
+                assetType:
+                  type: string
+                  enum:
+                    - logo
+                    - icon
+                    - banner
+                    - favicon
+                    - watermark
+                    - background
+                    - other
+                variant:
+                  type: string
+                  enum:
+                    - default
+                    - light
+                    - dark
+                    - monochrome
+                    - colored
+                    - transparent
+                isPrimary:
+                  type: boolean
+      responses:
+        '201':
+          description: Brand asset created
+  /api/projects/{id}/brand-assets/{assetId}:
+    get:
+      summary: Get a single brand asset
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: assetId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Brand asset details
+        '404':
+          description: Asset not found
+    patch:
+      summary: Update a brand asset
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: assetId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                assetType:
+                  type: string
+                  enum:
+                    - logo
+                    - icon
+                    - banner
+                    - favicon
+                    - watermark
+                    - background
+                    - other
+                variant:
+                  type: string
+                  enum:
+                    - default
+                    - light
+                    - dark
+                    - monochrome
+                    - colored
+                    - transparent
+                isPrimary:
+                  type: boolean
+                sortOrder:
+                  type: integer
+      responses:
+        '200':
+          description: Brand asset updated
+        '404':
+          description: Asset not found
+    delete:
+      summary: Delete a brand asset
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: assetId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Brand asset deleted
+        '404':
+          description: Asset not found
+  /api/projects/{id}/brand-assets/reorder:
+    post:
+      summary: Reorder brand assets
+      tags:
+        - Projects
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetIds
+              properties:
+                assetIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Assets reordered
   /api/properties/{id}/checklist:
     get:
       summary: Get compliance checklist for a property

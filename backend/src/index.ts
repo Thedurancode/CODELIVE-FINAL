@@ -53,6 +53,7 @@ import redditRoutes from './routes/redditRoutes';
 import clientPortalRoutes from './routes/clientPortalRoutes';
 import publicApiRoutes from './routes/publicApiRoutes';
 import apiKeyRoutes from './routes/apiKeyRoutes';
+import meetingRoutes from './routes/meetingRoutes';
 // Voice calling module (Twilio + OpenAI Realtime)
 import { twilioRoutes as voiceTwilioRoutes, callRoutes as voiceCallRoutes, handleTwilioConnection, closeAllSessions as closeVoiceSessions } from './voice';
 import { syncDatabase, sequelize } from './models';
@@ -70,6 +71,9 @@ import { projectService } from './services/ProjectService';
 import { gitHubService } from './services/GitHubService';
 import { projectContactService } from './services/ProjectContactService';
 import { projectNoteService } from './services/ProjectNoteService';
+import { projectNoteAudioService } from './services/ProjectNoteAudioService';
+import { projectEnvVariableService } from './services/ProjectEnvVariableService';
+import { projectBrandAssetService } from './services/ProjectBrandAssetService';
 import { projectRecapService } from './services/ProjectRecapService';
 import { codingTaskService } from './services/CodingTaskService';
 import { conversationTitleService } from './services/ConversationTitleService';
@@ -88,6 +92,7 @@ import { realtimeVoiceService } from './services/RealtimeVoiceService';
 import { entitySearchService } from './services/EntitySearchService';
 import { homeAssistantService } from './services/HomeAssistantService';
 import { elevenLabsService } from './services/ElevenLabsService';
+import { meetingService } from './services/MeetingService';
 import setupSwagger from './config/swagger';
 import { WebSocketServer, WebSocket } from 'ws';
 import { parse as parseUrl } from 'url';
@@ -207,6 +212,7 @@ app.use('/api/reddit', redditRoutes);
 app.use('/api/client', clientPortalRoutes);
 app.use('/api/api-keys', apiKeyRoutes); // API key management (JWT auth)
 app.use('/api/v1', publicApiRoutes); // Public API (API key auth)
+app.use('/api/meetings', meetingRoutes); // Meeting management with video rooms
 app.use('/api', documentRoutes);
 
 // OpenAI-compatible endpoints (for OpenWebUI, LangChain, etc.)
@@ -255,6 +261,7 @@ app.get('/', (req, res) => {
       tasks: '/api/tasks',
       reminders: '/api/reminders',
       projects: '/api/projects',
+      meetings: '/api/meetings',
       sprites: '/api/sprites',
       spriteTasks: '/api/sprite-tasks',
       teamChat: '/api/team-chat',
@@ -372,6 +379,9 @@ const startServer = async () => {
       await projectService.initialize();
       await projectContactService.initialize();
       await projectNoteService.initialize();
+      await projectNoteAudioService.initialize();
+      await projectEnvVariableService.initialize();
+      await projectBrandAssetService.initialize();
       await projectRecapService.initialize();
       await gitHubService.initialize();
       await codingTaskService.initialize();
@@ -486,6 +496,18 @@ const startServer = async () => {
       }
     } catch (calendarError) {
       logger.warn('Calendar Integration Service initialization failed', {}, calendarError);
+    }
+
+    // Initialize Meeting Service (video rooms with LiveKit)
+    try {
+      await meetingService.initialize();
+      if (meetingService.isReady()) {
+        logger.info('Meeting Service initialized (video rooms enabled)');
+      } else {
+        logger.warn('Meeting Service initialized (video rooms disabled - missing LiveKit credentials)');
+      }
+    } catch (meetingError) {
+      logger.warn('Meeting Service initialization failed', {}, meetingError);
     }
 
     const server = app.listen(PORT, '0.0.0.0', () => {
