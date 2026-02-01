@@ -1071,6 +1071,39 @@ class GitHubService {
   }
 
   /**
+   * Create or update a binary file in a repository
+   * Content should be passed as a Buffer (will be base64 encoded)
+   */
+  async createOrUpdateBinaryFile(
+    owner: string,
+    repo: string,
+    path: string,
+    content: Buffer,
+    message: string,
+    branch: string,
+    sha?: string // Required for updates
+  ): Promise<{ commit: { sha: string; html_url: string }; content: GitHubContent }> {
+    // Encode buffer content to base64
+    const encodedContent = content.toString('base64');
+
+    const body: any = {
+      message,
+      content: encodedContent,
+      branch,
+    };
+
+    // If SHA is provided, this is an update
+    if (sha) {
+      body.sha = sha;
+    }
+
+    return this.request(`/repos/${owner}/${repo}/contents/${path}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
    * Delete a file in a repository
    */
   async deleteFile(
@@ -1243,6 +1276,394 @@ class GitHubService {
   }> {
     return this.request(`/repos/${owner}/${repo}/compare/${base}...${head}`);
   }
+
+  // =========================================================================
+  // REPOSITORY DOWNLOAD METHODS
+  // =========================================================================
+
+  /**
+   * Get the URL to download a repository as a ZIP archive
+   * This returns the redirect URL that can be used to download the archive
+   */
+  getRepoZipUrl(owner: string, repo: string, ref: string = 'main'): string {
+    return `https://api.github.com/repos/${owner}/${repo}/zipball/${ref}`;
+  }
+
+  /**
+   * Get the URL to download a repository as a tarball
+   */
+  getRepoTarballUrl(owner: string, repo: string, ref: string = 'main'): string {
+    return `https://api.github.com/repos/${owner}/${repo}/tarball/${ref}`;
+  }
+
+  /**
+   * Download a repository as a ZIP archive
+   * Returns a Buffer containing the ZIP file
+   */
+  async downloadRepoAsZip(
+    owner: string,
+    repo: string,
+    ref?: string
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    if (!this.token) {
+      throw new Error('GitHub token not configured');
+    }
+
+    // Get the default branch if no ref specified
+    const branch = ref || await this.getDefaultBranch(owner, repo);
+
+    const url = this.getRepoZipUrl(owner, repo, branch);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github+json',
+      },
+      redirect: 'follow', // GitHub returns a redirect to the actual download URL
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to download repository: ${response.status} - ${error}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    // Generate a clean filename
+    const filename = `${repo}-${branch}.zip`;
+
+    console.log(`[GitHubService] Downloaded ${owner}/${repo}@${branch} as ZIP (${(buffer.length / 1024 / 1024).toFixed(2)}MB)`);
+
+    return { buffer, filename };
+  }
+
+  /**
+   * Download a repository as a tarball
+   * Returns a Buffer containing the tar.gz file
+   */
+  async downloadRepoAsTarball(
+    owner: string,
+    repo: string,
+    ref?: string
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    if (!this.token) {
+      throw new Error('GitHub token not configured');
+    }
+
+    const branch = ref || await this.getDefaultBranch(owner, repo);
+
+    const url = this.getRepoTarballUrl(owner, repo, branch);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github+json',
+      },
+      redirect: 'follow',
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to download repository: ${response.status} - ${error}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const filename = `${repo}-${branch}.tar.gz`;
+
+    console.log(`[GitHubService] Downloaded ${owner}/${repo}@${branch} as tarball (${(buffer.length / 1024 / 1024).toFixed(2)}MB)`);
+
+    return { buffer, filename };
+  }
+
+  /**
+   * Get download info for a repository (without downloading)
+   * Useful for showing download options in the UI
+   */
+  async getRepoDownloadInfo(
+    owner: string,
+    repo: string
+  ): Promise<{
+    defaultBranch: string;
+    branches: string[];
+    zipUrl: string;
+    tarballUrl: string;
+  }> {
+    const [repoData, branches] = await Promise.all([
+      this.getRepo(owner, repo),
+      this.listBranches(owner, repo),
+    ]);
+
+    return {
+      defaultBranch: repoData.default_branch,
+      branches: branches.map(b => b.name),
+      zipUrl: this.getRepoZipUrl(owner, repo, repoData.default_branch),
+      tarballUrl: this.getRepoTarballUrl(owner, repo, repoData.default_branch),
+    };
+  }
+
+  // =========================================================================
+  // GIT LFS METHODS (for large files >100MB)
+  // =========================================================================
+
+  /**
+   * Calculate SHA-256 hash for LFS object ID
+   */
+  private calculateLfsOid(content: Buffer): string {
+    const crypto = require('crypto');
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  /**
+   * Generate an LFS pointer file content
+   */
+  generateLfsPointer(oid: string, size: number): string {
+    return `version https://git-lfs.github.com/spec/v1
+oid sha256:${oid}
+size ${size}
+`;
+  }
+
+  /**
+   * Check if a file should use LFS (>100MB)
+   */
+  shouldUseLfs(size: number): boolean {
+    const LFS_THRESHOLD = 100 * 1024 * 1024; // 100MB
+    return size > LFS_THRESHOLD;
+  }
+
+  /**
+   * Request LFS batch API to get upload URLs
+   */
+  async lfsRequestBatch(
+    owner: string,
+    repo: string,
+    objects: Array<{ oid: string; size: number }>,
+    operation: 'upload' | 'download' = 'upload'
+  ): Promise<LFSBatchResponse> {
+    if (!this.token) {
+      throw new Error('GitHub token not configured');
+    }
+
+    const lfsUrl = `https://github.com/${owner}/${repo}.git/info/lfs/objects/batch`;
+
+    const request: LFSBatchRequest = {
+      operation,
+      transfers: ['basic'],
+      objects,
+    };
+
+    const response = await fetch(lfsUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${owner}:${this.token}`).toString('base64')}`,
+        Accept: 'application/vnd.git-lfs+json',
+        'Content-Type': 'application/vnd.git-lfs+json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`LFS batch API error: ${response.status} - ${error}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Upload a large file to GitHub LFS
+   */
+  async uploadToLfs(
+    owner: string,
+    repo: string,
+    content: Buffer
+  ): Promise<LFSUploadResult> {
+    if (!this.token) {
+      throw new Error('GitHub token not configured');
+    }
+
+    const oid = this.calculateLfsOid(content);
+    const size = content.length;
+
+    try {
+      // Step 1: Request batch API to get upload URL
+      const batchResponse = await this.lfsRequestBatch(owner, repo, [{ oid, size }]);
+
+      if (!batchResponse.objects || batchResponse.objects.length === 0) {
+        throw new Error('No objects returned from LFS batch API');
+      }
+
+      const lfsObject = batchResponse.objects[0];
+
+      // Check for errors
+      if (lfsObject.error) {
+        throw new Error(`LFS error: ${lfsObject.error.message}`);
+      }
+
+      // If no upload action, the file might already exist
+      if (!lfsObject.actions?.upload) {
+        console.log(`[GitHubService] LFS object ${oid} already exists`);
+        return {
+          success: true,
+          oid,
+          size,
+          lfsPointer: this.generateLfsPointer(oid, size),
+        };
+      }
+
+      // Step 2: Upload the file to the provided URL
+      const uploadUrl = lfsObject.actions.upload.href;
+      const uploadHeaders: Record<string, string> = {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(size),
+        ...lfsObject.actions.upload.header,
+      };
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: uploadHeaders,
+        body: content,
+      });
+
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.text();
+        throw new Error(`LFS upload failed: ${uploadResponse.status} - ${error}`);
+      }
+
+      // Step 3: Verify the upload if required
+      if (lfsObject.actions.verify) {
+        const verifyResponse = await fetch(lfsObject.actions.verify.href, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/vnd.git-lfs+json',
+            ...lfsObject.actions.verify.header,
+          },
+          body: JSON.stringify({ oid, size }),
+        });
+
+        if (!verifyResponse.ok) {
+          console.warn('[GitHubService] LFS verify step failed but upload may still be successful');
+        }
+      }
+
+      console.log(`[GitHubService] LFS upload successful: ${oid} (${size} bytes)`);
+
+      return {
+        success: true,
+        oid,
+        size,
+        lfsPointer: this.generateLfsPointer(oid, size),
+      };
+    } catch (error) {
+      console.error('[GitHubService] LFS upload error:', error);
+      return {
+        success: false,
+        oid,
+        size,
+        lfsPointer: '',
+        error: (error as Error).message,
+      };
+    }
+  }
+
+  /**
+   * Upload a large file to GitHub using LFS, then commit the pointer file
+   * This is the complete workflow for uploading large files to GitHub
+   */
+  async uploadLargeFile(
+    owner: string,
+    repo: string,
+    path: string,
+    content: Buffer,
+    message: string,
+    branch: string,
+    existingSha?: string
+  ): Promise<{ commit: { sha: string; html_url: string }; lfsOid: string; size: number }> {
+    // Step 1: Upload to LFS
+    const lfsResult = await this.uploadToLfs(owner, repo, content);
+
+    if (!lfsResult.success) {
+      throw new Error(`Failed to upload to LFS: ${lfsResult.error}`);
+    }
+
+    // Step 2: Commit the LFS pointer file to the repository
+    const result = await this.createOrUpdateFile(
+      owner,
+      repo,
+      path,
+      lfsResult.lfsPointer,
+      message,
+      branch,
+      existingSha
+    );
+
+    return {
+      commit: result.commit,
+      lfsOid: lfsResult.oid,
+      size: lfsResult.size,
+    };
+  }
+
+  /**
+   * Check if a repository has LFS enabled by looking for .gitattributes
+   */
+  async hasLfsEnabled(owner: string, repo: string, branch?: string): Promise<boolean> {
+    try {
+      const ref = branch || await this.getDefaultBranch(owner, repo);
+      const gitattributes = await this.getFileContent(owner, repo, '.gitattributes', ref);
+      return gitattributes.content.includes('filter=lfs');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Enable LFS for a repository by creating/updating .gitattributes
+   * Adds tracking for common large file types
+   */
+  async enableLfs(
+    owner: string,
+    repo: string,
+    branch: string,
+    patterns: string[] = ['*.mp4', '*.mov', '*.zip', '*.tar.gz', '*.pdf', '*.psd', '*.ai']
+  ): Promise<void> {
+    let existingContent = '';
+    let existingSha: string | undefined;
+
+    // Try to get existing .gitattributes
+    try {
+      const existing = await this.getFileContent(owner, repo, '.gitattributes', branch);
+      existingContent = existing.content;
+      existingSha = existing.sha;
+    } catch {
+      // File doesn't exist, that's fine
+    }
+
+    // Add LFS tracking for patterns not already tracked
+    const lines = existingContent.split('\n').filter(Boolean);
+    for (const pattern of patterns) {
+      const lfsLine = `${pattern} filter=lfs diff=lfs merge=lfs -text`;
+      if (!lines.some(line => line.startsWith(pattern))) {
+        lines.push(lfsLine);
+      }
+    }
+
+    const newContent = lines.join('\n') + '\n';
+
+    // Only update if content changed
+    if (newContent !== existingContent) {
+      await this.createOrUpdateFile(
+        owner,
+        repo,
+        '.gitattributes',
+        newContent,
+        'Enable Git LFS for large files',
+        branch,
+        existingSha
+      );
+      console.log(`[GitHubService] LFS enabled for patterns: ${patterns.join(', ')}`);
+    }
+  }
 }
 
 // Additional interfaces for repo content
@@ -1360,8 +1781,52 @@ interface CreatePullRequestOptions {
   draft?: boolean;
 }
 
+// LFS-related interfaces
+interface LFSBatchRequest {
+  operation: 'upload' | 'download';
+  transfers?: string[];
+  ref?: { name: string };
+  objects: Array<{
+    oid: string;
+    size: number;
+  }>;
+}
+
+interface LFSBatchResponse {
+  transfer?: string;
+  objects: Array<{
+    oid: string;
+    size: number;
+    authenticated?: boolean;
+    actions?: {
+      upload?: {
+        href: string;
+        header?: Record<string, string>;
+        expires_in?: number;
+      };
+      verify?: {
+        href: string;
+        header?: Record<string, string>;
+      };
+    };
+    error?: {
+      code: number;
+      message: string;
+    };
+  }>;
+}
+
+interface LFSUploadResult {
+  success: boolean;
+  oid: string;
+  size: number;
+  lfsPointer: string;
+  error?: string;
+}
+
 export const gitHubService = new GitHubService();
 export {
+  GitHubService,
   GitHubRepo,
   GitHubIssue,
   GitHubInvitation,
@@ -1377,4 +1842,7 @@ export {
   GitHubPullRequest,
   PullRequestOptions,
   CreatePullRequestOptions,
+  LFSBatchRequest,
+  LFSBatchResponse,
+  LFSUploadResult,
 };

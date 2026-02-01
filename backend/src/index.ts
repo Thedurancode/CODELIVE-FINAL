@@ -93,6 +93,10 @@ import { entitySearchService } from './services/EntitySearchService';
 import { homeAssistantService } from './services/HomeAssistantService';
 import { elevenLabsService } from './services/ElevenLabsService';
 import { meetingService } from './services/MeetingService';
+import { meetingNotificationService } from './services/MeetingNotificationService';
+import { noteMentionService } from './services/NoteMentionService';
+import { projectNoteAttachmentService } from './services/ProjectNoteAttachmentService';
+import { wasabiStorageService } from './services/WasabiStorageService';
 import setupSwagger from './config/swagger';
 import { WebSocketServer, WebSocket } from 'ws';
 import { parse as parseUrl } from 'url';
@@ -510,6 +514,56 @@ const startServer = async () => {
       logger.warn('Meeting Service initialization failed', {}, meetingError);
     }
 
+    // Initialize Meeting Notification Service (email/SMS notifications)
+    try {
+      await meetingNotificationService.initialize();
+      if (meetingNotificationService.isReady()) {
+        logger.info('Meeting Notification Service initialized (email/SMS enabled)');
+      } else {
+        logger.warn('Meeting Notification Service initialized (notifications disabled - missing credentials)');
+      }
+    } catch (meetingNotifError) {
+      logger.warn('Meeting Notification Service initialization failed', {}, meetingNotifError);
+    }
+
+    // Initialize Note Mention Service (@mention notifications)
+    try {
+      await noteMentionService.initialize();
+      if (noteMentionService.isReady()) {
+        const features = [];
+        if (noteMentionService.isEmailEnabled()) features.push('email');
+        if (noteMentionService.isSmsEnabled()) features.push('SMS');
+        logger.info(`Note Mention Service initialized (${features.join(', ') || 'no notifications'})`);
+      }
+    } catch (mentionError) {
+      logger.warn('Note Mention Service initialization failed', {}, mentionError);
+    }
+
+    // Initialize Wasabi Storage Service (S3-compatible cloud storage for large files)
+    try {
+      await wasabiStorageService.initialize();
+      if (wasabiStorageService.isReady()) {
+        logger.info('Wasabi Storage Service initialized', {
+          bucket: wasabiStorageService.getBucket(),
+          region: wasabiStorageService.getRegion(),
+        });
+      } else {
+        logger.warn('Wasabi Storage Service disabled (missing WASABI_* credentials)');
+      }
+    } catch (wasabiError) {
+      logger.warn('Wasabi Storage Service initialization failed', {}, wasabiError);
+    }
+
+    // Initialize Project Note Attachment Service (file uploads for notes)
+    try {
+      await projectNoteAttachmentService.initialize();
+      if (projectNoteAttachmentService.isReady()) {
+        logger.info('Project Note Attachment Service initialized');
+      }
+    } catch (attachmentError) {
+      logger.warn('Project Note Attachment Service initialization failed', {}, attachmentError);
+    }
+
     const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info('Server started', {
         port: PORT,
@@ -733,6 +787,26 @@ const startServer = async () => {
       logger.info('Email Sync Scheduler started', { schedule: `every ${syncInterval} minutes` });
     } catch (emailSyncError) {
       logger.warn('Email Sync Scheduler initialization failed', {}, emailSyncError);
+    }
+
+    // Start Meeting Reminder Scheduler (sends reminders before meetings)
+    try {
+      if (meetingNotificationService.isReady()) {
+        // Run every 5 minutes to check for meetings needing reminders
+        setInterval(async () => {
+          try {
+            const count = await meetingNotificationService.processScheduledReminders();
+            if (count > 0) {
+              logger.info('Meeting reminders sent', { count });
+            }
+          } catch (err) {
+            logger.warn('Meeting reminder processing failed', {}, err);
+          }
+        }, 5 * 60 * 1000); // Every 5 minutes
+        logger.info('Meeting Reminder Scheduler started', { schedule: 'every 5 minutes' });
+      }
+    } catch (meetingReminderError) {
+      logger.warn('Meeting Reminder Scheduler initialization failed', {}, meetingReminderError);
     }
 
     // Graceful shutdown handler

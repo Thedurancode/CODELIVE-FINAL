@@ -10,6 +10,7 @@
 import ProjectNote from '../models/ProjectNote';
 import MarketplaceUser from '../models/MarketplaceUser';
 import { projectRecapService } from './ProjectRecapService';
+import { noteMentionService } from './NoteMentionService';
 
 // Interfaces
 interface CreateNoteInput {
@@ -49,16 +50,30 @@ class ProjectNoteService {
    * Create a new note on a project
    */
   async createNote(input: CreateNoteInput): Promise<ProjectNoteWithAuthor> {
+    // Process @mentions in content
+    const mentionedUserIds = await noteMentionService.processMentions(
+      input.content,
+      input.organizationId
+    );
+
     const note = await ProjectNote.create({
       projectId: input.projectId,
       userId: input.userId,
       organizationId: input.organizationId,
       content: input.content,
       subject: input.subject,
+      mentions: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
     });
 
     // Queue recap update (non-blocking)
     projectRecapService.queueUpdate(input.projectId);
+
+    // Send mention notifications (non-blocking)
+    if (mentionedUserIds.length > 0) {
+      noteMentionService
+        .notifyMentionedUsers(note.id, { sendEmail: true, sendSms: false })
+        .catch((err) => console.error('[ProjectNoteService] Mention notification error:', err));
+    }
 
     // Fetch with author
     return this.getNoteById(note.id, input.organizationId) as Promise<ProjectNoteWithAuthor>;
@@ -133,10 +148,36 @@ class ProjectNoteService {
     if (updates.content !== undefined) updateData.content = updates.content;
     if (updates.subject !== undefined) updateData.subject = updates.subject || undefined;
 
-    await note.update(updateData);
+    // Process @mentions if content changed
+    let newMentions: string[] = [];
+    if (updates.content !== undefined) {
+      newMentions = await noteMentionService.processMentions(
+        updates.content,
+        organizationId
+      );
+      updateData.mentions = newMentions.length > 0 ? newMentions : [];
+
+      // Check for newly added mentions
+      const previousMentions = note.mentions || [];
+      const addedMentions = newMentions.filter((id) => !previousMentions.includes(id));
+
+      // Reset notification flag if new mentions were added
+      if (addedMentions.length > 0) {
+        updateData.mentionNotificationsSent = false;
+      }
+    }
+
+    await note.update(updateData as any);
 
     // Queue recap update (non-blocking)
     projectRecapService.queueUpdate(note.projectId);
+
+    // Send notifications for new mentions (non-blocking)
+    if (updates.content !== undefined && newMentions.length > 0 && !note.mentionNotificationsSent) {
+      noteMentionService
+        .notifyMentionedUsers(noteId, { sendEmail: true, sendSms: false })
+        .catch((err) => console.error('[ProjectNoteService] Mention notification error:', err));
+    }
 
     return this.getNoteById(noteId, organizationId);
   }

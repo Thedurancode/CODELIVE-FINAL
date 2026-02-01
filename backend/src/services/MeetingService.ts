@@ -21,6 +21,8 @@ import MeetingParticipant, {
 import MeetingRoom from '../models/MeetingRoom';
 import MarketplaceUser from '../models/MarketplaceUser';
 import Project from '../models/Project';
+import { meetingNotificationService } from './MeetingNotificationService';
+import { activityFeedService } from './ActivityFeedService';
 
 // =============================================================================
 // TYPES
@@ -417,7 +419,7 @@ class MeetingService {
       await meeting.update({ videoRoomId: room.id });
     }
 
-    // Add creator as host
+    // Add creator as host (no notification for creator)
     const creator = await MarketplaceUser.findByPk(createdById);
     if (creator) {
       await MeetingParticipant.addParticipant(meeting.id, organizationId, {
@@ -428,10 +430,43 @@ class MeetingService {
       });
     }
 
-    // Add other participants
+    // Add other participants and send invitations
+    const addedParticipantIds: number[] = [];
     for (const participant of participants) {
-      await MeetingParticipant.addParticipant(meeting.id, organizationId, participant);
+      const added = await MeetingParticipant.addParticipant(meeting.id, organizationId, participant);
+      addedParticipantIds.push(added.id);
     }
+
+    // Send invitation notifications asynchronously (non-blocking)
+    if (addedParticipantIds.length > 0) {
+      meetingNotificationService
+        .sendPendingInvitations(meeting.id)
+        .then((results) => {
+          const successCount = results.filter((r) => r.success).length;
+          console.log(`[MeetingService] Sent ${successCount} invitation(s) for new meeting "${title}"`);
+        })
+        .catch((err) => {
+          console.error(`[MeetingService] Failed to send meeting invitations:`, err);
+        });
+    }
+
+    // Log activity (non-blocking)
+    activityFeedService
+      .logMeetingActivity(
+        'meeting_created',
+        meeting.id,
+        title,
+        { id: createdById, name: creator?.name || creator?.email || 'Unknown' },
+        organizationId,
+        {
+          scheduledAt,
+          duration,
+          meetingType,
+          participantCount: participants.length + 1,
+          projectId,
+        }
+      )
+      .catch((err) => console.error('[MeetingService] Failed to log meeting_created activity:', err));
 
     return this.getMeetingById(meeting.id, organizationId) as Promise<MeetingResponse>;
   }
@@ -634,7 +669,8 @@ class MeetingService {
   async updateMeeting(
     meetingId: string,
     organizationId: string,
-    updates: UpdateMeetingInput
+    updates: UpdateMeetingInput,
+    options?: { notifyParticipants?: boolean }
   ): Promise<MeetingResponse | null> {
     const meeting = await Meeting.findOne({
       where: { id: meetingId, organizationId },
@@ -642,7 +678,96 @@ class MeetingService {
 
     if (!meeting) return null;
 
+    // Track significant changes for notification
+    const significantChanges: string[] = [];
+    if (updates.scheduledAt && new Date(updates.scheduledAt).getTime() !== new Date(meeting.scheduledAt).getTime()) {
+      significantChanges.push(`Date/time changed to ${new Date(updates.scheduledAt).toLocaleString()}`);
+    }
+    if (updates.duration && updates.duration !== meeting.duration) {
+      significantChanges.push(`Duration changed to ${updates.duration} minutes`);
+    }
+    if (updates.location && updates.location !== meeting.location) {
+      significantChanges.push(`Location updated`);
+    }
+
     await meeting.update(updates);
+
+    // Send update notifications if significant changes and not explicitly disabled
+    if (significantChanges.length > 0 && options?.notifyParticipants !== false) {
+      meetingNotificationService
+        .sendUpdateNotification(meetingId, significantChanges.join('. '))
+        .then((results) => {
+          const successCount = results.filter((r) => r.success).length;
+          console.log(`[MeetingService] Sent ${successCount} update notification(s) for meeting "${meeting.title}"`);
+        })
+        .catch((err) => {
+          console.error(`[MeetingService] Failed to send update notifications:`, err);
+        });
+    }
+
+    // Log activity (non-blocking)
+    if (significantChanges.length > 0) {
+      activityFeedService
+        .logMeetingActivity(
+          'meeting_updated',
+          meetingId,
+          meeting.title,
+          { id: meeting.createdById, name: 'User', type: 'user' },
+          organizationId,
+          { changes: significantChanges, updates }
+        )
+        .catch((err) => console.error('[MeetingService] Failed to log meeting_updated activity:', err));
+    }
+
+    return this.getMeetingById(meetingId, organizationId);
+  }
+
+  /**
+   * Cancel meeting (with notifications)
+   */
+  async cancelMeeting(
+    meetingId: string,
+    organizationId: string,
+    reason?: string
+  ): Promise<MeetingResponse | null> {
+    const meeting = await Meeting.findOne({
+      where: { id: meetingId, organizationId },
+    });
+
+    if (!meeting) return null;
+
+    await meeting.update({ status: 'cancelled' });
+
+    // End any active room
+    if (meeting.videoRoomId) {
+      const room = await MeetingRoom.findByPk(meeting.videoRoomId);
+      if (room) {
+        await this.endRoom(room.id);
+      }
+    }
+
+    // Send cancellation notifications
+    meetingNotificationService
+      .sendCancellationNotification(meetingId, reason)
+      .then((results) => {
+        const successCount = results.filter((r) => r.success).length;
+        console.log(`[MeetingService] Sent ${successCount} cancellation notification(s) for meeting "${meeting.title}"`);
+      })
+      .catch((err) => {
+        console.error(`[MeetingService] Failed to send cancellation notifications:`, err);
+      });
+
+    // Log activity (non-blocking)
+    activityFeedService
+      .logMeetingActivity(
+        'meeting_cancelled',
+        meetingId,
+        meeting.title,
+        { id: meeting.createdById, name: 'User', type: 'user' },
+        organizationId,
+        { reason }
+      )
+      .catch((err) => console.error('[MeetingService] Failed to log meeting_cancelled activity:', err));
 
     return this.getMeetingById(meetingId, organizationId);
   }
@@ -689,6 +814,17 @@ class MeetingService {
       }
     }
 
+    // Log activity (non-blocking)
+    activityFeedService
+      .logMeetingActivity(
+        'meeting_started',
+        meetingId,
+        meeting.title,
+        { name: 'System', type: 'system' },
+        organizationId
+      )
+      .catch((err) => console.error('[MeetingService] Failed to log meeting_started activity:', err));
+
     return this.getMeetingById(meetingId, organizationId);
   }
 
@@ -712,6 +848,17 @@ class MeetingService {
       await this.endRoom(meeting.videoRoomId);
     }
 
+    // Log activity (non-blocking)
+    activityFeedService
+      .logMeetingActivity(
+        'meeting_ended',
+        meetingId,
+        meeting.title,
+        { name: 'System', type: 'system' },
+        organizationId
+      )
+      .catch((err) => console.error('[MeetingService] Failed to log meeting_ended activity:', err));
+
     return this.getMeetingById(meetingId, organizationId);
   }
 
@@ -731,9 +878,48 @@ class MeetingService {
       userId?: string;
       contactId?: string;
       role?: ParticipantRole;
-    }
+      phone?: string;
+    },
+    options?: { sendNotification?: boolean; sendSms?: boolean }
   ): Promise<MeetingParticipant> {
-    return MeetingParticipant.addParticipant(meetingId, organizationId, participant);
+    const newParticipant = await MeetingParticipant.addParticipant(meetingId, organizationId, participant);
+
+    // Send invitation notification by default (unless explicitly disabled)
+    if (options?.sendNotification !== false) {
+      // Send invitation asynchronously (non-blocking)
+      meetingNotificationService
+        .sendInvitation(meetingId, newParticipant.id, { sendSms: options?.sendSms })
+        .then((results) => {
+          const successCount = results.filter((r) => r.success).length;
+          if (successCount > 0) {
+            console.log(`[MeetingService] Sent ${successCount} invitation(s) to ${participant.email}`);
+          }
+        })
+        .catch((err) => {
+          console.error(`[MeetingService] Failed to send invitation to ${participant.email}:`, err);
+        });
+    }
+
+    // Log activity (non-blocking) - get meeting title for better activity summary
+    Meeting.findByPk(meetingId)
+      .then((meeting) => {
+        if (meeting) {
+          activityFeedService
+            .logParticipantActivity(
+              'participant_added',
+              meetingId,
+              meeting.title,
+              participant.name,
+              { name: 'User', type: 'user' },
+              organizationId,
+              { email: participant.email, role: participant.role }
+            )
+            .catch((err) => console.error('[MeetingService] Failed to log participant_added activity:', err));
+        }
+      })
+      .catch(() => {});
+
+    return newParticipant;
   }
 
   /**
@@ -743,7 +929,32 @@ class MeetingService {
     const participant = await MeetingParticipant.findByPk(participantId);
     if (!participant) return false;
 
+    const participantName = participant.name;
+    const participantEmail = participant.email;
+    const meetingId = participant.meetingId;
+    const orgId = participant.organizationId;
+
     await participant.destroy();
+
+    // Log activity (non-blocking)
+    Meeting.findByPk(meetingId)
+      .then((meeting) => {
+        if (meeting) {
+          activityFeedService
+            .logParticipantActivity(
+              'participant_removed',
+              meetingId,
+              meeting.title,
+              participantName,
+              { name: 'User', type: 'user' },
+              orgId,
+              { email: participantEmail }
+            )
+            .catch((err) => console.error('[MeetingService] Failed to log participant_removed activity:', err));
+        }
+      })
+      .catch(() => {});
+
     return true;
   }
 
@@ -754,7 +965,37 @@ class MeetingService {
     participantId: number,
     status: RsvpStatus
   ): Promise<MeetingParticipant | null> {
-    return MeetingParticipant.updateRsvp(participantId, status);
+    const participant = await MeetingParticipant.updateRsvp(participantId, status);
+
+    if (participant) {
+      // Log activity (non-blocking)
+      const eventType =
+        status === 'accepted'
+          ? 'participant_rsvp_accepted'
+          : status === 'declined'
+            ? 'participant_rsvp_declined'
+            : 'participant_rsvp_tentative';
+
+      Meeting.findByPk(participant.meetingId)
+        .then((meeting) => {
+          if (meeting) {
+            activityFeedService
+              .logParticipantActivity(
+                eventType,
+                participant.meetingId,
+                meeting.title,
+                participant.name,
+                { id: participant.userId || undefined, name: participant.name, type: 'user' },
+                participant.organizationId,
+                { email: participant.email, status }
+              )
+              .catch((err) => console.error(`[MeetingService] Failed to log ${eventType} activity:`, err));
+          }
+        })
+        .catch(() => {});
+    }
+
+    return participant;
   }
 
   /**

@@ -159,6 +159,7 @@ import ContactNote from './ContactNote';
 import Project from './Project';
 import ProjectContact from './ProjectContact';
 import ProjectNote from './ProjectNote';
+import ProjectNoteAttachment from './ProjectNoteAttachment';
 import ProjectNoteAudio from './ProjectNoteAudio';
 import ProjectEnvVariable from './ProjectEnvVariable';
 import ProjectBrandAsset from './ProjectBrandAsset';
@@ -1270,6 +1271,50 @@ ProjectNote.belongsTo(Organization, {
   as: 'organization',
 });
 
+// ProjectNote -> ProjectNoteAttachment (one-to-many)
+ProjectNote.hasMany(ProjectNoteAttachment, {
+  foreignKey: 'noteId',
+  as: 'attachments',
+  onDelete: 'CASCADE',
+});
+ProjectNoteAttachment.belongsTo(ProjectNote, {
+  foreignKey: 'noteId',
+  as: 'note',
+});
+
+// Project -> ProjectNoteAttachment (one-to-many)
+Project.hasMany(ProjectNoteAttachment, {
+  foreignKey: 'projectId',
+  as: 'noteAttachments',
+  onDelete: 'CASCADE',
+});
+ProjectNoteAttachment.belongsTo(Project, {
+  foreignKey: 'projectId',
+  as: 'project',
+});
+
+// MarketplaceUser -> ProjectNoteAttachment (one-to-many)
+MarketplaceUser.hasMany(ProjectNoteAttachment, {
+  foreignKey: 'userId',
+  as: 'projectNoteAttachments',
+  onDelete: 'CASCADE',
+});
+ProjectNoteAttachment.belongsTo(MarketplaceUser, {
+  foreignKey: 'userId',
+  as: 'uploader',
+});
+
+// Organization -> ProjectNoteAttachment (one-to-many)
+Organization.hasMany(ProjectNoteAttachment, {
+  foreignKey: 'organizationId',
+  as: 'projectNoteAttachments',
+  onDelete: 'CASCADE',
+});
+ProjectNoteAttachment.belongsTo(Organization, {
+  foreignKey: 'organizationId',
+  as: 'organization',
+});
+
 // Project -> ProjectNoteAudio (one-to-many)
 Project.hasMany(ProjectNoteAudio, {
   foreignKey: 'projectId',
@@ -1946,6 +1991,7 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         Project,
         ProjectContact,
         ProjectNote,
+        ProjectNoteAttachment,
         ProjectNoteAudio,
         ProjectEnvVariable,
         ProjectBrandAsset,
@@ -2132,6 +2178,7 @@ export {
   Project,
   ProjectContact,
   ProjectNote,
+  ProjectNoteAttachment,
   ProjectNoteAudio,
   ProjectEnvVariable,
   ProjectBrandAsset,
@@ -2286,6 +2333,7 @@ export default {
   Project,
   ProjectContact,
   ProjectNote,
+  ProjectNoteAttachment,
   ProjectNoteAudio,
   ProjectEnvVariable,
   ProjectBrandAsset,

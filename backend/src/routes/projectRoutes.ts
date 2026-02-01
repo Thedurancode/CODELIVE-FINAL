@@ -9,7 +9,7 @@ import rateLimit from 'express-rate-limit';
 import * as projectController from '../controllers/projectController';
 import { clientPortalController } from '../controllers/clientPortalController';
 import { authenticate } from '../middleware/auth';
-import { uploadSingle, uploadAudio } from '../middleware/upload';
+import { uploadSingle, uploadAudio, uploadNoteAttachment } from '../middleware/upload';
 
 const router = Router();
 
@@ -915,6 +915,50 @@ router.delete('/:id/notes/:noteId', projectController.deleteProjectNote);
 
 /**
  * @swagger
+ * /api/projects/{id}/mentionable-users:
+ *   get:
+ *     summary: Get users that can be @mentioned in notes
+ *     description: Returns team members and contacts that can be mentioned in project notes
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: List of mentionable users
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         format: uuid
+ *                       name:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *                         enum: [user, contact]
+ */
+router.get('/:id/mentionable-users', projectController.getMentionableUsers);
+
+/**
+ * @swagger
  * /api/projects/{id}/notes/{noteId}/github-issue:
  *   post:
  *     summary: Create a GitHub issue from a note
@@ -971,6 +1015,164 @@ router.delete('/:id/notes/:noteId', projectController.deleteProjectNote);
  *         description: Project or note not found
  */
 router.post('/:id/notes/:noteId/github-issue', projectController.createGitHubIssueFromNote);
+
+// ============================================================================
+// PROJECT NOTE ATTACHMENTS (Files, Images, Audio)
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/notes/{noteId}/attachments:
+ *   get:
+ *     summary: Get all attachments for a note
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: noteId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of note attachments
+ */
+router.get('/:id/notes/:noteId/attachments', projectController.getNoteAttachments);
+
+/**
+ * @swagger
+ * /api/projects/{id}/notes/{noteId}/attachments:
+ *   post:
+ *     summary: Upload a file attachment to a note
+ *     description: Upload images, documents, audio files, etc. to attach to a note
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: noteId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: File to upload (images, documents, audio, video)
+ *     responses:
+ *       201:
+ *         description: Attachment uploaded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     noteId:
+ *                       type: integer
+ *                     filename:
+ *                       type: string
+ *                     originalFilename:
+ *                       type: string
+ *                     mimeType:
+ *                       type: string
+ *                     size:
+ *                       type: integer
+ *                     url:
+ *                       type: string
+ *                     type:
+ *                       type: string
+ *                       enum: [image, document, audio, video, other]
+ *       400:
+ *         description: No file uploaded or file too large
+ *       404:
+ *         description: Note not found
+ */
+router.post('/:id/notes/:noteId/attachments', uploadNoteAttachment, projectController.uploadNoteAttachment);
+
+/**
+ * @swagger
+ * /api/projects/{id}/notes/{noteId}/attachments/{attachmentId}:
+ *   delete:
+ *     summary: Delete a note attachment (uploader only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: noteId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: attachmentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Attachment deleted
+ *       403:
+ *         description: Only the uploader can delete this attachment
+ *       404:
+ *         description: Attachment not found
+ */
+router.delete('/:id/notes/:noteId/attachments/:attachmentId', projectController.deleteNoteAttachment);
+
+/**
+ * @swagger
+ * /api/projects/{id}/attachments:
+ *   get:
+ *     summary: Get all attachments for a project
+ *     description: Returns all attachments across all notes for a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: List of project attachments
+ */
+router.get('/:id/attachments', projectController.getProjectAttachments);
 
 // ============================================================================
 // PROJECT AUDIO NOTES (Transcribed Audio)

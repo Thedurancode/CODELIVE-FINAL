@@ -15,12 +15,14 @@ export interface ProjectNoteAttributes {
   organizationId: string;
   content: string;
   subject?: string;
+  mentions?: string[]; // Array of mentioned user IDs
+  mentionNotificationsSent?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface ProjectNoteCreationAttributes
-  extends Optional<ProjectNoteAttributes, 'id' | 'subject' | 'createdAt' | 'updatedAt'> {}
+  extends Optional<ProjectNoteAttributes, 'id' | 'subject' | 'mentions' | 'mentionNotificationsSent' | 'createdAt' | 'updatedAt'> {}
 
 class ProjectNote
   extends Model<ProjectNoteAttributes, ProjectNoteCreationAttributes>
@@ -32,6 +34,8 @@ class ProjectNote
   declare organizationId: string;
   declare content: string;
   declare subject?: string;
+  declare mentions?: string[];
+  declare mentionNotificationsSent?: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 
@@ -62,6 +66,22 @@ class ProjectNote
       return [firstName, lastName].filter(Boolean).join(' ');
     }
     return email || 'Unknown';
+  }
+
+  /**
+   * Parse @mentions from content and return usernames
+   */
+  static parseMentions(content: string): string[] {
+    const mentionRegex = /@([a-zA-Z0-9_.-]+)/g;
+    const matches = content.match(mentionRegex);
+    return matches ? [...new Set(matches.map((m) => m.substring(1)))] : [];
+  }
+
+  /**
+   * Check if content has any @mentions
+   */
+  hasMentions(): boolean {
+    return (this.mentions && this.mentions.length > 0) || false;
   }
 
   /**
@@ -166,6 +186,19 @@ ProjectNote.init(
     subject: {
       type: DataTypes.STRING(255),
       allowNull: true,
+    },
+    mentions: {
+      type: DataTypes.ARRAY(DataTypes.UUID),
+      allowNull: true,
+      defaultValue: [],
+      comment: 'Array of user IDs mentioned in the note',
+    },
+    mentionNotificationsSent: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      field: 'mention_notifications_sent',
+      comment: 'Whether notifications have been sent for mentions',
     },
     createdAt: {
       type: DataTypes.DATE,

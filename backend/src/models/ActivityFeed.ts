@@ -37,7 +37,20 @@ export type ActivityEventType =
   | 'team_member_added'
   | 'team_member_removed'
   | 'pipeline_stage_changed'
-  | 'system_event';
+  | 'system_event'
+  // Meeting events
+  | 'meeting_created'
+  | 'meeting_updated'
+  | 'meeting_cancelled'
+  | 'meeting_started'
+  | 'meeting_ended'
+  | 'participant_added'
+  | 'participant_removed'
+  | 'participant_rsvp_accepted'
+  | 'participant_rsvp_declined'
+  | 'participant_rsvp_tentative'
+  | 'participant_joined'
+  | 'participant_left';
 
 // Resource types that activities can be associated with
 export type ActivityResourceType =
@@ -50,7 +63,9 @@ export type ActivityResourceType =
   | 'team'
   | 'offer'
   | 'pipeline'
-  | 'system';
+  | 'system'
+  | 'meeting'
+  | 'meeting_participant';
 
 // Actor types
 export type ActivityActorType = 'user' | 'system' | 'automation' | 'external';

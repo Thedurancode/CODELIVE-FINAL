@@ -76,6 +76,7 @@ import {
   Key,
   Palette,
   Video,
+  Download,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -953,6 +954,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         Clone in VS Code
                       </a>
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {(() => {
+                      const parsed = parseGitHubUrl(project.githubUrl);
+                      if (!parsed) return null;
+                      return (
+                        <DropdownMenuItem asChild>
+                          <a href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/github/repos/${parsed.owner}/${parsed.repo}/download/zip`}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download ZIP
+                          </a>
+                        </DropdownMenuItem>
+                      );
+                    })()}
                   </>
                 )}
               </DropdownMenuContent>

@@ -13,6 +13,7 @@ import {
   UpdateMeetingInput,
   MeetingFilters,
 } from '../services/MeetingService';
+import { meetingNotificationService } from '../services/MeetingNotificationService';
 import type { MeetingStatus, MeetingType } from '../models/Meeting';
 import type { RsvpStatus, ParticipantRole } from '../models/MeetingParticipant';
 
@@ -640,7 +641,7 @@ router.post('/:id/participants', async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: 'Not authenticated' });
     }
 
-    const { email, name, userId, contactId, role } = req.body;
+    const { email, name, userId, contactId, role, phone, sendNotification, sendSms } = req.body;
 
     if (!email || !name) {
       return res.status(400).json({
@@ -652,7 +653,8 @@ router.post('/:id/participants', async (req: Request, res: Response) => {
     const participant = await meetingService.addParticipant(
       req.params.id,
       user.organizationId,
-      { email, name, userId, contactId, role }
+      { email, name, userId, contactId, role, phone },
+      { sendNotification: sendNotification !== false, sendSms: sendSms === true }
     );
 
     res.status(201).json({ success: true, data: participant });
@@ -832,6 +834,278 @@ router.post('/:id/room/token', async (req: Request, res: Response) => {
     }
 
     res.json({ success: true, data: token });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+/**
+ * @swagger
+ * /api/meetings/{id}/notifications/invite:
+ *   post:
+ *     summary: Send invitation to a specific participant
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - participantId
+ *             properties:
+ *               participantId:
+ *                 type: integer
+ *               sendSms:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Invitation sent
+ */
+router.post('/:id/notifications/invite', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const { participantId, sendSms } = req.body;
+
+    if (!participantId) {
+      return res.status(400).json({ success: false, error: 'participantId is required' });
+    }
+
+    const results = await meetingNotificationService.sendInvitation(
+      req.params.id,
+      participantId,
+      { sendSms: sendSms === true }
+    );
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/notifications/invite-all:
+ *   post:
+ *     summary: Send invitations to all participants who haven't received one
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               sendSms:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Invitations sent
+ */
+router.post('/:id/notifications/invite-all', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const { sendSms } = req.body || {};
+
+    const results = await meetingNotificationService.sendPendingInvitations(
+      req.params.id,
+      { sendSms: sendSms === true }
+    );
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/notifications/reminder:
+ *   post:
+ *     summary: Send reminder to a specific participant
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - participantId
+ *             properties:
+ *               participantId:
+ *                 type: integer
+ *               sendSms:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Reminder sent
+ */
+router.post('/:id/notifications/reminder', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const { participantId, sendSms } = req.body;
+
+    if (!participantId) {
+      return res.status(400).json({ success: false, error: 'participantId is required' });
+    }
+
+    const results = await meetingNotificationService.sendReminder(
+      req.params.id,
+      participantId,
+      { sendSms: sendSms === true }
+    );
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/notifications/remind-all:
+ *   post:
+ *     summary: Send reminders to all participants who haven't received one
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               sendSms:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Reminders sent
+ */
+router.post('/:id/notifications/remind-all', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const { sendSms } = req.body || {};
+
+    const results = await meetingNotificationService.sendPendingReminders(
+      req.params.id,
+      { sendSms: sendSms === true }
+    );
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/cancel:
+ *   post:
+ *     summary: Cancel a meeting and notify all participants
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *               sendNotifications:
+ *                 type: boolean
+ *               sendSms:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Meeting cancelled
+ */
+router.post('/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const { reason, sendNotifications, sendSms } = req.body || {};
+
+    const meeting = await meetingService.cancelMeeting(
+      req.params.id,
+      user.organizationId,
+      {
+        reason,
+        sendNotifications: sendNotifications !== false,
+        sendSms: sendSms === true,
+      }
+    );
+
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    res.json({ success: true, data: meeting, message: 'Meeting cancelled and participants notified' });
   } catch (error) {
     res.status(500).json({
       success: false,

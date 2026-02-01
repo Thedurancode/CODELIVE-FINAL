@@ -571,6 +571,144 @@ class ActivityFeedService {
       importance: eventType === 'team_member_added' ? 'high' : 'normal',
     });
   }
+
+  // ============================================================================
+  // MEETING ACTIVITY HELPERS
+  // ============================================================================
+
+  /**
+   * Log a meeting activity
+   */
+  async logMeetingActivity(
+    eventType:
+      | 'meeting_created'
+      | 'meeting_updated'
+      | 'meeting_cancelled'
+      | 'meeting_started'
+      | 'meeting_ended',
+    meetingId: string,
+    meetingTitle: string,
+    actor: { id?: string; name: string; type?: ActivityActorType },
+    organizationId?: string,
+    details?: Record<string, any>
+  ): Promise<ActivityFeed> {
+    const actionMap: Record<string, string> = {
+      meeting_created: 'scheduled',
+      meeting_updated: 'updated',
+      meeting_cancelled: 'cancelled',
+      meeting_started: 'started',
+      meeting_ended: 'ended',
+    };
+
+    const summaryMap: Record<string, string> = {
+      meeting_created: `${actor.name} scheduled meeting "${meetingTitle}"`,
+      meeting_updated: `${actor.name} updated meeting "${meetingTitle}"`,
+      meeting_cancelled: `${actor.name} cancelled meeting "${meetingTitle}"`,
+      meeting_started: `Meeting "${meetingTitle}" has started`,
+      meeting_ended: `Meeting "${meetingTitle}" has ended`,
+    };
+
+    const importanceMap: Record<string, 'low' | 'normal' | 'high' | 'critical'> = {
+      meeting_created: 'high',
+      meeting_updated: 'normal',
+      meeting_cancelled: 'high',
+      meeting_started: 'normal',
+      meeting_ended: 'low',
+    };
+
+    return this.createActivity({
+      organizationId,
+      eventType,
+      actor: {
+        type: actor.type || 'user',
+        id: actor.id,
+        name: actor.name,
+      },
+      resource: {
+        type: 'meeting',
+        id: meetingId,
+        name: meetingTitle,
+        url: `/meetings/${meetingId}`,
+      },
+      action: actionMap[eventType],
+      summary: summaryMap[eventType],
+      details,
+      importance: importanceMap[eventType],
+    });
+  }
+
+  /**
+   * Log a meeting participant activity
+   */
+  async logParticipantActivity(
+    eventType:
+      | 'participant_added'
+      | 'participant_removed'
+      | 'participant_rsvp_accepted'
+      | 'participant_rsvp_declined'
+      | 'participant_rsvp_tentative'
+      | 'participant_joined'
+      | 'participant_left',
+    meetingId: string,
+    meetingTitle: string,
+    participantName: string,
+    actor: { id?: string; name: string; type?: ActivityActorType },
+    organizationId?: string,
+    details?: Record<string, any>
+  ): Promise<ActivityFeed> {
+    const actionMap: Record<string, string> = {
+      participant_added: 'invited',
+      participant_removed: 'removed',
+      participant_rsvp_accepted: 'accepted',
+      participant_rsvp_declined: 'declined',
+      participant_rsvp_tentative: 'tentatively accepted',
+      participant_joined: 'joined',
+      participant_left: 'left',
+    };
+
+    const summaryMap: Record<string, string> = {
+      participant_added: `${actor.name} invited ${participantName} to "${meetingTitle}"`,
+      participant_removed: `${actor.name} removed ${participantName} from "${meetingTitle}"`,
+      participant_rsvp_accepted: `${participantName} accepted invitation to "${meetingTitle}"`,
+      participant_rsvp_declined: `${participantName} declined invitation to "${meetingTitle}"`,
+      participant_rsvp_tentative: `${participantName} tentatively accepted "${meetingTitle}"`,
+      participant_joined: `${participantName} joined meeting "${meetingTitle}"`,
+      participant_left: `${participantName} left meeting "${meetingTitle}"`,
+    };
+
+    const importanceMap: Record<string, 'low' | 'normal' | 'high' | 'critical'> = {
+      participant_added: 'normal',
+      participant_removed: 'normal',
+      participant_rsvp_accepted: 'normal',
+      participant_rsvp_declined: 'normal',
+      participant_rsvp_tentative: 'low',
+      participant_joined: 'low',
+      participant_left: 'low',
+    };
+
+    return this.createActivity({
+      organizationId,
+      eventType,
+      actor: {
+        type: actor.type || 'user',
+        id: actor.id,
+        name: actor.name,
+      },
+      resource: {
+        type: 'meeting',
+        id: meetingId,
+        name: meetingTitle,
+        url: `/meetings/${meetingId}`,
+      },
+      action: actionMap[eventType],
+      summary: summaryMap[eventType],
+      details: {
+        ...details,
+        participantName,
+      },
+      importance: importanceMap[eventType],
+    });
+  }
 }
 
 export const activityFeedService = new ActivityFeedService();

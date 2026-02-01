@@ -13,9 +13,11 @@ import { projectService } from '../services/ProjectService';
 import { projectContactService } from '../services/ProjectContactService';
 import { projectNoteService } from '../services/ProjectNoteService';
 import { projectNoteAudioService } from '../services/ProjectNoteAudioService';
+import { projectNoteAttachmentService } from '../services/ProjectNoteAttachmentService';
 import { projectEnvVariableService } from '../services/ProjectEnvVariableService';
 import { projectBrandAssetService } from '../services/ProjectBrandAssetService';
 import { projectRecapService } from '../services/ProjectRecapService';
+import { noteMentionService } from '../services/NoteMentionService';
 import type { BrandAssetType, BrandAssetVariant } from '../models/ProjectBrandAsset';
 import { taskService } from '../services/TaskService';
 import { gitHubService } from '../services/GitHubService';
@@ -749,6 +751,178 @@ export const deleteProjectNote = async (req: Request, res: Response) => {
         timestamp: new Date().toISOString(),
       });
     }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Get users that can be @mentioned in project notes
+ */
+export const getMentionableUsers = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const users = await noteMentionService.getMentionableUsers(organizationId);
+
+    res.json({
+      success: true,
+      data: users,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT NOTE ATTACHMENTS
+// ============================================================================
+
+export const getNoteAttachments = async (req: Request, res: Response) => {
+  try {
+    const { noteId } = req.params;
+
+    const attachments = await projectNoteAttachmentService.getAttachmentsForNote(
+      parseInt(noteId, 10)
+    );
+
+    res.json({
+      success: true,
+      data: attachments,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const uploadNoteAttachment = async (req: Request, res: Response) => {
+  try {
+    const { id: projectId, noteId } = req.params;
+    const userId = (req as any).user?.id;
+    const organizationId = (req as any).user?.organizationId;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const attachment = await projectNoteAttachmentService.uploadAttachment({
+      noteId: parseInt(noteId, 10),
+      projectId,
+      userId,
+      organizationId,
+      file: {
+        buffer: file.buffer,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: attachment,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if ((error as Error).message === 'Note not found') {
+      return res.status(404).json({
+        success: false,
+        error: 'Note not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+    if ((error as Error).message.includes('exceeds maximum')) {
+      return res.status(400).json({
+        success: false,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const deleteNoteAttachment = async (req: Request, res: Response) => {
+  try {
+    const { attachmentId } = req.params;
+    const userId = (req as any).user?.id;
+
+    const deleted = await projectNoteAttachmentService.deleteAttachment(
+      parseInt(attachmentId, 10),
+      userId
+    );
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: 'Attachment not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Attachment deleted successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    if ((error as Error).message.includes('Only the uploader')) {
+      return res.status(403).json({
+        success: false,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const getProjectAttachments = async (req: Request, res: Response) => {
+  try {
+    const { id: projectId } = req.params;
+
+    const attachments = await projectNoteAttachmentService.getAttachmentsForProject(projectId);
+
+    res.json({
+      success: true,
+      data: attachments,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : String(error),

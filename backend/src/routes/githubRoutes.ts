@@ -1125,4 +1125,167 @@ router.get('/repos/:owner/:repo/collaborator-access', async (req: Request, res: 
   }
 });
 
+// =========================================================================
+// REPOSITORY DOWNLOAD ROUTES
+// =========================================================================
+
+/**
+ * @swagger
+ * /api/github/repos/{owner}/{repo}/download-info:
+ *   get:
+ *     summary: Get download info for a repository
+ *     tags: [GitHub]
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Download info with available branches and URLs
+ */
+router.get('/repos/:owner/:repo/download-info', async (req: Request, res: Response) => {
+  try {
+    if (!gitHubService.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub integration not configured',
+      });
+    }
+
+    const { owner, repo } = req.params;
+    const info = await gitHubService.getRepoDownloadInfo(owner, repo);
+
+    res.json({
+      success: true,
+      data: info,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/github/repos/{owner}/{repo}/download/zip:
+ *   get:
+ *     summary: Download repository as ZIP
+ *     tags: [GitHub]
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: ref
+ *         schema:
+ *           type: string
+ *         description: Branch name or commit SHA (defaults to default branch)
+ *     responses:
+ *       200:
+ *         description: ZIP file download
+ *         content:
+ *           application/zip:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+router.get('/repos/:owner/:repo/download/zip', async (req: Request, res: Response) => {
+  try {
+    if (!gitHubService.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub integration not configured',
+      });
+    }
+
+    const { owner, repo } = req.params;
+    const ref = req.query.ref as string | undefined;
+
+    const { buffer, filename } = await gitHubService.downloadRepoAsZip(owner, repo, ref);
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/github/repos/{owner}/{repo}/download/tarball:
+ *   get:
+ *     summary: Download repository as tarball
+ *     tags: [GitHub]
+ *     parameters:
+ *       - in: path
+ *         name: owner
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: repo
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: ref
+ *         schema:
+ *           type: string
+ *         description: Branch name or commit SHA (defaults to default branch)
+ *     responses:
+ *       200:
+ *         description: Tarball file download
+ *         content:
+ *           application/gzip:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+router.get('/repos/:owner/:repo/download/tarball', async (req: Request, res: Response) => {
+  try {
+    if (!gitHubService.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: 'GitHub integration not configured',
+      });
+    }
+
+    const { owner, repo } = req.params;
+    const ref = req.query.ref as string | undefined;
+
+    const { buffer, filename } = await gitHubService.downloadRepoAsTarball(owner, repo, ref);
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message,
+    });
+  }
+});
+
 export default router;

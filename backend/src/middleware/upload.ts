@@ -143,4 +143,49 @@ export const audioUpload = multer({
 // Single audio file upload
 export const uploadAudio = audioUpload.single('audio');
 
+// =============================================================================
+// NOTE ATTACHMENTS UPLOAD (Larger files - images, documents, audio, video)
+// =============================================================================
+
+// All allowed types for note attachments
+const NOTE_ATTACHMENT_TYPES = [
+  ...ALLOWED_MIME_TYPES,
+  ...ALLOWED_AUDIO_TYPES,
+  // Video types
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'video/quicktime',
+  'video/x-msvideo',
+];
+
+// Note attachment file filter
+const noteAttachmentFilter = (
+  req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  if (NOTE_ATTACHMENT_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`File type ${file.mimetype} is not allowed for note attachments.`));
+  }
+};
+
+// Max note attachment size: 2GB (with Wasabi cloud storage for large files)
+const MAX_NOTE_ATTACHMENT_SIZE = 2 * 1024 * 1024 * 1024;
+
+// Note attachment upload instance
+export const noteAttachmentUpload = multer({
+  storage,
+  fileFilter: noteAttachmentFilter,
+  limits: {
+    fileSize: MAX_NOTE_ATTACHMENT_SIZE,
+    files: 1,
+  },
+});
+
+// Single note attachment upload
+export const uploadNoteAttachment = noteAttachmentUpload.single('file');
+
 export default upload;

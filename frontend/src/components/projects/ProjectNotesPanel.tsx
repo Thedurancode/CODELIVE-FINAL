@@ -45,6 +45,16 @@ import {
   Search,
   Languages,
   Clock,
+  AtSign,
+  Paperclip,
+  Image,
+  FileText,
+  Film,
+  File,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Cloud,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -65,6 +75,12 @@ import {
   useUpdateProjectNote,
   useDeleteProjectNote,
   useCreateGitHubIssueFromNote,
+  useMentionableUsers,
+  useNoteAttachments,
+  useUploadNoteAttachment,
+  useDeleteNoteAttachment,
+  type MentionableUser,
+  type NoteAttachment,
 } from '@/hooks/use-project-notes';
 import {
   useProjectAudioNotes,
@@ -301,8 +317,10 @@ const TRANSCRIPTION_LANGUAGES = [
   { code: 'hi', label: 'Hindi' },
 ] as const;
 
-// Maximum file size for audio uploads (50MB)
-const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
+// Maximum file size for attachments
+// - Files <100MB: Stored locally + synced to GitHub
+// - Files >=100MB: Stored in Wasabi cloud storage (if configured)
+const MAX_ATTACHMENT_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 const MAX_RECORDING_DURATION = 600; // 10 minutes in seconds
 
 // Highlight search query in text
@@ -450,6 +468,356 @@ function AudioWaveform({ analyser, isRecording }: { analyser: AnalyserNode | nul
   );
 }
 
+// Get icon for file type
+function getFileTypeIcon(type: string) {
+  switch (type) {
+    case 'image':
+      return Image;
+    case 'audio':
+      return FileAudio;
+    case 'video':
+      return Film;
+    case 'document':
+      return FileText;
+    default:
+      return File;
+  }
+}
+
+// Format file size
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Note Attachments Component
+function NoteAttachments({ projectId, noteId }: { projectId: string; noteId: number }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: attachmentsData, isLoading } = useNoteAttachments(projectId, noteId);
+  const uploadAttachment = useUploadNoteAttachment(projectId, noteId);
+  const deleteAttachment = useDeleteNoteAttachment(projectId, noteId);
+
+  const attachments: NoteAttachment[] = Array.isArray(attachmentsData)
+    ? attachmentsData
+    : ((attachmentsData as any)?.data || []);
+
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    // 100MB limit (GitHub API limit)
+    if (file.size > MAX_ATTACHMENT_FILE_SIZE) {
+      toast.error('File is too large. Maximum size is 100MB.');
+      return;
+    }
+
+    try {
+      await uploadAttachment.mutateAsync(file);
+      toast.success('File uploaded');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to upload file');
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileSelect(e.dataTransfer.files);
+  };
+
+  const handleDelete = async (attachmentId: number) => {
+    if (!confirm('Delete this attachment?')) return;
+    try {
+      await deleteAttachment.mutateAsync(attachmentId);
+      toast.success('Attachment deleted');
+    } catch {
+      toast.error('Failed to delete attachment');
+    }
+  };
+
+  if (isLoading) {
+    return null; // Don't show loading state for attachments
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/30">
+      {/* Attachments header with toggle */}
+      <div className="flex items-center justify-between mb-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+          <span>{attachments.length} attachment{attachments.length !== 1 ? 's' : ''}</span>
+          {attachments.length > 0 && (
+            isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+          )}
+        </button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadAttachment.isPending}
+        >
+          {uploadAttachment.isPending ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <>
+              <Plus className="h-3 w-3 mr-1" />
+              Add
+            </>
+          )}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => handleFileSelect(e.target.files)}
+        />
+      </div>
+
+      {/* Expanded attachments list or drop zone */}
+      {(isExpanded || attachments.length === 0) && (
+        <div
+          className={`rounded-lg border border-dashed transition-colors ${
+            isDragging
+              ? 'border-accent-500 bg-accent-500/10'
+              : 'border-border/50 hover:border-border'
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {attachments.length === 0 ? (
+            <div className="p-4 text-center">
+              <Paperclip className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">
+                Drop files here or{' '}
+                <button
+                  className="text-accent-400 hover:underline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  browse
+                </button>
+              </p>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                Images, documents, audio, video (max 2GB, cloud storage for large files)
+              </p>
+            </div>
+          ) : (
+            <div className="p-2 space-y-1">
+              {attachments.map((attachment) => {
+                const Icon = getFileTypeIcon(attachment.type);
+                return (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary/50 group"
+                  >
+                    {/* Thumbnail or icon */}
+                    {attachment.type === 'image' ? (
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="h-10 w-10 rounded overflow-hidden flex-shrink-0 bg-secondary"
+                      >
+                        <img
+                          src={attachment.thumbnailUrl || attachment.url}
+                          alt={attachment.originalFilename}
+                          className="h-full w-full object-cover"
+                        />
+                      </a>
+                    ) : (
+                      <div className="h-10 w-10 rounded bg-secondary flex items-center justify-center flex-shrink-0">
+                        <Icon className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+
+                    {/* File info */}
+                    <div className="flex-1 min-w-0">
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-foreground hover:text-accent-400 truncate block"
+                      >
+                        {attachment.originalFilename}
+                      </a>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(attachment.size)}
+                        {attachment.uploader?.name && ` • ${attachment.uploader.name}`}
+                      </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Cloud storage badge when using Wasabi */}
+                      {attachment.storageType === 'wasabi' && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="h-5 px-1.5 flex items-center gap-1 rounded bg-green-500/20 text-green-400 text-[10px] font-medium">
+                                <Cloud className="h-3 w-3" />
+                                Cloud
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-secondary border">
+                              Stored in Wasabi cloud storage
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {/* LFS badge when using LFS storage */}
+                      {attachment.usedLfs && !attachment.storageType?.startsWith('wasabi') && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="h-5 px-1.5 flex items-center justify-center rounded bg-purple-500/20 text-purple-400 text-[10px] font-medium">
+                                LFS
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-secondary border">
+                              Stored via Git LFS (Large File Storage)
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {/* GitHub link when synced */}
+                      {attachment.githubUrl && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <a
+                                href={attachment.githubUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="h-7 w-7 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+                              >
+                                <Github className="h-4 w-4" />
+                              </a>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-secondary border">
+                              View in GitHub{attachment.usedLfs ? ' (LFS)' : ''}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <a
+                              href={attachment.url}
+                              download={attachment.originalFilename}
+                              className="h-7 w-7 flex items-center justify-center rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+                            >
+                              <Download className="h-4 w-4" />
+                            </a>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary border">
+                            Download
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => handleDelete(attachment.id)}
+                              className="h-7 w-7 flex items-center justify-center rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary border">
+                            Delete
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Drop zone hint when there are attachments */}
+              <div
+                className={`mt-2 p-2 rounded text-center text-xs text-muted-foreground/60 border border-dashed border-border/30 ${
+                  isDragging ? 'bg-accent-500/10 border-accent-500' : ''
+                }`}
+              >
+                Drop more files here
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Collapsed preview thumbnails */}
+      {!isExpanded && attachments.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {attachments.slice(0, 4).map((attachment) => {
+            const Icon = getFileTypeIcon(attachment.type);
+            return attachment.type === 'image' ? (
+              <a
+                key={attachment.id}
+                href={attachment.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-8 w-8 rounded overflow-hidden bg-secondary hover:ring-2 ring-accent-500/50"
+              >
+                <img
+                  src={attachment.thumbnailUrl || attachment.url}
+                  alt={attachment.originalFilename}
+                  className="h-full w-full object-cover"
+                />
+              </a>
+            ) : (
+              <TooltipProvider key={attachment.id}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="h-8 w-8 rounded bg-secondary flex items-center justify-center hover:ring-2 ring-accent-500/50"
+                    >
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-secondary border">
+                    {attachment.originalFilename}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          })}
+          {attachments.length > 4 && (
+            <button
+              onClick={() => setIsExpanded(true)}
+              className="h-8 px-2 rounded bg-secondary flex items-center justify-center text-xs text-muted-foreground hover:text-foreground"
+            >
+              +{attachments.length - 4} more
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function groupNotesIntoThreads(notes: ProjectNote[]): NoteThread[] {
   if (!notes || notes.length === 0) return [];
 
@@ -566,6 +934,14 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
   // Search/filter state for transcripts
   const [transcriptSearchQuery, setTranscriptSearchQuery] = useState('');
 
+  // @mention autocomplete state
+  const [showMentionPopup, setShowMentionPopup] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStartPos, setMentionStartPos] = useState<number | null>(null);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   const { data: notesData, isLoading } = useProjectNotes(projectId);
   const { data: audioNotesData, isLoading: isLoadingAudio } = useProjectAudioNotes(projectId);
   const createNote = useCreateProjectNote(projectId);
@@ -578,6 +954,12 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
   const deleteAudioNote = useDeleteProjectAudioNote(projectId);
   const retryTranscription = useRetryAudioNoteTranscription(projectId);
 
+  // Mentionable users for @mention autocomplete
+  const { data: mentionableUsersData } = useMentionableUsers(projectId);
+  const mentionableUsers: MentionableUser[] = Array.isArray(mentionableUsersData)
+    ? mentionableUsersData
+    : ((mentionableUsersData as any)?.data || []);
+
   // Extract array from potentially wrapped response
   const notes: ProjectNote[] = Array.isArray(notesData)
     ? notesData
@@ -587,6 +969,91 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
   const audioNotes: ProjectAudioNote[] = Array.isArray(audioNotesData)
     ? audioNotesData
     : ((audioNotesData as any)?.data || []);
+
+  // Filter mentionable users based on query
+  const filteredMentionUsers = mentionableUsers.filter((user) =>
+    mentionQuery
+      ? user.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(mentionQuery.toLowerCase())
+      : true
+  ).slice(0, 5); // Limit to 5 suggestions
+
+  // Handle @mention input detection
+  const handleContentChange = useCallback((
+    value: string,
+    cursorPos: number,
+    isEditing: boolean = false
+  ) => {
+    setContent(value);
+
+    // Check for @ trigger
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const atMatch = textBeforeCursor.match(/@(\w*)$/);
+
+    if (atMatch) {
+      setMentionStartPos(cursorPos - atMatch[0].length);
+      setMentionQuery(atMatch[1]);
+      setShowMentionPopup(true);
+      setSelectedMentionIndex(0);
+    } else {
+      setShowMentionPopup(false);
+      setMentionQuery('');
+      setMentionStartPos(null);
+    }
+  }, []);
+
+  // Insert selected mention into content
+  const insertMention = useCallback((user: MentionableUser) => {
+    if (mentionStartPos === null) return;
+
+    const beforeMention = content.slice(0, mentionStartPos);
+    const afterMention = content.slice(mentionStartPos + mentionQuery.length + 1); // +1 for @
+    const mentionText = user.name.includes(' ') ? `@"${user.name}"` : `@${user.name.replace(/\s/g, '')}`;
+    const newContent = beforeMention + mentionText + ' ' + afterMention;
+
+    setContent(newContent);
+    setShowMentionPopup(false);
+    setMentionQuery('');
+    setMentionStartPos(null);
+
+    // Focus back to textarea
+    const textarea = textareaRef.current || editTextareaRef.current;
+    if (textarea) {
+      setTimeout(() => {
+        textarea.focus();
+        const newCursorPos = beforeMention.length + mentionText.length + 1;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }, 0);
+    }
+  }, [content, mentionStartPos, mentionQuery]);
+
+  // Handle keyboard navigation in mention popup
+  const handleMentionKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!showMentionPopup || filteredMentionUsers.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedMentionIndex((prev) =>
+          prev < filteredMentionUsers.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedMentionIndex((prev) =>
+          prev > 0 ? prev - 1 : filteredMentionUsers.length - 1
+        );
+        break;
+      case 'Enter':
+      case 'Tab':
+        e.preventDefault();
+        insertMention(filteredMentionUsers[selectedMentionIndex]);
+        break;
+      case 'Escape':
+        setShowMentionPopup(false);
+        break;
+    }
+  }, [showMentionPopup, filteredMentionUsers, selectedMentionIndex, insertMention]);
 
   // Initialize speech recognition
   const initSpeechRecognition = useCallback(() => {
@@ -745,8 +1212,8 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
 
         // Check file size
-        if (audioBlob.size > MAX_AUDIO_FILE_SIZE) {
-          toast.error(`Recording is too large (${(audioBlob.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 50MB.`);
+        if (audioBlob.size > MAX_ATTACHMENT_FILE_SIZE) {
+          toast.error(`Recording is too large (${(audioBlob.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 100MB.`);
           return;
         }
 
@@ -811,8 +1278,8 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
     }
 
     // Validate file size
-    if (file.size > MAX_AUDIO_FILE_SIZE) {
-      toast.error(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 50MB.`);
+    if (file.size > MAX_ATTACHMENT_FILE_SIZE) {
+      toast.error(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)}MB). Maximum size is 100MB.`);
       return;
     }
 
@@ -1179,7 +1646,7 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                       </Button>
 
                       <p className="text-xs text-muted-foreground text-center">
-                        Max file size: 50MB | Max duration: 10 minutes
+                        Max file size: 100MB | Max duration: 10 minutes
                       </p>
                     </>
                   )}
@@ -1249,17 +1716,43 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                   </div>
                   <div className="relative">
                     <Textarea
-                      placeholder={isListening ? "Listening... speak now" : "Write your note..."}
+                      ref={textareaRef}
+                      placeholder={isListening ? "Listening... speak now" : "Write your note... Use @ to mention someone"}
                       value={content + interimTranscript}
                       onChange={(e) => {
                         if (!isListening) {
-                          setContent(e.target.value);
+                          handleContentChange(e.target.value, e.target.selectionStart || 0);
                         }
                       }}
+                      onKeyDown={handleMentionKeyDown}
                       className={`mt-1 bg-secondary border text-foreground min-h-40 ${isListening ? 'border-red-500/50' : ''}`}
                       required
                       autoFocus
                     />
+                    {/* @mention autocomplete popup */}
+                    {showMentionPopup && filteredMentionUsers.length > 0 && (
+                      <div className="absolute left-0 right-0 mt-1 bg-secondary border rounded-lg shadow-lg z-50 overflow-hidden">
+                        {filteredMentionUsers.map((user, index) => (
+                          <button
+                            key={user.id}
+                            type="button"
+                            className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-accent-500/20 ${
+                              index === selectedMentionIndex ? 'bg-accent-500/20' : ''
+                            }`}
+                            onClick={() => insertMention(user)}
+                          >
+                            <div className="h-6 w-6 rounded-full bg-accent-500/30 flex items-center justify-center text-xs text-accent-400 uppercase">
+                              {user.name.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-foreground truncate">{user.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                            </div>
+                            <span className="text-xs text-muted-foreground/50 capitalize">{user.type}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {isListening && (
                       <div className="absolute bottom-2 right-2">
                         <div className="flex items-center gap-1">
@@ -1275,6 +1768,9 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                       Hearing: {interimTranscript}
                     </p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    Type @ to mention team members or contacts
+                  </p>
                 </div>
                 <div className="flex gap-3">
                   <Button
@@ -1655,6 +2151,9 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
+
+                            {/* Note Attachments */}
+                            <NoteAttachments projectId={projectId} noteId={note.id} />
                           </CardContent>
                         </Card>
                       </div>
@@ -1729,16 +2228,42 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
               </div>
               <div className="relative">
                 <Textarea
-                  placeholder={isListening ? "Listening... speak now" : "Write your note..."}
+                  ref={editTextareaRef}
+                  placeholder={isListening ? "Listening... speak now" : "Write your note... Use @ to mention someone"}
                   value={content + interimTranscript}
                   onChange={(e) => {
                     if (!isListening) {
-                      setContent(e.target.value);
+                      handleContentChange(e.target.value, e.target.selectionStart || 0, true);
                     }
                   }}
+                  onKeyDown={handleMentionKeyDown}
                   className={`mt-1 bg-secondary border text-foreground min-h-32 ${isListening ? 'border-red-500/50' : ''}`}
                   required
                 />
+                {/* @mention autocomplete popup */}
+                {showMentionPopup && filteredMentionUsers.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-secondary border rounded-lg shadow-lg z-50 overflow-hidden">
+                    {filteredMentionUsers.map((user, index) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-accent-500/20 ${
+                          index === selectedMentionIndex ? 'bg-accent-500/20' : ''
+                        }`}
+                        onClick={() => insertMention(user)}
+                      >
+                        <div className="h-6 w-6 rounded-full bg-accent-500/30 flex items-center justify-center text-xs text-accent-400 uppercase">
+                          {user.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-foreground truncate">{user.name}</div>
+                          <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                        </div>
+                        <span className="text-xs text-muted-foreground/50 capitalize">{user.type}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {isListening && (
                   <div className="absolute bottom-2 right-2">
                     <div className="flex items-center gap-1">
@@ -1754,6 +2279,9 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                   Hearing: {interimTranscript}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground">
+                Type @ to mention team members or contacts
+              </p>
             </div>
             <div className="flex gap-3 pt-2">
               <Button
