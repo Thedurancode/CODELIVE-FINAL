@@ -27,7 +27,11 @@ export function useProjects(filters: ProjectFilters = {}) {
 export function useProject(id: string) {
   return useQuery({
     queryKey: ['project', id],
-    queryFn: () => api.get<Project>(`/api/projects/${id}`),
+    queryFn: async () => {
+      const response = await api.get<{ data: Project }>(`/api/projects/${id}`);
+      // Endpoint is under /api/projects/ which is treated as paginated, so unwrap data
+      return response.data;
+    },
     enabled: !!id,
   });
 }
@@ -35,14 +39,20 @@ export function useProject(id: string) {
 export function useProjectStats() {
   return useQuery({
     queryKey: ['projectStats'],
-    queryFn: () => api.get<ProjectStats>('/api/projects/stats'),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectStats }>('/api/projects/stats');
+      return response.data;
+    },
   });
 }
 
 export function useSearchProjects(query: string, limit: number = 10) {
   return useQuery({
     queryKey: ['projectSearch', query],
-    queryFn: () => api.get<Project[]>(`/api/projects/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+    queryFn: async () => {
+      const response = await api.get<{ data: Project[] }>(`/api/projects/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+      return response.data;
+    },
     enabled: query.length >= 2,
   });
 }
@@ -50,7 +60,10 @@ export function useSearchProjects(query: string, limit: number = 10) {
 export function useProjectTags() {
   return useQuery({
     queryKey: ['projectTags'],
-    queryFn: () => api.get<{ tag: string; count: number }[]>('/api/projects/tags'),
+    queryFn: async () => {
+      const response = await api.get<{ data: { tag: string; count: number }[] }>('/api/projects/tags');
+      return response.data;
+    },
   });
 }
 
@@ -153,7 +166,10 @@ export function useBulkDeleteProjects() {
 export function useTeamMembers() {
   return useQuery({
     queryKey: ['teamMembers'],
-    queryFn: () => api.get<TeamMember[]>('/api/projects/team-members'),
+    queryFn: async () => {
+      const response = await api.get<{ data: TeamMember[] }>('/api/projects/team-members');
+      return response.data;
+    },
   });
 }
 
@@ -163,7 +179,10 @@ export function useTeamMembers() {
 export function useProjectMembers(projectId: string) {
   return useQuery({
     queryKey: ['projectMembers', projectId],
-    queryFn: () => api.get<ProjectMember[]>(`/api/projects/${projectId}/members`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectMember[] }>(`/api/projects/${projectId}/members`);
+      return response.data;
+    },
     enabled: !!projectId,
   });
 }
@@ -260,7 +279,10 @@ export interface ProjectRecap {
 export function useProjectRecap(projectId: string) {
   return useQuery({
     queryKey: ['projectRecap', projectId],
-    queryFn: () => api.get<ProjectRecap>(`/api/projects/${projectId}/recap`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectRecap }>(`/api/projects/${projectId}/recap`);
+      return response.data;
+    },
     enabled: !!projectId,
   });
 }
@@ -275,6 +297,68 @@ export function useRefreshProjectRecap() {
       api.post<ProjectRecap>(`/api/projects/${projectId}/recap/refresh`, { userName }),
     onSuccess: (data, { projectId }) => {
       queryClient.setQueryData(['projectRecap', projectId], data);
+    },
+  });
+}
+
+// ============================================================================
+// SCREENSHOT HOOKS
+// ============================================================================
+
+interface ScreenshotData {
+  screenshotUrl: string | null;
+  deploymentUrl: string | null;
+}
+
+interface CaptureScreenshotResult {
+  screenshotUrl: string;
+  storagePath: string;
+}
+
+/**
+ * Get screenshot data for a project
+ */
+export function useProjectScreenshot(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ['projectScreenshot', projectId],
+    queryFn: () => api.get<ScreenshotData>(`/api/projects/${projectId}/screenshot`),
+    enabled: !!projectId,
+  });
+}
+
+/**
+ * Capture a new screenshot of the project's live deployment
+ */
+export function useCaptureProjectScreenshot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      api.post<CaptureScreenshotResult>(`/api/projects/${projectId}/screenshot`),
+    onSuccess: (data, projectId) => {
+      queryClient.setQueryData(['projectScreenshot', projectId], {
+        screenshotUrl: data.screenshotUrl,
+        deploymentUrl: null, // Will be refreshed with full project data
+      });
+      // Also invalidate the project to update screenshotUrl
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+/**
+ * Delete the project screenshot
+ */
+export function useDeleteProjectScreenshot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      api.delete(`/api/projects/${projectId}/screenshot`),
+    onSuccess: (_, projectId) => {
+      queryClient.setQueryData(['projectScreenshot', projectId], {
+        screenshotUrl: null,
+        deploymentUrl: null,
+      });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }

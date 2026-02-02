@@ -52,6 +52,9 @@ interface UpdateProjectData {
   logoUrl?: string | null;
   githubUrl?: string | null;
   deploymentUrl?: string | null;
+  apiUrl?: string | null;
+  previewUrl?: string | null;
+  screenshotUrl?: string | null;
   status?: ProjectStatus;
   startDate?: Date | string | null;
   targetEndDate?: Date | string | null;
@@ -278,6 +281,9 @@ class ProjectService {
     if (data.logoUrl !== undefined) updates.logoUrl = data.logoUrl;
     if (data.githubUrl !== undefined) updates.githubUrl = data.githubUrl;
     if (data.deploymentUrl !== undefined) updates.deploymentUrl = data.deploymentUrl;
+    if (data.apiUrl !== undefined) updates.apiUrl = data.apiUrl;
+    if (data.previewUrl !== undefined) updates.previewUrl = data.previewUrl;
+    if (data.screenshotUrl !== undefined) updates.screenshotUrl = data.screenshotUrl;
     if (data.status !== undefined) updates.status = data.status;
     if (data.startDate !== undefined) {
       updates.startDate = data.startDate ? new Date(data.startDate) : null;

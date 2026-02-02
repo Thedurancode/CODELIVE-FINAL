@@ -272,6 +272,9 @@ export interface Project {
   logoUrl: string | null;
   githubUrl: string | null;
   deploymentUrl: string | null;
+  apiUrl: string | null;
+  previewUrl: string | null;
+  screenshotUrl: string | null;
   status: ProjectStatus;
   organizationId: string;
   createdById: string | null;

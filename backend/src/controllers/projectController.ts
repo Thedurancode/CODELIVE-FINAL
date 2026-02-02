@@ -28,6 +28,7 @@ import DocuSealSubmission from '../models/DocuSealSubmission';
 import ContractSigner from '../models/ContractSigner';
 import Contact from '../models/Contact';
 import { docuSealService } from '../services/DocuSealService';
+import { screenshotService } from '../services/ScreenshotService';
 
 // Permission mapping for project roles to GitHub permissions
 type GitHubPermission = 'pull' | 'push' | 'admin' | 'maintain' | 'triage';
@@ -831,18 +832,25 @@ export const uploadNoteAttachment = async (req: Request, res: Response) => {
       });
     }
 
+    // Read file buffer from disk (diskStorage doesn't provide buffer directly)
+    const fs = await import('fs/promises');
+    const fileBuffer = await fs.readFile(file.path);
+
     const attachment = await projectNoteAttachmentService.uploadAttachment({
       noteId: parseInt(noteId, 10),
       projectId,
       userId,
       organizationId,
       file: {
-        buffer: file.buffer,
+        buffer: fileBuffer,
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
       },
     });
+
+    // Clean up temp file
+    await fs.unlink(file.path).catch(() => {});
 
     res.status(201).json({
       success: true,
@@ -2792,6 +2800,146 @@ export const reorderProjectBrandAssets = async (req: Request, res: Response) => 
     await projectBrandAssetService.reorderBrandAssets(projectId, user.organizationId, assetIds);
 
     res.json({ success: true, message: 'Assets reordered' });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+// ============================================================================
+// PROJECT SCREENSHOT
+// ============================================================================
+
+/**
+ * Get project screenshot
+ */
+export const getProjectScreenshot = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const project = await projectService.getProject(id);
+    if (!project) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        screenshotUrl: project.screenshotUrl,
+        deploymentUrl: project.deploymentUrl,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
+ * Capture/refresh project screenshot using Browserless API
+ */
+export const captureProjectScreenshot = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    // Check if Browserless is available
+    if (!screenshotService.isAvailable()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Screenshot service not available. BROWSERLESS_API_KEY not configured.',
+      });
+    }
+
+    const project = await projectService.getProject(id);
+    if (!project) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+
+    if (!project.deploymentUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project has no deployment URL configured',
+      });
+    }
+
+    // Capture screenshot with taller viewport to show more content
+    const result = await screenshotService.captureAndStore(
+      project.deploymentUrl,
+      id,
+      {
+        width: 1280,
+        height: 1600, // Taller viewport to capture more of the page
+        fullPage: false,
+        waitUntil: 'networkidle2',
+        delay: 2000,
+      }
+    );
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        error: result.error || 'Failed to capture screenshot',
+      });
+    }
+
+    // Update project with new screenshot URL
+    await projectService.updateProject(id, undefined, {
+      screenshotUrl: result.url,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        screenshotUrl: result.url,
+        storagePath: result.storagePath,
+      },
+    });
+  } catch (error) {
+    console.error('[projectController] Error capturing screenshot:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
+ * Delete project screenshot
+ */
+export const deleteProjectScreenshot = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const project = await projectService.getProject(id);
+    if (!project) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+
+    // Update project to remove screenshot URL
+    await projectService.updateProject(id, undefined, {
+      screenshotUrl: null,
+    });
+
+    res.json({ success: true, message: 'Screenshot deleted' });
   } catch (error) {
     res.status(500).json({
       success: false,

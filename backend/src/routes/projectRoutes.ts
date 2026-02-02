@@ -2376,4 +2376,112 @@ router.delete('/:id/brand-assets/:assetId', projectController.deleteProjectBrand
  */
 router.post('/:id/brand-assets/reorder', projectController.reorderProjectBrandAssets);
 
+// ============================================================================
+// PROJECT SCREENSHOT (Browserless Integration)
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/projects/{id}/screenshot:
+ *   get:
+ *     summary: Get project screenshot URL
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Project screenshot URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     screenshotUrl:
+ *                       type: string
+ *                       nullable: true
+ *                     deploymentUrl:
+ *                       type: string
+ *                       nullable: true
+ *       404:
+ *         description: Project not found
+ */
+router.get('/:id/screenshot', projectController.getProjectScreenshot);
+
+/**
+ * @swagger
+ * /api/projects/{id}/screenshot:
+ *   post:
+ *     summary: Capture a new screenshot of the project's live deployment
+ *     description: Uses Browserless API to capture a screenshot of the deployment URL
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Screenshot captured successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     screenshotUrl:
+ *                       type: string
+ *                     storagePath:
+ *                       type: string
+ *       400:
+ *         description: Project has no deployment URL
+ *       404:
+ *         description: Project not found
+ *       503:
+ *         description: Screenshot service not available (Browserless not configured)
+ */
+router.post('/:id/screenshot', projectController.captureProjectScreenshot);
+
+/**
+ * @swagger
+ * /api/projects/{id}/screenshot:
+ *   delete:
+ *     summary: Delete project screenshot
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Screenshot deleted
+ *       404:
+ *         description: Project not found
+ */
+router.delete('/:id/screenshot', projectController.deleteProjectScreenshot);
+
 export default router;

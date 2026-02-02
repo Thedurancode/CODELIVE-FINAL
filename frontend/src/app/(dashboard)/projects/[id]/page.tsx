@@ -77,6 +77,8 @@ import {
   Palette,
   Video,
   Download,
+  Phone,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -101,7 +103,7 @@ import { useProjectContracts, getContractStatusColor, getContractStatusLabel, ty
 import { ProjectSignersPanel } from '@/components/contracts/ProjectSignersPanel';
 import { ContractSignersPanel } from '@/components/contracts/ContractSignersPanel';
 import { ProjectMeetingsPanel } from '@/components/projects/ProjectMeetingsPanel';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ProjectScreenshotPreview } from '@/components/projects/ProjectScreenshotPreview';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -818,189 +820,63 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4">
-        {/* Top row: Back button, logo, title */}
+      <div className="flex flex-col gap-2">
+        {/* Compact header row: Back, Logo, Title, Status, Actions */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="shrink-0" asChild>
+          <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" asChild>
             <Link href="/projects">
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
+
           {project.logoUrl ? (
             <img
               src={project.logoUrl}
               alt={`${project.title} logo`}
-              className="h-11 w-11 rounded-lg object-cover shrink-0"
+              className="h-12 w-12 rounded-xl object-cover shrink-0"
             />
           ) : (
-            <div className="h-11 w-11 rounded-lg bg-accent-600/20 flex items-center justify-center shrink-0">
-              <FolderKanban className="h-5 w-5 text-accent-400" />
+            <div className="h-12 w-12 rounded-xl bg-accent-600/20 flex items-center justify-center shrink-0">
+              <FolderKanban className="h-6 w-6 text-accent-400" />
             </div>
           )}
-          <div>
-            <h1 className="text-xl font-bold text-foreground">{project.title}</h1>
-            <Badge variant="outline" className={`${STATUS_COLORS[project.status || 'active']} text-xs mt-1`}>
+
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl font-bold text-foreground truncate">{project.title}</h1>
+            <Badge variant="outline" className={`${STATUS_COLORS[project.status || 'active']} text-xs mt-0.5`}>
               {(project.status || 'active').replace('_', ' ')}
             </Badge>
           </div>
-        </div>
 
-        {/* Action buttons row - Consolidated */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Play Recap - Voice button with waveform */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className={isPlayingRecap
-                ? "bg-violet-500/20 border-violet-500/40 text-violet-400 hover:bg-violet-500/30"
-                : "hover:bg-violet-500/10 hover:text-violet-400 hover:border-violet-500/40"
+          {/* AI Recap button */}
+          <button
+            onClick={handlePlayRecap}
+            disabled={isLoadingAudio}
+            title={isPlayingRecap ? "Stop playback" : "Generate and play fresh AI recap"}
+            className={`
+              shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
+              transition-all duration-200
+              ${isPlayingRecap
+                ? "bg-violet-500 text-white"
+                : "bg-violet-500/10 text-violet-400 border border-violet-500/30 hover:bg-violet-500/20"
               }
-              onClick={handlePlayRecap}
-              disabled={isLoadingAudio}
-              title={isPlayingRecap ? "Stop playback" : "Generate and play fresh AI recap"}
-            >
-              {isLoadingAudio ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : isPlayingRecap ? (
-                <>
-                  <VolumeX className="h-4 w-4 mr-2" />
-                  Stop
-                </>
-              ) : (
-                <>
-                  <Volume2 className="h-4 w-4 mr-2" />
-                  Play Recap
-                </>
-              )}
-            </Button>
-            {/* Waveform visualization when playing */}
-            <RecapWaveform analyser={recapAnalyser} isPlaying={isPlayingRecap} />
-          </div>
-
-          {/* Add Note - Primary Action */}
-          <Button
-            className="bg-emerald-500/20 backdrop-blur-sm border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300 hover:border-emerald-400/60 shadow-lg shadow-emerald-500/10 transition-all duration-200"
-            onClick={() => {
-              setActiveTab('notes');
-              setIsAddNoteDialogOpen(true);
-            }}
+              ${isLoadingAudio ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}
+            `}
           >
-            <StickyNote className="h-4 w-4 mr-2" />
-            Add Note
-          </Button>
-
-          {/* New Issue Button */}
-          {project.githubUrl && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-orange-500/40 text-orange-400 hover:bg-orange-500/10 hover:text-orange-300 hover:border-orange-400/60"
-              onClick={() => setIsNewIssueDialogOpen(true)}
-            >
-              <CirclePlus className="h-4 w-4 mr-2" />
-              New Issue
-            </Button>
-          )}
-
-          {/* Primary action: Open Terminal / Launch Agent */}
-          {project.githubUrl && (
-            <SpriteLaunchButton
-              projectId={project.id}
-              projectTitle={project.title}
-              githubUrl={project.githubUrl}
-            />
-          )}
-
-          {/* GitHub dropdown - combines GitHub, Clone options */}
-          {project.githubUrl && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Github className="h-4 w-4 mr-1" />
-                  GitHub
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-card border">
-                <DropdownMenuItem asChild>
-                  <a href={project.githubUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Open Repository
-                  </a>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsNewIssueDialogOpen(true)}>
-                  <CirclePlus className="mr-2 h-4 w-4" />
-                  New Issue
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsCodingTaskDialogOpen(true)}>
-                  <Bot className="mr-2 h-4 w-4" />
-                  Start Coding Task
-                </DropdownMenuItem>
-                {canClone && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <a href={`x-github-client://openRepo/${project.githubUrl}`}>
-                        <MonitorDown className="mr-2 h-4 w-4" />
-                        Clone in GitHub Desktop
-                      </a>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(project.githubUrl)}`}>
-                        <Code2 className="mr-2 h-4 w-4" />
-                        Clone in VS Code
-                      </a>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {(() => {
-                      const parsed = parseGitHubUrl(project.githubUrl);
-                      if (!parsed) return null;
-                      return (
-                        <DropdownMenuItem asChild>
-                          <a href={`${process.env.NEXT_PUBLIC_API_URL || ''}/api/github/repos/${parsed.owner}/${parsed.repo}/download/zip`}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Download ZIP
-                          </a>
-                        </DropdownMenuItem>
-                      );
-                    })()}
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
-          {/* Share dropdown - combines Share and Clients */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Share2 className="h-4 w-4 mr-1" />
-                Share
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="bg-card border">
-              <DropdownMenuItem onClick={handleCopyPublicLink}>
-                {linkCopied ? (
-                  <Check className="mr-2 h-4 w-4 text-green-400" />
-                ) : (
-                  <Copy className="mr-2 h-4 w-4" />
-                )}
-                Copy Public Link
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsClientPortalDialogOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Manage Client Access
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            {isLoadingAudio ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : isPlayingRecap ? (
+              <Volume2 className="h-3 w-3" />
+            ) : (
+              <Volume2 className="h-3 w-3" />
+            )}
+            <span className="hidden sm:inline">{isLoadingAudio ? "Loading..." : isPlayingRecap ? "Stop" : "AI Recap"}</span>
+          </button>
 
           {/* More actions dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="shrink-0 h-8 w-8">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -1051,6 +927,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {/* Waveform visualization when playing - only show when active */}
+        {isPlayingRecap && (
+          <div className="flex justify-center">
+            <RecapWaveform analyser={recapAnalyser} isPlaying={isPlayingRecap} />
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -1058,54 +941,66 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         {/* Main Content */}
         <div className="lg:col-span-2">
           <Tabs
-            value={activeTab || (project.githubUrl ? 'github' : 'notes')}
+            value={activeTab || 'notes'}
             onValueChange={setActiveTab}
             className="space-y-4"
           >
-            <TabsList className="bg-secondary border">
+            <TabsList className="bg-secondary border w-full justify-start overflow-x-auto flex-nowrap">
+              <TabsTrigger value="notes" className="data-[state=active]:bg-secondary shrink-0">
+                <StickyNote className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Overview</span>
+              </TabsTrigger>
               {project.githubUrl && (
-                <TabsTrigger value="github" className="data-[state=active]:bg-secondary">
-                  <Github className="h-4 w-4 mr-2" />
-                  Repository
+                <TabsTrigger value="agent" className="data-[state=active]:bg-secondary shrink-0">
+                  <Bot className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Agent</span>
                 </TabsTrigger>
               )}
-              {project.githubUrl && (
-                <TabsTrigger value="agent" className="data-[state=active]:bg-secondary">
-                  <Bot className="h-4 w-4 mr-2" />
-                  Agent
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="notes" className="data-[state=active]:bg-secondary">
-                <StickyNote className="h-4 w-4 mr-2" />
-                Notes
+              <TabsTrigger value="contacts" className="data-[state=active]:bg-secondary shrink-0">
+                <Users className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Contacts</span>
               </TabsTrigger>
-              <TabsTrigger value="contacts" className="data-[state=active]:bg-secondary">
-                <Users className="h-4 w-4 mr-2" />
-                Contacts
+              <TabsTrigger value="meetings" className="data-[state=active]:bg-secondary shrink-0">
+                <Video className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Meetings</span>
               </TabsTrigger>
-              <TabsTrigger value="meetings" className="data-[state=active]:bg-secondary">
-                <Video className="h-4 w-4 mr-2" />
-                Meetings
+              <TabsTrigger value="contracts" className="data-[state=active]:bg-secondary shrink-0">
+                <FileSignature className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Contracts</span>
               </TabsTrigger>
-              <TabsTrigger value="contracts" className="data-[state=active]:bg-secondary">
-                <FileSignature className="h-4 w-4 mr-2" />
-                Contracts
+              <TabsTrigger value="secrets" className="data-[state=active]:bg-secondary shrink-0">
+                <Key className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Secrets</span>
               </TabsTrigger>
-              <TabsTrigger value="secrets" className="data-[state=active]:bg-secondary">
-                <Key className="h-4 w-4 mr-2" />
-                Secrets
-              </TabsTrigger>
-              <TabsTrigger value="brand" className="data-[state=active]:bg-secondary">
-                <Palette className="h-4 w-4 mr-2" />
-                Brand
+              <TabsTrigger value="brand" className="data-[state=active]:bg-secondary shrink-0">
+                <Palette className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Brand</span>
               </TabsTrigger>
             </TabsList>
 
-            {project.githubUrl && (
-              <TabsContent value="github">
-                <GitHubRepoPanel githubUrl={project.githubUrl} projectId={project.id} />
-              </TabsContent>
-            )}
+            <TabsContent value="notes">
+              <div className="space-y-4">
+                {/* Notes Section */}
+                <Card className="bg-card border">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg font-medium text-foreground">Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ProjectNotesPanel
+                      projectId={id}
+                      githubUrl={project.githubUrl}
+                      externalDialogOpen={isAddNoteDialogOpen}
+                      onExternalDialogOpenChange={setIsAddNoteDialogOpen}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* GitHub Repository Section */}
+                {project.githubUrl && (
+                  <GitHubRepoPanel githubUrl={project.githubUrl} projectId={project.id} />
+                )}
+              </div>
+            </TabsContent>
 
             {project.githubUrl && (
               <TabsContent value="agent">
@@ -1182,22 +1077,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </TabsContent>
             )}
 
-            <TabsContent value="notes">
-              <Card className="bg-card border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg font-medium text-foreground">Notes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ProjectNotesPanel
-                    projectId={id}
-                    githubUrl={project.githubUrl}
-                    externalDialogOpen={isAddNoteDialogOpen}
-                    onExternalDialogOpenChange={setIsAddNoteDialogOpen}
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
             <TabsContent value="contacts">
               <Card className="bg-card border">
                 <CardHeader className="pb-3">
@@ -1239,8 +1118,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Sidebar - OS Style */}
         <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden shadow-xl">
-          <ScrollArea className="h-[calc(100vh-16rem)]">
-            <div className="p-4 space-y-4">
+          <div className="p-4 space-y-4">
+              {/* Live Site Screenshot Preview */}
+              {project.deploymentUrl && (
+                <ProjectScreenshotPreview
+                  projectId={id}
+                  screenshotUrl={project.screenshotUrl}
+                  deploymentUrl={project.deploymentUrl}
+                />
+              )}
+
               {/* Quick Stats Section */}
               <div className="p-4 rounded-xl bg-muted/50 border border-border/50">
                 <div className="flex items-center gap-3 mb-4">
@@ -1372,14 +1259,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
             </div>
-          </ScrollArea>
+          </div>
         </div>
-      </div>
 
       {/* Edit Dialog - OS Style */}
       {mounted && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-xl p-0 overflow-hidden shadow-2xl">
+          <DialogContent className="bg-card/95 backdrop-blur-xl border border-border/50 rounded-2xl max-w-3xl p-0 overflow-hidden shadow-2xl">
             <DialogHeader className="px-6 pt-6 pb-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">

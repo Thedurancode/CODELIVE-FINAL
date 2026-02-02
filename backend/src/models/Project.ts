@@ -18,6 +18,8 @@ interface ProjectAttributes {
   logoUrl: string | null;
   githubUrl: string | null;
   deploymentUrl: string | null;
+  apiUrl: string | null;
+  previewUrl: string | null;
   status: ProjectStatus;
 
   // Organization scoping (legacy, now uses createdById)
@@ -38,6 +40,9 @@ interface ProjectAttributes {
   aiRecapUpdatedAt: Date | null;
   aiRecapAudioUrl: string | null; // Cached TTS audio URL
 
+  // Live site screenshot
+  screenshotUrl: string | null;
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -51,6 +56,8 @@ interface ProjectCreationAttributes
     | 'logoUrl'
     | 'githubUrl'
     | 'deploymentUrl'
+    | 'apiUrl'
+    | 'previewUrl'
     | 'status'
     | 'organizationId'
     | 'createdById'
@@ -62,6 +69,7 @@ interface ProjectCreationAttributes
     | 'aiRecap'
     | 'aiRecapUpdatedAt'
     | 'aiRecapAudioUrl'
+    | 'screenshotUrl'
     | 'createdAt'
     | 'updatedAt'
   > {}
@@ -76,6 +84,8 @@ class Project
   declare logoUrl: string | null;
   declare githubUrl: string | null;
   declare deploymentUrl: string | null;
+  declare apiUrl: string | null;
+  declare previewUrl: string | null;
   declare status: ProjectStatus;
 
   declare organizationId: string | null;
@@ -91,6 +101,7 @@ class Project
   declare aiRecap: string | null;
   declare aiRecapUpdatedAt: Date | null;
   declare aiRecapAudioUrl: string | null;
+  declare screenshotUrl: string | null;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -197,6 +208,24 @@ Project.init(
       },
       comment: 'Live deployment/preview URL',
     },
+    apiUrl: {
+      type: DataTypes.STRING(2048),
+      allowNull: true,
+      field: 'api_url',
+      validate: {
+        isUrl: true,
+      },
+      comment: 'API endpoint URL',
+    },
+    previewUrl: {
+      type: DataTypes.STRING(2048),
+      allowNull: true,
+      field: 'preview_url',
+      validate: {
+        isUrl: true,
+      },
+      comment: 'Preview/staging URL',
+    },
     status: {
       type: DataTypes.ENUM('in_talks', 'now_coding', 'needs_review', 'completed', 'cancelled'),
       allowNull: false,
@@ -262,6 +291,12 @@ Project.init(
       allowNull: true,
       field: 'ai_recap_audio_url',
       comment: 'Cached TTS audio URL for the recap',
+    },
+    screenshotUrl: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'screenshot_url',
+      comment: 'Screenshot image URL of the live deployment (base64 data URL)',
     },
     createdAt: {
       type: DataTypes.DATE,

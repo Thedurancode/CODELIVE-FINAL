@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, Plus, Loader2, Github, Globe, Upload, ImageIcon, FileText, Calendar, Tag, Users, Link2, Activity } from 'lucide-react';
+import { X, Plus, Loader2, Github, Globe, Upload, ImageIcon, FileText, Calendar, Tag, Users, Link2, Activity, Server, Eye } from 'lucide-react';
 import type { Project, ProjectStatus } from '@/types';
 import { GitHubRepoPicker } from './GitHubRepoPicker';
 import { TeamMemberSelector } from './TeamMemberSelector';
@@ -48,6 +48,8 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [githubUrl, setGithubUrl] = useState<string | null>(project?.githubUrl || null);
   const [deploymentUrl, setDeploymentUrl] = useState(project?.deploymentUrl || '');
+  const [apiUrl, setApiUrl] = useState(project?.apiUrl || '');
+  const [previewUrl, setPreviewUrl] = useState(project?.previewUrl || '');
   const [status, setStatus] = useState<ProjectStatus>(project?.status || 'in_talks');
   const [startDate, setStartDate] = useState(
     project?.startDate ? new Date(project.startDate).toISOString().split('T')[0] : ''
@@ -66,6 +68,8 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
       setLogoPreview(project.logoUrl || null);
       setGithubUrl(project.githubUrl || null);
       setDeploymentUrl(project.deploymentUrl || '');
+      setApiUrl(project.apiUrl || '');
+      setPreviewUrl(project.previewUrl || '');
       setStatus(project.status || 'in_talks');
       setStartDate(
         project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : ''
@@ -144,6 +148,8 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
       logoUrl: logoUrl || undefined,
       githubUrl: githubUrl || undefined,
       deploymentUrl: deploymentUrl || undefined,
+      apiUrl: apiUrl || undefined,
+      previewUrl: previewUrl || undefined,
       status,
       startDate: startDate ? new Date(startDate).toISOString() : undefined,
       targetEndDate: targetEndDate ? new Date(targetEndDate).toISOString() : undefined,
@@ -182,7 +188,7 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <ScrollArea className="h-[500px] pr-4">
+      <ScrollArea className="h-[600px] pr-4">
         <div className="space-y-4">
           {/* Project Identity Section */}
           <div className="p-4 rounded-xl bg-muted/50 border border-border/50 space-y-4">
@@ -311,19 +317,52 @@ export function ProjectForm({ project, onSubmit, onCancel, isLoading, initialMem
               />
             </div>
 
-            {/* Live Link */}
-            <div className="space-y-2">
-              <Label className="text-muted-foreground text-sm flex items-center gap-2">
-                <Globe className="h-4 w-4" />
-                Live Link
-              </Label>
-              <Input
-                type="url"
-                placeholder="https://myproject.com"
-                value={deploymentUrl}
-                onChange={(e) => setDeploymentUrl(e.target.value)}
-                className="bg-background/50 border-border/50"
-              />
+            {/* URLs Grid - 2 columns on desktop */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Live Link */}
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Live Link
+                </Label>
+                <Input
+                  type="url"
+                  placeholder="https://myproject.com"
+                  value={deploymentUrl}
+                  onChange={(e) => setDeploymentUrl(e.target.value)}
+                  className="bg-background/50 border-border/50"
+                />
+              </div>
+
+              {/* Preview URL */}
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  Preview URL
+                </Label>
+                <Input
+                  type="url"
+                  placeholder="https://staging.myproject.com"
+                  value={previewUrl}
+                  onChange={(e) => setPreviewUrl(e.target.value)}
+                  className="bg-background/50 border-border/50"
+                />
+              </div>
+
+              {/* API URL */}
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-muted-foreground text-sm flex items-center gap-2">
+                  <Server className="h-4 w-4" />
+                  API URL
+                </Label>
+                <Input
+                  type="url"
+                  placeholder="https://api.myproject.com"
+                  value={apiUrl}
+                  onChange={(e) => setApiUrl(e.target.value)}
+                  className="bg-background/50 border-border/50"
+                />
+              </div>
             </div>
           </div>
 

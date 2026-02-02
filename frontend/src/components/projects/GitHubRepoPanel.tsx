@@ -616,7 +616,7 @@ function IssuesList({ owner, repo, projectId }: { owner: string; repo: string; p
   const [issueState, setIssueState] = useState<'open' | 'closed' | 'all'>('open');
   const { data: issues, isLoading } = useGitHubIssues(owner, repo, {
     state: issueState,
-    perPage: 30,
+    perPage: 20,
   });
 
   if (isLoading) {
@@ -659,113 +659,90 @@ function IssuesList({ owner, repo, projectId }: { owner: string; repo: string; p
         </Button>
       </div>
 
-      <ScrollArea className="h-[420px]">
-        {issues?.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <CircleAlert className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p>No {issueState === 'all' ? '' : issueState} issues</p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {issues?.map((issue) => (
-              <div
-                key={issue.id}
-                className="p-3 hover:bg-secondary/80 rounded border border-transparent hover:border-border transition-colors group"
-              >
-                <div className="flex items-start gap-3">
-                  {/* Issue Icon */}
-                  <div className="shrink-0 mt-0.5">
-                    {issue.state === 'closed' ? (
-                      <CheckCircle2 className="h-5 w-5 text-purple-400" />
-                    ) : (
-                      <CircleAlert className="h-5 w-5 text-green-400" />
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={issue.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm font-medium truncate hover:underline"
-                      >
-                        {issue.title}
-                      </a>
-                    </div>
-
-                    {/* Labels */}
-                    {issue.labels.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {issue.labels.map((label) => (
-                          <Badge
-                            key={label.name}
-                            variant="outline"
-                            className="text-xs px-1.5 py-0"
-                            style={{
-                              borderColor: `#${label.color}`,
-                              color: `#${label.color}`,
-                            }}
-                          >
-                            {label.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <span className="font-medium text-foreground/80">#{issue.number}</span>
-                        <span>opened</span>
-                        <Clock className="h-3 w-3" />
-                        <span>{formatRelativeDate(issue.createdAt)}</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        by
-                        {issue.user.avatar_url && (
-                          <img
-                            src={issue.user.avatar_url}
-                            alt={issue.user.login}
-                            className="h-4 w-4 rounded-full"
-                          />
-                        )}
-                        <span className="font-medium">{issue.user.login}</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Convert to Task Button */}
-                  {projectId && issue.state === 'open' && (
-                    <div className="shrink-0">
-                      <ProcessIssueButton
-                        projectId={projectId}
-                        issueNumber={issue.number}
-                        issueTitle={issue.title}
-                        size="sm"
-                        variant="outline"
-                        showLabel
-                      />
-                    </div>
+      {issues?.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <CircleAlert className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p>No {issueState === 'all' ? '' : issueState} issues</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {issues?.map((issue) => (
+            <div
+              key={issue.id}
+              className="p-3 hover:bg-secondary/80 rounded border border-transparent hover:border-border transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                {/* Issue Icon */}
+                <div className="shrink-0">
+                  {issue.state === 'closed' ? (
+                    <CheckCircle2 className="h-5 w-5 text-purple-400" />
+                  ) : (
+                    <CircleAlert className="h-5 w-5 text-green-400" />
                   )}
+                </div>
 
-                  {/* External link */}
+                {/* Content */}
+                <div className="flex-1 min-w-0">
                   <a
                     href={issue.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-sm font-medium hover:underline line-clamp-1"
                   >
-                    <Button variant="ghost" size="sm" className="h-7 px-2">
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
+                    {issue.title}
                   </a>
+
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground/80">#{issue.number}</span>
+                    <span className="hidden sm:inline">·</span>
+                    <span className="hidden sm:flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {formatRelativeDate(issue.createdAt)}
+                    </span>
+                    <span className="hidden sm:inline">·</span>
+                    <span className="hidden sm:flex items-center gap-1">
+                      {issue.user.avatar_url && (
+                        <img
+                          src={issue.user.avatar_url}
+                          alt={issue.user.login}
+                          className="h-4 w-4 rounded-full"
+                        />
+                      )}
+                      {issue.user.login}
+                    </span>
+                    {/* Labels inline */}
+                    {issue.labels.slice(0, 2).map((label) => (
+                      <Badge
+                        key={label.name}
+                        variant="outline"
+                        className="text-xs px-1.5 py-0 hidden md:inline-flex"
+                        style={{
+                          borderColor: `#${label.color}`,
+                          color: `#${label.color}`,
+                        }}
+                      >
+                        {label.name}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Convert to Task Button - icon style on right */}
+                {projectId && issue.state === 'open' && (
+                  <ProcessIssueButton
+                    projectId={projectId}
+                    issueNumber={issue.number}
+                    issueTitle={issue.title}
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0 h-9 w-9 rounded-lg bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 hover:border-purple-500/50"
+                  />
+                )}
               </div>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
