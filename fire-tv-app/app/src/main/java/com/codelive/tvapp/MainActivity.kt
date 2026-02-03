@@ -30,10 +30,10 @@ class MainActivity : Activity() {
         private const val TV_URL_LOCAL = "http://192.168.1.100:3000/tv/projects"
 
         // For production (deployed URL)
-        private const val TV_URL_PRODUCTION = "https://your-domain.com/tv/projects"
+        private const val TV_URL_PRODUCTION = "https://dispotree-web.fly.dev/tv/projects"
 
         // Set which URL to use
-        private const val USE_PRODUCTION = false
+        private const val USE_PRODUCTION = true
 
         val TV_URL: String
             get() = if (USE_PRODUCTION) TV_URL_PRODUCTION else TV_URL_LOCAL
