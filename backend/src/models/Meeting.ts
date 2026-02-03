@@ -58,6 +58,7 @@ export interface MeetingAttributes {
   notes: string | null;
   agenda: string | null;
   recordingUrl: string | null;
+  recordingStoragePath: string | null; // Wasabi storage path for permanent recording
   transcriptUrl: string | null;
 
   // Calendar sync
@@ -92,6 +93,7 @@ export interface MeetingCreationAttributes
     | 'notes'
     | 'agenda'
     | 'recordingUrl'
+    | 'recordingStoragePath'
     | 'transcriptUrl'
     | 'calendarEventId'
     | 'calendarProvider'
@@ -135,6 +137,7 @@ class Meeting
   declare notes: string | null;
   declare agenda: string | null;
   declare recordingUrl: string | null;
+  declare recordingStoragePath: string | null;
   declare transcriptUrl: string | null;
 
   declare calendarEventId: string | null;
@@ -371,6 +374,11 @@ Meeting.init(
       type: DataTypes.TEXT,
       allowNull: true,
       field: 'recording_url',
+    },
+    recordingStoragePath: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'recording_storage_path',
     },
     transcriptUrl: {
       type: DataTypes.TEXT,

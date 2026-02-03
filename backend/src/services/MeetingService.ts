@@ -23,6 +23,7 @@ import MarketplaceUser from '../models/MarketplaceUser';
 import Project from '../models/Project';
 import { meetingNotificationService } from './MeetingNotificationService';
 import { activityFeedService } from './ActivityFeedService';
+import { meetingTranscriptionService } from './MeetingTranscriptionService';
 
 // =============================================================================
 // TYPES
@@ -212,6 +213,7 @@ class MeetingService {
     options?: {
       maxParticipants?: number;
       enableRecording?: boolean;
+      enableTranscription?: boolean;
       enableWaitingRoom?: boolean;
       expiryMinutes?: number;
     }
@@ -222,6 +224,30 @@ class MeetingService {
     }
 
     try {
+      // Build room properties
+      const properties: Record<string, unknown> = {
+        max_participants: options?.maxParticipants || 50,
+        enable_chat: true,
+        enable_screenshare: true,
+        enable_knocking: options?.enableWaitingRoom || false,
+      };
+
+      // Enable cloud recording if requested
+      if (options?.enableRecording) {
+        properties.enable_recording = 'cloud';
+      }
+
+      // Enable transcription (uses Deepgram via Daily.co)
+      // Default to enabled for all video meetings
+      if (options?.enableTranscription !== false) {
+        properties.enable_transcription_storage = true;
+      }
+
+      // Set room expiry
+      if (options?.expiryMinutes) {
+        properties.exp = Math.floor(Date.now() / 1000) + options.expiryMinutes * 60;
+      }
+
       const response = await fetch('https://api.daily.co/v1/rooms', {
         method: 'POST',
         headers: {
@@ -231,16 +257,7 @@ class MeetingService {
         body: JSON.stringify({
           name: roomName,
           privacy: 'private', // Requires token to join
-          properties: {
-            max_participants: options?.maxParticipants || 50,
-            enable_chat: true,
-            enable_screenshare: true,
-            enable_recording: options?.enableRecording ? 'cloud' : undefined,
-            enable_knocking: options?.enableWaitingRoom || false,
-            exp: options?.expiryMinutes
-              ? Math.floor(Date.now() / 1000) + options.expiryMinutes * 60
-              : undefined,
-          },
+          properties,
         }),
       });
 
@@ -334,6 +351,79 @@ class MeetingService {
     return `https://${this.dailyDomain}.daily.co/${roomName}`;
   }
 
+  /**
+   * Start transcription for a Daily.co room with speaker diarization enabled
+   * This uses Deepgram via Daily.co with diarize=true for speaker identification
+   */
+  async startDailyTranscription(roomName: string): Promise<boolean> {
+    if (!this.isDailyConfigured()) {
+      console.warn('[MeetingService] Daily.co not configured, cannot start transcription');
+      return false;
+    }
+
+    try {
+      const response = await fetch(
+        `https://api.daily.co/v1/rooms/${roomName}/transcription/start`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.dailyApiKey}`,
+          },
+          body: JSON.stringify({
+            // Use nova-2-meeting model optimized for multi-speaker meetings
+            model: 'nova-2-meeting',
+            // Enable punctuation for better readability
+            punctuate: true,
+            // Extra Deepgram parameters for speaker diarization
+            extra: {
+              diarize: true,        // Enable speaker diarization
+              utterances: true,     // Group words into utterances by speaker
+              smart_format: true,   // Enable smart formatting
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        // 400 errors may mean transcription is already running or room not active yet
+        const errorText = await response.text();
+        console.warn(`[MeetingService] Failed to start Daily transcription for ${roomName}: ${response.status} - ${errorText}`);
+        return false;
+      }
+
+      console.log(`[MeetingService] Started transcription with diarization for room ${roomName}`);
+      return true;
+    } catch (error) {
+      console.error('[MeetingService] Error starting Daily transcription:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Stop transcription for a Daily.co room
+   */
+  async stopDailyTranscription(roomName: string): Promise<boolean> {
+    if (!this.isDailyConfigured()) return false;
+
+    try {
+      const response = await fetch(
+        `https://api.daily.co/v1/rooms/${roomName}/transcription/stop`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.dailyApiKey}`,
+          },
+        }
+      );
+
+      return response.ok;
+    } catch (error) {
+      console.error('[MeetingService] Error stopping Daily transcription:', error);
+      return false;
+    }
+  }
+
   // ===========================================================================
   // MEETING CRUD
   // ===========================================================================
@@ -400,7 +490,8 @@ class MeetingService {
       if (this.isDailyConfigured()) {
         const dailyRoom = await this.createDailyRoom(room.roomName, {
           maxParticipants: roomOptions?.maxParticipants,
-          enableRecording: roomOptions?.recordingEnabled,
+          // Enable recording by default (can be overridden by roomOptions)
+          enableRecording: roomOptions?.recordingEnabled !== false,
           enableWaitingRoom: roomOptions?.waitingRoomEnabled,
           expiryMinutes: duration + 60, // Room expires 1 hour after scheduled end
         });
@@ -811,6 +902,20 @@ class MeetingService {
       const room = await MeetingRoom.findByPk(meeting.videoRoomId);
       if (room) {
         await room.start();
+
+        // Start transcription with speaker diarization (non-blocking)
+        // Note: Transcription requires at least one participant in the room
+        // We start it after a short delay to allow participant to join
+        setTimeout(async () => {
+          try {
+            const started = await this.startDailyTranscription(room.roomName);
+            if (started) {
+              console.log(`[MeetingService] Transcription with diarization started for meeting "${meeting.title}"`);
+            }
+          } catch (err) {
+            console.warn(`[MeetingService] Failed to auto-start transcription:`, err);
+          }
+        }, 5000); // 5 second delay to allow participant to join
       }
     }
 
@@ -838,6 +943,13 @@ class MeetingService {
 
     if (!meeting) return null;
 
+    // Get room info before ending (for transcription)
+    let roomName: string | undefined;
+    if (meeting.videoRoomId) {
+      const room = await MeetingRoom.findByPk(meeting.videoRoomId);
+      roomName = room?.roomName;
+    }
+
     await meeting.update({
       status: 'completed',
       endedAt: new Date(),
@@ -858,6 +970,14 @@ class MeetingService {
         organizationId
       )
       .catch((err) => console.error('[MeetingService] Failed to log meeting_ended activity:', err));
+
+    // Auto-transcribe if recording is available (non-blocking)
+    // This runs in the background and fetches the recording from Daily.co if configured
+    if (meeting.meetingType === 'video') {
+      meetingTranscriptionService
+        .autoTranscribeIfRecordingAvailable(meetingId, roomName)
+        .catch((err) => console.error('[MeetingService] Auto-transcription failed:', err));
+    }
 
     return this.getMeetingById(meetingId, organizationId);
   }

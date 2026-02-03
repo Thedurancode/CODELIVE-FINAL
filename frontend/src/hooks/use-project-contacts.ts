@@ -5,7 +5,10 @@ import type { ProjectContact } from '@/types';
 export function useProjectContacts(projectId: string) {
   return useQuery({
     queryKey: ['projectContacts', projectId],
-    queryFn: () => api.get<ProjectContact[]>(`/api/projects/${projectId}/contacts`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectContact[] }>(`/api/projects/${projectId}/contacts`);
+      return response.data;
+    },
     enabled: !!projectId,
   });
 }

@@ -12,6 +12,7 @@ export { SpriteManagementPanel } from './SpriteManagementPanel';
 export { SpriteStatusBadge, SpriteStatusDot } from './SpriteStatusBadge';
 export { SpritePanel } from './SpritePanel';
 export { SpriteChatPanel } from './SpriteChatPanel';
+export { AutomakerPanel } from './AutomakerPanel';
 export { SpriteServicesPanel } from './SpriteServicesPanel';
 export { SpriteMcpPanel } from './SpriteMcpPanel';
 export { McpRegistryBrowser } from './McpRegistryBrowser';

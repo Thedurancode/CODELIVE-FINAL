@@ -319,6 +319,58 @@ router.post('/config/github', spritesController.setGitHubToken);
  */
 router.delete('/config/github', spritesController.removeGitHubToken);
 
+/**
+ * @swagger
+ * /api/sprites/config/anthropic:
+ *   get:
+ *     summary: Check if Anthropic API key (Z.AI) is configured
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: API key status
+ */
+router.get('/config/anthropic', spritesController.getAnthropicApiKeyStatus);
+
+/**
+ * @swagger
+ * /api/sprites/config/anthropic:
+ *   post:
+ *     summary: Set Anthropic API key (Z.AI) for sprites
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               apiKey:
+ *                 type: string
+ *                 description: Z.AI API key
+ *     responses:
+ *       200:
+ *         description: API key configured
+ */
+router.post('/config/anthropic', spritesController.setAnthropicApiKey);
+
+/**
+ * @swagger
+ * /api/sprites/config/anthropic:
+ *   delete:
+ *     summary: Remove Anthropic API key
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: API key removed
+ */
+router.delete('/config/anthropic', spritesController.removeAnthropicApiKey);
+
 // ============================================================================
 // SPRITES CRUD
 // ============================================================================

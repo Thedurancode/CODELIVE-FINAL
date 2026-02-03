@@ -13,7 +13,7 @@ import { useTVRemoteReceiver, generateRoomCode, type TVRemoteHandlers, type Slid
 const queryClient = new QueryClient();
 
 // ============ SLIDESHOW TYPES ============
-type SlideType = 'overview' | 'column-active' | 'column-on_hold' | 'column-completed' | 'column-archived' | 'logo' | 'top3' | 'video' | 'youtube' | 'recent-issues' | 'recent-commits' | 'hacker-news' | 'reddit';
+type SlideType = 'overview' | 'column-in_talks' | 'column-now_coding' | 'column-needs_review' | 'column-completed' | 'logo' | 'top3' | 'video' | 'youtube' | 'recent-issues' | 'recent-commits' | 'hacker-news' | 'reddit';
 
 interface SlideConfig {
   type: SlideType;
@@ -34,7 +34,7 @@ const DEFAULT_SLIDESHOW_SETTINGS: SlideshowSettings = {
   enabled: false,
   slides: [
     { type: 'overview', duration: 20, label: 'All Projects' },
-    { type: 'column-active', duration: 20, label: 'In Talks' },
+    { type: 'column-in_talks', duration: 20, label: 'In Talks' },
     { type: 'reddit', duration: 30, label: 'Reddit Feed' },
     { type: 'logo', duration: 5, label: 'Logo' },
   ],
@@ -79,10 +79,10 @@ function SettingsPanel({
     { type: 'recent-commits', label: 'Recent Commits' },
     { type: 'hacker-news', label: 'Hacker News Feed' },
     { type: 'reddit', label: 'Reddit Feed' },
-    { type: 'column-active', label: 'Active Column Only' },
-    { type: 'column-on_hold', label: 'On Hold Column Only' },
+    { type: 'column-in_talks', label: 'In Talks Column Only' },
+    { type: 'column-now_coding', label: 'Now Coding Column Only' },
+    { type: 'column-needs_review', label: 'Needs Review Column Only' },
     { type: 'column-completed', label: 'Completed Column Only' },
-    { type: 'column-archived', label: 'Archived Column Only' },
     { type: 'logo', label: 'Logo Screen' },
     { type: 'video', label: 'MP4 Video', hasUrl: true },
     { type: 'youtube', label: 'YouTube Video', hasUrl: true },
@@ -1994,7 +1994,7 @@ function RedditSlide({ subreddits = DEFAULT_SUBREDDITS }: { subreddits?: string[
 // ============ TOP 3 SLIDE ============
 function Top3Slide({ projects }: { projects: Project[] }) {
   const activeProjects = projects
-    .filter(p => p.status === 'active')
+    .filter(p => p.status === 'in_talks')
     .slice(0, 3);
 
   return (
@@ -2257,7 +2257,7 @@ function ProjectDetailModal({ project, onClose }: { project: Project; onClose: (
 
   const isOverdue = project.isOverdue || (
     project.targetEndDate &&
-    !['completed', 'archived', 'cancelled'].includes(project.status) &&
+    !['completed', 'cancelled'].includes(project.status) &&
     new Date(project.targetEndDate) < new Date()
   );
 
@@ -2586,7 +2586,7 @@ function ProjectDetailModal({ project, onClose }: { project: Project; onClose: (
 function ProjectCard({ project, onClick }: { project: Project; onClick: () => void }) {
   const isOverdue = project.isOverdue || (
     project.targetEndDate &&
-    !['completed', 'archived', 'cancelled'].includes(project.status) &&
+    !['completed', 'cancelled'].includes(project.status) &&
     new Date(project.targetEndDate) < new Date()
   );
 
@@ -2674,10 +2674,10 @@ function ProjectCard({ project, onClick }: { project: Project; onClick: () => vo
 
 // ============ COLUMN CONFIG ============
 const columns: { status: ProjectStatus; label: string; icon: React.ElementType; headerColor: string; countColor: string }[] = [
-  { status: 'active', label: 'In Talks', icon: MessageSquare, headerColor: 'text-emerald-400', countColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-  { status: 'on_hold', label: 'Now Coding', icon: Rocket, headerColor: 'text-amber-400', countColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
-  { status: 'completed', label: 'In Review', icon: CircleDot, headerColor: 'text-blue-400', countColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
-  { status: 'archived', label: 'Complete', icon: CheckCircle2, headerColor: 'text-zinc-400', countColor: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30' },
+  { status: 'in_talks', label: 'In Talks', icon: MessageSquare, headerColor: 'text-emerald-400', countColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  { status: 'now_coding', label: 'Now Coding', icon: Rocket, headerColor: 'text-amber-400', countColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+  { status: 'needs_review', label: 'Needs Review', icon: CircleDot, headerColor: 'text-blue-400', countColor: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+  { status: 'completed', label: 'Complete', icon: CheckCircle2, headerColor: 'text-zinc-400', countColor: 'bg-zinc-500/20 text-zinc-300 border-zinc-500/30' },
 ];
 
 // ============ MAIN BOARD ============
@@ -2844,7 +2844,7 @@ function TVBoard() {
 
   const { data, isLoading, error, dataUpdatedAt, isRefetching, refetch } = useQuery({
     queryKey: ['projects-tv-board'],
-    queryFn: () => api.get<PaginatedResponse<Project>>('/api/projects?limit=200'),
+    queryFn: () => api.get<{ data: Project[]; total: number }>('/api/projects/tv-display?limit=200'),
     refetchInterval: 10000,
     refetchIntervalInBackground: true,
   });
@@ -3114,14 +3114,14 @@ function TVBoard() {
         return currentSlide.url ? <VideoSlide url={currentSlide.url} label={currentSlide.label} /> : <LogoSlide />;
       case 'youtube':
         return currentSlide.url ? <YouTubeSlide url={currentSlide.url} label={currentSlide.label} /> : <LogoSlide />;
-      case 'column-active':
-        return <SingleColumnSlide projects={projects} status="active" config={columns[0]} />;
-      case 'column-on_hold':
-        return <SingleColumnSlide projects={projects} status="on_hold" config={columns[1]} />;
+      case 'column-in_talks':
+        return <SingleColumnSlide projects={projects} status="in_talks" config={columns[0]} />;
+      case 'column-now_coding':
+        return <SingleColumnSlide projects={projects} status="now_coding" config={columns[1]} />;
+      case 'column-needs_review':
+        return <SingleColumnSlide projects={projects} status="needs_review" config={columns[2]} />;
       case 'column-completed':
-        return <SingleColumnSlide projects={projects} status="completed" config={columns[2]} />;
-      case 'column-archived':
-        return <SingleColumnSlide projects={projects} status="archived" config={columns[3]} />;
+        return <SingleColumnSlide projects={projects} status="completed" config={columns[3]} />;
       case 'overview':
       default:
         return (

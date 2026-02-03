@@ -459,6 +459,96 @@ class SpritesService {
   }
 
   // ============================================================================
+  // ANTHROPIC API KEY MANAGEMENT (Z.AI)
+  // ============================================================================
+
+  /**
+   * Get Anthropic API key for organization from secure storage
+   * Used to configure Claude CLI in sprites with Z.AI proxy
+   * Falls back to 'default' organization key if org-specific key not found
+   */
+  async getAnthropicApiKey(organizationId: string): Promise<string | null> {
+    // Check cache first
+    const cacheKey = `anthropic:${organizationId}`;
+    const cached = this.tokenCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.token;
+    }
+
+    // Retrieve from SecureCredentialStore
+    const credentialStore = getCredentialStore();
+    let credential = await credentialStore.getCredential(`anthropic:org:${organizationId}`);
+
+    // Fallback to 'default' organization key if org-specific not found
+    if (!credential && organizationId !== 'default') {
+      credential = await credentialStore.getCredential('anthropic:org:default');
+      if (credential) {
+        console.log(`[SpritesService] Using default Anthropic API key for org: ${organizationId}`);
+      }
+    }
+
+    if (credential) {
+      // Cache for 5 minutes
+      this.tokenCache.set(cacheKey, {
+        token: credential.password,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      });
+      return credential.password;
+    }
+
+    return null;
+  }
+
+  /**
+   * Store Anthropic API key for organization
+   * @param organizationId - The organization ID
+   * @param apiKey - The Z.AI API key
+   */
+  async setAnthropicApiKey(organizationId: string, apiKey: string): Promise<void> {
+    const credentialStore = getCredentialStore();
+    await credentialStore.setCredential(
+      `anthropic:org:${organizationId}`,
+      'anthropic_api_key',
+      apiKey,
+      { type: 'anthropic', organizationId, provider: 'z.ai' }
+    );
+
+    // Update cache
+    this.tokenCache.set(`anthropic:${organizationId}`, {
+      token: apiKey,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+
+    console.log(`🔐 Anthropic API key stored for organization: ${organizationId}`);
+  }
+
+  /**
+   * Remove Anthropic API key for organization
+   */
+  async removeAnthropicApiKey(organizationId: string): Promise<boolean> {
+    const credentialStore = getCredentialStore();
+    const deleted = await credentialStore.deleteCredential(`anthropic:org:${organizationId}`);
+    this.tokenCache.delete(`anthropic:${organizationId}`);
+    return deleted;
+  }
+
+  /**
+   * Check if organization has Anthropic API key configured
+   */
+  async hasAnthropicApiKey(organizationId: string): Promise<boolean> {
+    const key = await this.getAnthropicApiKey(organizationId);
+    return key !== null;
+  }
+
+  /**
+   * Get Anthropic API key prefix for display (first 8 chars)
+   */
+  async getAnthropicApiKeyPrefix(organizationId: string): Promise<string | null> {
+    const key = await this.getAnthropicApiKey(organizationId);
+    return key ? key.substring(0, 8) : null;
+  }
+
+  // ============================================================================
   // API REQUEST HELPER
   // ============================================================================
 
@@ -705,6 +795,9 @@ class SpritesService {
       const githubToken = await this.getGitHubToken(sprite.organizationId);
       let githubConfigured = false;
 
+      // Get Anthropic API key for the organization (if configured)
+      const anthropicApiKey = await this.getAnthropicApiKey(sprite.organizationId);
+
       // Generate feature branch name for this sprite
       // Format: sprite/{spriteName} - unique per sprite, easy to identify
       const featureBranch = `sprite/${sprite.spriteName}`;
@@ -767,13 +860,37 @@ class SpritesService {
         );
       }
 
-      // Install Claude CLI
+      // Install Claude CLI and configure with Z.AI
       commands.push(
         // Install Claude CLI if not present
         `which claude || npm install -g @anthropic-ai/claude-code`,
         // Verify Claude
         `claude --version`
       );
+
+      // Configure Claude CLI with Z.AI API (if Anthropic API key is configured)
+      if (anthropicApiKey) {
+        console.log(`[SpritesService] Configuring Claude CLI with Z.AI API key for sprite ${sprite.spriteName}`);
+        const claudeSettings = {
+          env: {
+            ANTHROPIC_AUTH_TOKEN: anthropicApiKey,
+            ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
+            API_TIMEOUT_MS: '3000000',
+          },
+        };
+        // Escape the JSON for shell command
+        const settingsJson = JSON.stringify(claudeSettings).replace(/'/g, "'\\''");
+        commands.push(
+          // Create .claude directory if it doesn't exist
+          `mkdir -p ~/.claude`,
+          // Write settings.json with Z.AI configuration
+          `echo '${settingsJson}' > ~/.claude/settings.json`,
+          // Verify the settings file was created
+          `cat ~/.claude/settings.json`
+        );
+      } else {
+        console.log(`[SpritesService] No Anthropic API key found for org ${sprite.organizationId} - Claude will require manual auth`);
+      }
 
       // Filter out null commands
       const filteredCommands = commands.filter(Boolean) as string[];
@@ -900,67 +1017,78 @@ class SpritesService {
 
   /**
    * Stop a sprite by creating a checkpoint (forces hibernate) and setting URL to private
+   * @param spriteId - The sprite ID to stop
+   * @param options.quick - If true, skip checkpoint creation for faster shutdown (sprite will auto-hibernate)
    */
-  async stopSprite(spriteId: string): Promise<void> {
+  async stopSprite(spriteId: string, options?: { quick?: boolean }): Promise<void> {
     const sprite = await ProjectSprite.findByPk(spriteId);
     if (!sprite) throw new Error('Sprite not found');
+
+    const quickStop = options?.quick ?? false;
 
     // Store the previous auth setting so we can restore it on resume
     const previousAuth = sprite.urlSettings?.auth || 'sprite';
 
-    // Stop all running MCP servers first
+    // Stop all running MCP servers first (do this in parallel for speed)
     // Import dynamically to avoid circular dependency
-    try {
-      const { spriteMcpService } = await import('./SpriteMcpService');
-      const stoppedCount = await spriteMcpService.stopAllServers(sprite.id);
-      if (stoppedCount > 0) {
-        console.log(`[SpritesService] Stopped ${stoppedCount} MCP servers on sprite ${sprite.id}`);
+    const mcpStopPromise = (async () => {
+      try {
+        const { spriteMcpService } = await import('./SpriteMcpService');
+        const stoppedCount = await spriteMcpService.stopAllServers(sprite.id);
+        if (stoppedCount > 0) {
+          console.log(`[SpritesService] Stopped ${stoppedCount} MCP servers on sprite ${sprite.id}`);
+        }
+      } catch (error) {
+        console.error(`[SpritesService] Error stopping MCP servers:`, error);
       }
-    } catch (error) {
-      // Don't fail the stop if MCP server stop fails
-      console.error(`[SpritesService] Error stopping MCP servers:`, error);
-    }
+    })();
 
     // Update status to show we're stopping
     await sprite.update({
-      status: 'checkpointing',
-      statusMessage: 'Stopping and saving state...',
+      status: quickStop ? 'stopped' : 'checkpointing',
+      statusMessage: quickStop ? 'Quick stop (no checkpoint)...' : 'Stopping and saving state...',
     });
 
-    // Create a checkpoint to save state and force hibernate
-    try {
-      const response = await this.request<Response>(
-        sprite.organizationId,
-        'POST',
-        `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/checkpoint`,
-        { comment: 'Stopped by user' },
-        { stream: true, timeout: 120000 }
-      );
+    // For quick stop, skip checkpointing - just let the sprite auto-hibernate
+    if (!quickStop) {
+      // Create a checkpoint to save state and force hibernate
+      try {
+        const response = await this.request<Response>(
+          sprite.organizationId,
+          'POST',
+          `/v1/sprites/${encodeURIComponent(sprite.spriteName)}/checkpoint`,
+          { comment: 'Stopped by user' },
+          { stream: true, timeout: 120000 }
+        );
 
-      // Process streaming response
-      const messages = await this.processStream(response as unknown as Response);
-      const completeMsg = messages.find((m) => m.type === 'complete');
+        // Process streaming response
+        const messages = await this.processStream(response as unknown as Response);
+        const completeMsg = messages.find((m) => m.type === 'complete');
 
-      if (!completeMsg) {
-        const errorMsg = messages.find((m) => m.type === 'error');
-        console.warn('Checkpoint during stop may have issues:', errorMsg?.error);
-        // Continue anyway - we still want to mark as stopped
+        if (!completeMsg) {
+          const errorMsg = messages.find((m) => m.type === 'error');
+          console.warn('Checkpoint during stop may have issues:', errorMsg?.error);
+          // Continue anyway - we still want to mark as stopped
+        }
+
+        // Update checkpoint info
+        const checkpoints = await this.listCheckpoints(spriteId);
+        const latestCheckpoint = checkpoints[0];
+        if (latestCheckpoint) {
+          await sprite.update({
+            lastCheckpointId: latestCheckpoint.id,
+            lastCheckpointAt: new Date(),
+            checkpointCount: checkpoints.length,
+          });
+        }
+      } catch (error) {
+        console.warn('Checkpoint during stop failed:', error);
+        // Continue anyway - sprite may auto-hibernate, but we still mark as stopped
       }
-
-      // Update checkpoint info
-      const checkpoints = await this.listCheckpoints(spriteId);
-      const latestCheckpoint = checkpoints[0];
-      if (latestCheckpoint) {
-        await sprite.update({
-          lastCheckpointId: latestCheckpoint.id,
-          lastCheckpointAt: new Date(),
-          checkpointCount: checkpoints.length,
-        });
-      }
-    } catch (error) {
-      console.warn('Checkpoint during stop failed:', error);
-      // Continue anyway - sprite may auto-hibernate, but we still mark as stopped
     }
+
+    // Wait for MCP servers to stop
+    await mcpStopPromise;
 
     // Set URL to private (requires auth) so public link won't work
     try {
@@ -975,11 +1103,11 @@ class SpritesService {
     }
 
     // End the current session
-    await this.endSession(sprite.id, 'checkpointed');
+    await this.endSession(sprite.id, quickStop ? 'stopped' : 'checkpointed');
 
     await sprite.update({
       status: 'stopped',
-      statusMessage: 'Stopped by user',
+      statusMessage: quickStop ? 'Quick stopped (will auto-hibernate)' : 'Stopped by user',
       currentSessionId: null, // Clear session ID - shell processes are terminated during checkpoint
       urlSettings: {
         ...sprite.urlSettings,

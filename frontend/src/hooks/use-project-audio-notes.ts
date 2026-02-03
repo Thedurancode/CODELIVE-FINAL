@@ -5,7 +5,10 @@ import type { ProjectAudioNote } from '@/types';
 export function useProjectAudioNotes(projectId: string) {
   return useQuery({
     queryKey: ['projectAudioNotes', projectId],
-    queryFn: () => api.get<ProjectAudioNote[]>(`/api/projects/${projectId}/audio-notes`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectAudioNote[] }>(`/api/projects/${projectId}/audio-notes`);
+      return response.data;
+    },
     enabled: !!projectId,
     // Refetch every 10 seconds to catch transcription updates
     refetchInterval: 10000,
@@ -15,7 +18,10 @@ export function useProjectAudioNotes(projectId: string) {
 export function useProjectAudioNote(projectId: string, audioId: number | null) {
   return useQuery({
     queryKey: ['projectAudioNote', projectId, audioId],
-    queryFn: () => api.get<ProjectAudioNote>(`/api/projects/${projectId}/audio-notes/${audioId}`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectAudioNote }>(`/api/projects/${projectId}/audio-notes/${audioId}`);
+      return response.data;
+    },
     enabled: !!projectId && audioId !== null,
   });
 }

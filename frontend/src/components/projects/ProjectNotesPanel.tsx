@@ -21,6 +21,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from '@/components/ui/context-menu';
+import {
   Plus,
   MoreHorizontal,
   Trash2,
@@ -88,6 +95,7 @@ import {
   useDeleteProjectAudioNote,
   useRetryAudioNoteTranscription,
 } from '@/hooks/use-project-audio-notes';
+import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import type { ProjectNote, ProjectAudioNote } from '@/types';
 
@@ -549,19 +557,47 @@ function NoteAttachments({ projectId, noteId }: { projectId: string; noteId: num
   };
 
   if (isLoading) {
-    return null; // Don't show loading state for attachments
+    return null;
+  }
+
+  // Show minimal attach button if no attachments and not expanded
+  if (attachments.length === 0 && !isExpanded) {
+    return (
+      <div className="mt-2 flex items-center">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+          disabled={uploadAttachment.isPending}
+        >
+          {uploadAttachment.isPending ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <>
+              <Paperclip className="h-3 w-3" />
+              <span>Attach</span>
+            </>
+          )}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => handleFileSelect(e.target.files)}
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="mt-3 pt-3 border-t border-border/30">
+    <div className="mt-2 pt-2 border-t border-border/20">
       {/* Attachments header with toggle */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          <Paperclip className="h-3.5 w-3.5" />
-          <span>{attachments.length} attachment{attachments.length !== 1 ? 's' : ''}</span>
+          <Paperclip className="h-3 w-3" />
+          <span>{attachments.length} file{attachments.length !== 1 ? 's' : ''}</span>
           {attachments.length > 0 && (
             isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
           )}
@@ -569,17 +605,14 @@ function NoteAttachments({ projectId, noteId }: { projectId: string; noteId: num
         <Button
           size="sm"
           variant="ghost"
-          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+          className="h-5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploadAttachment.isPending}
         >
           {uploadAttachment.isPending ? (
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : (
-            <>
-              <Plus className="h-3 w-3 mr-1" />
-              Add
-            </>
+            <Plus className="h-3 w-3" />
           )}
         </Button>
         <input
@@ -591,32 +624,26 @@ function NoteAttachments({ projectId, noteId }: { projectId: string; noteId: num
       </div>
 
       {/* Expanded attachments list or drop zone */}
-      {(isExpanded || attachments.length === 0) && (
+      {isExpanded && (
         <div
-          className={`rounded-lg border border-dashed transition-colors ${
+          className={`mt-1.5 rounded border border-dashed transition-colors ${
             isDragging
               ? 'border-accent-500 bg-accent-500/10'
-              : 'border-border/50 hover:border-border'
+              : 'border-border/40'
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
           {attachments.length === 0 ? (
-            <div className="p-4 text-center">
-              <Paperclip className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">
-                Drop files here or{' '}
-                <button
-                  className="text-accent-400 hover:underline"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  browse
-                </button>
-              </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
-                Images, documents, audio, video (max 2GB, cloud storage for large files)
-              </p>
+            <div className="px-2 py-1.5 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              <span>Drop or</span>
+              <button
+                className="text-accent-400 hover:underline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                browse
+              </button>
             </div>
           ) : (
             <div className="p-2 space-y-1">
@@ -902,6 +929,10 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
   const [editingNote, setEditingNote] = useState<ProjectNote | null>(null);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+
+  // Pending attachments for new note
+  const [pendingAttachments, setPendingAttachments] = useState<File[]>([]);
+  const createAttachmentInputRef = useRef<HTMLInputElement>(null);
 
   // Merge dialog state
   const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
@@ -1375,14 +1406,34 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
       return;
     }
     try {
-      await createNote.mutateAsync({
+      const newNote = await createNote.mutateAsync({
         content: content.trim(),
         subject: subject || undefined,
       });
-      toast.success('Note created');
+
+      // Upload pending attachments if any
+      if (pendingAttachments.length > 0 && newNote?.id) {
+        const uploadPromises = pendingAttachments.map(async (file) => {
+          const formData = new FormData();
+          formData.append('file', file);
+          try {
+            await api.upload(`/api/projects/${projectId}/notes/${newNote.id}/attachments`, formData);
+          } catch (err) {
+            console.error('Failed to upload attachment:', file.name, err);
+          }
+        });
+        await Promise.all(uploadPromises);
+        if (pendingAttachments.length > 0) {
+          toast.success(`Note created with ${pendingAttachments.length} attachment${pendingAttachments.length > 1 ? 's' : ''}`);
+        }
+      } else {
+        toast.success('Note created');
+      }
+
       setIsCreateDialogOpen(false);
       setSubject('');
       setContent('');
+      setPendingAttachments([]);
       autoStartRef.current = false;
     } catch (error: any) {
       console.error('Failed to create note:', error);
@@ -1395,6 +1446,7 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
     autoStartRef.current = autoStartVoice;
     setSubject('');
     setContent('');
+    setPendingAttachments([]);
     setIsCreateDialogOpen(true);
   };
 
@@ -1522,7 +1574,7 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
           {notes?.length || 0} Note{notes?.length !== 1 ? 's' : ''}{audioNotes?.length > 0 && ` + ${audioNotes.length} Audio`}
         </h3>
         <div className="flex gap-2">
-          {/* Record Audio Button */}
+          {/* Upload Audio Transcript Dialog - Button hidden, accessed via context menu */}
           <Dialog open={isAudioDialogOpen} onOpenChange={(open) => {
             if (!open && isRecordingAudio) {
               stopRecordingAudio();
@@ -1533,7 +1585,7 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
               <Button
                 size="sm"
                 variant="outline"
-                className="border text-foreground"
+                className="hidden"
               >
                 <FileAudio className="h-4 w-4 mr-1" />
                 Record
@@ -1655,17 +1707,17 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
             </DialogContent>
           </Dialog>
 
-          {/* Voice Note Button - Auto-starts dictation */}
+          {/* Add Note Button - Auto-starts dictation */}
           <Button
             size="sm"
             variant="outline"
-            className="border text-foreground"
+            className="bg-green-500/20 border-green-500/50 text-green-400 hover:bg-green-500/30 hover:border-green-500/70 hover:text-green-300 backdrop-blur-sm"
             onClick={() => openCreateDialogWithVoice(true)}
           >
             <Mic className="h-4 w-4 mr-1" />
-            Voice
+            Add Note
           </Button>
-          {/* Regular Add Note Button */}
+          {/* Regular Add Note Button - Hidden, dialog opened via green button */}
           <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
             if (!open) {
               stopListening();
@@ -1674,7 +1726,7 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
             setIsCreateDialogOpen(open);
           }}>
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-accent-600 hover:bg-accent-700 text-white">
+              <Button size="sm" className="hidden">
                 <Plus className="h-4 w-4 mr-1" />
                 Add Note
               </Button>
@@ -1772,6 +1824,86 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                     Type @ to mention team members or contacts
                   </p>
                 </div>
+
+                {/* Attachments Section */}
+                <div className="border border-dashed border-border/50 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Paperclip className="h-4 w-4" />
+                      <span>Attachments</span>
+                      {pendingAttachments.length > 0 && (
+                        <span className="text-xs bg-accent-500/20 text-accent-400 px-1.5 py-0.5 rounded">
+                          {pendingAttachments.length}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => createAttachmentInputRef.current?.click()}
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add File
+                    </Button>
+                    <input
+                      ref={createAttachmentInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          const newFiles = Array.from(e.target.files);
+                          setPendingAttachments(prev => [...prev, ...newFiles]);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </div>
+                  {pendingAttachments.length === 0 ? (
+                    <p className="text-xs text-muted-foreground/60 text-center py-2">
+                      No attachments. Click "Add File" to attach files to this note.
+                    </p>
+                  ) : (
+                    <div className="space-y-1">
+                      {pendingAttachments.map((file, index) => (
+                        <div
+                          key={`${file.name}-${index}`}
+                          className="flex items-center justify-between gap-2 p-2 bg-secondary/50 rounded text-sm"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {file.type.startsWith('image/') ? (
+                              <Image className="h-4 w-4 text-blue-400 shrink-0" />
+                            ) : file.type.startsWith('video/') ? (
+                              <Film className="h-4 w-4 text-purple-400 shrink-0" />
+                            ) : file.type.startsWith('audio/') ? (
+                              <FileAudio className="h-4 w-4 text-green-400 shrink-0" />
+                            ) : (
+                              <File className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
+                            <span className="truncate">{file.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              ({(file.size / 1024).toFixed(1)} KB)
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+                            onClick={() => {
+                              setPendingAttachments(prev => prev.filter((_, i) => i !== index));
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
@@ -1781,6 +1913,7 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                       setIsCreateDialogOpen(false);
                       setSubject('');
                       setContent('');
+                      setPendingAttachments([]);
                       autoStartRef.current = false;
                     }}
                   >
@@ -2052,12 +2185,14 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                           }`} />
                         )}
 
-                        <Card
-                          className={`bg-secondary/50 border ${hasSimilar ? 'border-amber-500/50' : ''} ${
-                            isThreaded && isLast ? 'border-accent-500/50' : ''
-                          }`}
-                        >
-                          <CardContent className="p-4">
+                        <ContextMenu>
+                          <ContextMenuTrigger asChild>
+                            <Card
+                              className={`bg-secondary/50 border ${hasSimilar ? 'border-amber-500/50' : ''} ${
+                                isThreaded && isLast ? 'border-accent-500/50' : ''
+                              } cursor-context-menu`}
+                            >
+                              <CardContent className="p-4">
                             {/* Similarity Warning Banner */}
                             {hasSimilar && (
                               <div className="flex items-center justify-between gap-2 mb-3 p-2 bg-amber-500/10 rounded-lg border border-amber-500/30">
@@ -2091,7 +2226,7 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                                 {note.subject && (
                                   <h4 className="font-medium text-foreground mb-1">{note.subject}</h4>
                                 )}
-                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                <p className="text-base text-foreground/90 whitespace-pre-wrap leading-relaxed">
                                   {note.content}
                                 </p>
                                 <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
@@ -2121,6 +2256,13 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                                   >
                                     <Edit2 className="mr-2 h-4 w-4" />
                                     Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => setIsAudioDialogOpen(true)}
+                                    className="text-foreground cursor-pointer"
+                                  >
+                                    <Mic className="mr-2 h-4 w-4" />
+                                    Upload Audio Transcript
                                   </DropdownMenuItem>
                                   {hasSimilar && (
                                     <DropdownMenuItem
@@ -2155,7 +2297,52 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                             {/* Note Attachments */}
                             <NoteAttachments projectId={projectId} noteId={note.id} />
                           </CardContent>
-                        </Card>
+                            </Card>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent className="bg-secondary border">
+                            <ContextMenuItem
+                              onClick={() => openEditDialog(note)}
+                              className="cursor-pointer"
+                            >
+                              <Edit2 className="mr-2 h-4 w-4" />
+                              Edit
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onClick={() => setIsAudioDialogOpen(true)}
+                              className="cursor-pointer"
+                            >
+                              <Mic className="mr-2 h-4 w-4" />
+                              Upload Audio Transcript
+                            </ContextMenuItem>
+                            {hasSimilar && (
+                              <ContextMenuItem
+                                onClick={() => openMergeDialog(note, similarNotes[0])}
+                                className="text-amber-400 cursor-pointer"
+                              >
+                                <Merge className="mr-2 h-4 w-4" />
+                                Merge with similar
+                              </ContextMenuItem>
+                            )}
+                            {githubUrl && (
+                              <ContextMenuItem
+                                onClick={() => handleCreateGitHubIssue(note)}
+                                className="cursor-pointer"
+                                disabled={createGitHubIssue.isPending}
+                              >
+                                <Github className="mr-2 h-4 w-4" />
+                                Create GitHub Issue
+                              </ContextMenuItem>
+                            )}
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              onClick={() => handleDelete(note.id)}
+                              className="text-red-400 cursor-pointer"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       </div>
                     );
                   })}

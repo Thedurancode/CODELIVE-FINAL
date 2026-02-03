@@ -5,7 +5,10 @@ import type { ProjectEnvVariable } from '@/types';
 export function useProjectEnvVariables(projectId: string) {
   return useQuery({
     queryKey: ['projectEnvVariables', projectId],
-    queryFn: () => api.get<ProjectEnvVariable[]>(`/api/projects/${projectId}/env-variables`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectEnvVariable[] }>(`/api/projects/${projectId}/env-variables`);
+      return response.data;
+    },
     enabled: !!projectId,
   });
 }
@@ -45,7 +48,9 @@ export function useDeleteProjectEnvVariable(projectId: string) {
 
 export function useGetEnvVariableValue(projectId: string) {
   return useMutation({
-    mutationFn: (envId: number) =>
-      api.get<{ value: string }>(`/api/projects/${projectId}/env-variables/${envId}/value`),
+    mutationFn: async (envId: number) => {
+      const response = await api.get<{ data: { value: string } }>(`/api/projects/${projectId}/env-variables/${envId}/value`);
+      return response.data;
+    },
   });
 }

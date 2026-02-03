@@ -68,10 +68,11 @@ import {
   useEndMeeting,
   useMeetingRoomToken,
 } from '@/hooks/use-meetings';
-import { VideoRoom, VideoRoomPreJoin, MeetingParticipantsPanel } from '@/components/meetings';
+import { VideoRoom, VideoRoomPreJoin, MeetingParticipantsPanel, MeetingRecordingPlayer } from '@/components/meetings';
 import type { Meeting, MeetingStatus, MeetingType, CreateMeetingInput } from '@/types';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
+import { Film } from 'lucide-react';
 
 const statusColors: Record<MeetingStatus, string> = {
   scheduled: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
@@ -110,6 +111,7 @@ function MeetingCard({
   onDelete,
   onStart,
   onEnd,
+  onViewRecording,
 }: {
   meeting: Meeting;
   onJoin: (meeting: Meeting) => void;
@@ -117,6 +119,7 @@ function MeetingCard({
   onDelete: (meeting: Meeting) => void;
   onStart: (meeting: Meeting) => void;
   onEnd: (meeting: Meeting) => void;
+  onViewRecording: (meeting: Meeting) => void;
 }) {
   const startDate = new Date(meeting.scheduledAt);
   const endDate = meeting.endedAt ? new Date(meeting.endedAt) : null;
@@ -124,6 +127,7 @@ function MeetingCard({
   const canJoin =
     meeting.status === 'in_progress' ||
     (meeting.status === 'scheduled' && meeting.meetingType === 'video');
+  const hasRecording = meeting.status === 'completed' && meeting.meetingType === 'video';
 
   const getTimeDisplay = () => {
     if (isToday(startDate)) {
@@ -171,6 +175,12 @@ function MeetingCard({
                 Join
               </Button>
             )}
+            {hasRecording && (
+              <Button size="sm" variant="outline" onClick={() => onViewRecording(meeting)}>
+                <Film className="h-4 w-4 mr-1" />
+                Recording
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -206,6 +216,12 @@ function MeetingCard({
                     </a>
                   </DropdownMenuItem>
                 )}
+                {hasRecording && (
+                  <DropdownMenuItem onClick={() => onViewRecording(meeting)}>
+                    <Film className="h-4 w-4 mr-2" />
+                    View Recording
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => onDelete(meeting)}
@@ -235,6 +251,7 @@ export default function MeetingsPage() {
   const [roomUrl, setRoomUrl] = useState<string | null>(null);
   const [initialVideoEnabled, setInitialVideoEnabled] = useState(true);
   const [initialAudioEnabled, setInitialAudioEnabled] = useState(true);
+  const [viewingRecordingMeeting, setViewingRecordingMeeting] = useState<Meeting | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<Partial<CreateMeetingInput>>({
@@ -371,6 +388,10 @@ export default function MeetingsPage() {
 
   const handleJoinMeeting = async (meeting: Meeting) => {
     setJoiningMeeting(meeting);
+  };
+
+  const handleViewRecording = (meeting: Meeting) => {
+    setViewingRecordingMeeting(meeting);
   };
 
   const handlePreJoinComplete = async (name: string, email: string, videoEnabled: boolean, audioEnabled: boolean) => {
@@ -560,6 +581,7 @@ export default function MeetingsPage() {
               onDelete={handleDeleteMeeting}
               onStart={handleStartMeeting}
               onEnd={handleEndMeeting}
+              onViewRecording={handleViewRecording}
             />
           ))
         )}
@@ -800,6 +822,26 @@ export default function MeetingsPage() {
               {editingMeeting ? 'Save Changes' : 'Create Meeting'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recording Player Dialog */}
+      <Dialog
+        open={!!viewingRecordingMeeting}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingRecordingMeeting(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+          {viewingRecordingMeeting && (
+            <MeetingRecordingPlayer
+              meetingId={viewingRecordingMeeting.id}
+              meetingTitle={viewingRecordingMeeting.title}
+              showTranscript
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

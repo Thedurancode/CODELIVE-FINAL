@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,9 @@ import {
   ImageIcon,
   FileImage,
   Square,
+  Info,
+  Type,
+  Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -60,7 +64,26 @@ import {
   useUpdateProjectBrandAsset,
   useDeleteProjectBrandAsset,
 } from '@/hooks/use-project-brand-assets';
-import type { ProjectBrandAsset, BrandAssetType, BrandAssetVariant } from '@/types';
+import { useProject, useUpdateProject } from '@/hooks/use-projects';
+import type { ProjectBrandAsset, BrandAssetType, BrandAssetVariant, BrandSettings, BrandStyle } from '@/types';
+
+// Style options for design preferences
+const STYLE_OPTIONS: { value: BrandStyle; label: string; description: string }[] = [
+  { value: 'modern', label: 'Modern', description: 'Clean lines, minimalist approach' },
+  { value: 'classic', label: 'Classic', description: 'Timeless, traditional design' },
+  { value: 'minimalist', label: 'Minimalist', description: 'Simple, essential elements only' },
+  { value: 'bold', label: 'Bold', description: 'Strong, attention-grabbing visuals' },
+  { value: 'playful', label: 'Playful', description: 'Fun, energetic, and creative' },
+  { value: 'elegant', label: 'Elegant', description: 'Sophisticated and refined' },
+  { value: 'tech', label: 'Tech', description: 'Futuristic, digital-focused' },
+];
+
+// Common font options
+const FONT_OPTIONS = [
+  'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Raleway',
+  'Playfair Display', 'Merriweather', 'Source Sans Pro', 'Nunito', 'Work Sans',
+  'DM Sans', 'Space Grotesk', 'Outfit', 'Plus Jakarta Sans',
+];
 
 interface ProjectBrandPanelProps {
   projectId: string;
@@ -116,10 +139,76 @@ export function ProjectBrandPanel({ projectId }: ProjectBrandPanelProps) {
   const [editVariant, setEditVariant] = useState<BrandAssetVariant>('default');
   const [editIsPrimary, setEditIsPrimary] = useState(false);
 
+  // Brand assets hooks
   const { data: assets, isLoading, error, refetch } = useProjectBrandAssets(projectId);
   const createAsset = useCreateProjectBrandAsset(projectId);
   const updateAsset = useUpdateProjectBrandAsset(projectId);
   const deleteAsset = useDeleteProjectBrandAsset(projectId);
+
+  // Project data hooks for about us and brand settings
+  const { data: project, isLoading: projectLoading } = useProject(projectId);
+  const updateProject = useUpdateProject();
+
+  // About Us state
+  const [aboutUs, setAboutUs] = useState('');
+  const [aboutUsDirty, setAboutUsDirty] = useState(false);
+  const [isEditingAboutUs, setIsEditingAboutUs] = useState(false);
+
+  // Brand Settings state
+  const [brandSettings, setBrandSettings] = useState<BrandSettings>({});
+  const [brandSettingsDirty, setBrandSettingsDirty] = useState(false);
+
+  // Sync state with project data
+  useEffect(() => {
+    if (project) {
+      setAboutUs(project.aboutUs || '');
+      setBrandSettings(project.brandSettings || {});
+      setAboutUsDirty(false);
+      setBrandSettingsDirty(false);
+    }
+  }, [project]);
+
+  // Save about us
+  const handleSaveAboutUs = async () => {
+    try {
+      await updateProject.mutateAsync({
+        id: projectId,
+        data: { aboutUs: aboutUs || null },
+      });
+      setAboutUsDirty(false);
+      setIsEditingAboutUs(false);
+      toast.success('About Us saved');
+    } catch (err) {
+      toast.error('Failed to save About Us');
+    }
+  };
+
+  // Cancel editing about us
+  const handleCancelAboutUs = () => {
+    setAboutUs(project?.aboutUs || '');
+    setAboutUsDirty(false);
+    setIsEditingAboutUs(false);
+  };
+
+  // Save brand settings
+  const handleSaveBrandSettings = async () => {
+    try {
+      await updateProject.mutateAsync({
+        id: projectId,
+        data: { brandSettings: Object.keys(brandSettings).length > 0 ? brandSettings : null },
+      });
+      setBrandSettingsDirty(false);
+      toast.success('Design preferences saved');
+    } catch (err) {
+      toast.error('Failed to save design preferences');
+    }
+  };
+
+  // Update brand settings helper
+  const updateBrandSetting = <K extends keyof BrandSettings>(key: K, value: BrandSettings[K]) => {
+    setBrandSettings(prev => ({ ...prev, [key]: value }));
+    setBrandSettingsDirty(true);
+  };
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -292,28 +381,46 @@ export function ProjectBrandPanel({ projectId }: ProjectBrandPanelProps) {
     <>
       <Card className="bg-card border">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
-                <Palette className="h-5 w-5 text-purple-400" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-medium">Brand Assets</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Logos, icons, and brand images
-                </p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+              <Palette className="h-5 w-5 text-purple-400" />
             </div>
-            <Button
-              onClick={() => setIsUploadDialogOpen(true)}
-              className="bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:bg-purple-500/30"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Asset
-            </Button>
+            <div>
+              <CardTitle className="text-lg font-medium">Brand & Design</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Assets, about us, and design preferences
+              </p>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          <Tabs defaultValue="assets" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsTrigger value="assets" className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" />
+                Assets
+              </TabsTrigger>
+              <TabsTrigger value="about" className="flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                About Us
+              </TabsTrigger>
+              <TabsTrigger value="design" className="flex items-center gap-2">
+                <Paintbrush className="h-4 w-4" />
+                Design
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ASSETS TAB */}
+            <TabsContent value="assets" className="mt-0">
+              <div className="flex justify-end mb-4">
+                <Button
+                  onClick={() => setIsUploadDialogOpen(true)}
+                  className="bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:bg-purple-500/30"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Asset
+                </Button>
+              </div>
           {(!assets || assets.length === 0) ? (
             <div className="text-center py-12">
               <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
@@ -458,6 +565,361 @@ export function ProjectBrandPanel({ projectId }: ProjectBrandPanelProps) {
               ))}
             </div>
           )}
+            </TabsContent>
+
+            {/* ABOUT US TAB */}
+            <TabsContent value="about" className="mt-0">
+              {isEditingAboutUs ? (
+                /* Edit Mode */
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-medium">Edit About Us</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Describe your company, project, or brand story
+                      </p>
+                    </div>
+                  </div>
+                  <Textarea
+                    id="about-us"
+                    value={aboutUs}
+                    onChange={(e) => {
+                      setAboutUs(e.target.value);
+                      setAboutUsDirty(true);
+                    }}
+                    placeholder="Tell us about your company or project...
+
+Example: We are a innovative tech company focused on building solutions that help businesses grow. Our mission is to simplify complex workflows and empower teams to do their best work."
+                    rows={10}
+                    className="resize-none bg-muted/30 border-muted focus:bg-background transition-colors"
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      {aboutUs.length} characters
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleCancelAboutUs}
+                        disabled={updateProject.isPending}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSaveAboutUs}
+                        disabled={!aboutUsDirty || updateProject.isPending}
+                        className="bg-purple-500 hover:bg-purple-600 text-white"
+                      >
+                        {updateProject.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Save
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* View Mode */
+                <div className="space-y-4">
+                  {aboutUs ? (
+                    /* Has Content */
+                    <div className="group relative">
+                      <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-purple-500/20 via-pink-500/10 to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity blur-sm" />
+                      <div className="relative rounded-2xl border border-border/50 bg-gradient-to-br from-muted/30 to-muted/10 p-6 hover:border-border transition-colors">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                              <Info className="h-5 w-5 text-purple-400" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold">About Us</h3>
+                              <p className="text-xs text-muted-foreground">Company Description</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsEditingAboutUs(true)}
+                            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                        </div>
+                        <div className="prose prose-sm prose-invert max-w-none">
+                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                            {aboutUs}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border/50">
+                          <span className="text-xs text-muted-foreground">
+                            {aboutUs.length} characters
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ~{Math.ceil(aboutUs.split(/\s+/).length / 200)} min read
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Empty State */
+                    <div className="relative rounded-2xl border-2 border-dashed border-border/50 bg-muted/10 p-12 text-center hover:border-border hover:bg-muted/20 transition-all cursor-pointer group"
+                      onClick={() => setIsEditingAboutUs(true)}
+                    >
+                      <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 flex items-center justify-center group-hover:from-purple-500/20 group-hover:to-pink-500/20 transition-colors">
+                        <Info className="h-8 w-8 text-purple-400/50 group-hover:text-purple-400 transition-colors" />
+                      </div>
+                      <h3 className="text-lg font-medium mb-2">Add Your Story</h3>
+                      <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+                        Share your company&apos;s mission, vision, and what makes you unique. This helps with marketing materials and AI-generated content.
+                      </p>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsEditingAboutUs(true);
+                        }}
+                        className="bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:bg-purple-500/30"
+                      >
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Write About Us
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* DESIGN PREFERENCES TAB */}
+            <TabsContent value="design" className="mt-0">
+              <div className="space-y-6">
+                {/* Colors Section */}
+                <div>
+                  <h3 className="text-base font-medium mb-3 flex items-center gap-2">
+                    <Palette className="h-4 w-4" />
+                    Brand Colors
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="primary-color" className="text-sm">Primary Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="primary-color"
+                          value={brandSettings.primaryColor || '#8b5cf6'}
+                          onChange={(e) => updateBrandSetting('primaryColor', e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={brandSettings.primaryColor || ''}
+                          onChange={(e) => updateBrandSetting('primaryColor', e.target.value)}
+                          placeholder="#8b5cf6"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="secondary-color" className="text-sm">Secondary Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="secondary-color"
+                          value={brandSettings.secondaryColor || '#06b6d4'}
+                          onChange={(e) => updateBrandSetting('secondaryColor', e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={brandSettings.secondaryColor || ''}
+                          onChange={(e) => updateBrandSetting('secondaryColor', e.target.value)}
+                          placeholder="#06b6d4"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="accent-color" className="text-sm">Accent Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="accent-color"
+                          value={brandSettings.accentColor || '#f59e0b'}
+                          onChange={(e) => updateBrandSetting('accentColor', e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={brandSettings.accentColor || ''}
+                          onChange={(e) => updateBrandSetting('accentColor', e.target.value)}
+                          placeholder="#f59e0b"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="bg-color" className="text-sm">Background</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="bg-color"
+                          value={brandSettings.backgroundColor || '#ffffff'}
+                          onChange={(e) => updateBrandSetting('backgroundColor', e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={brandSettings.backgroundColor || ''}
+                          onChange={(e) => updateBrandSetting('backgroundColor', e.target.value)}
+                          placeholder="#ffffff"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="text-color" className="text-sm">Text Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="color"
+                          id="text-color"
+                          value={brandSettings.textColor || '#1f2937'}
+                          onChange={(e) => updateBrandSetting('textColor', e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                        />
+                        <Input
+                          value={brandSettings.textColor || ''}
+                          onChange={(e) => updateBrandSetting('textColor', e.target.value)}
+                          placeholder="#1f2937"
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fonts Section */}
+                <div>
+                  <h3 className="text-base font-medium mb-3 flex items-center gap-2">
+                    <Type className="h-4 w-4" />
+                    Typography
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm">Heading Font</Label>
+                      <Select
+                        value={brandSettings.headingFont || ''}
+                        onValueChange={(v) => updateBrandSetting('headingFont', v)}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select font..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FONT_OPTIONS.map((font) => (
+                            <SelectItem key={font} value={font}>
+                              {font}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-sm">Body Font</Label>
+                      <Select
+                        value={brandSettings.bodyFont || ''}
+                        onValueChange={(v) => updateBrandSetting('bodyFont', v)}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select font..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FONT_OPTIONS.map((font) => (
+                            <SelectItem key={font} value={font}>
+                              {font}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Style Section */}
+                <div>
+                  <h3 className="text-base font-medium mb-3 flex items-center gap-2">
+                    <Paintbrush className="h-4 w-4" />
+                    Design Style
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {STYLE_OPTIONS.map((style) => (
+                      <button
+                        key={style.value}
+                        onClick={() => updateBrandSetting('style', style.value)}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          brandSettings.style === style.value
+                            ? 'border-purple-500 bg-purple-500/10'
+                            : 'border-border/50 hover:border-border'
+                        }`}
+                      >
+                        <p className="font-medium text-sm">{style.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{style.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Mood Keywords */}
+                <div>
+                  <Label className="text-sm">Mood Keywords</Label>
+                  <p className="text-xs text-muted-foreground mt-1 mb-2">
+                    Comma-separated keywords that describe your brand&apos;s personality
+                  </p>
+                  <Input
+                    value={(brandSettings.moodKeywords || []).join(', ')}
+                    onChange={(e) => {
+                      const keywords = e.target.value.split(',').map(k => k.trim()).filter(Boolean);
+                      updateBrandSetting('moodKeywords', keywords);
+                    }}
+                    placeholder="professional, innovative, friendly, trustworthy"
+                  />
+                </div>
+
+                {/* Additional Notes */}
+                <div>
+                  <Label className="text-sm">Additional Design Notes</Label>
+                  <Textarea
+                    value={brandSettings.additionalNotes || ''}
+                    onChange={(e) => updateBrandSetting('additionalNotes', e.target.value)}
+                    placeholder="Any other design preferences or guidelines..."
+                    rows={3}
+                    className="mt-1 resize-none"
+                  />
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveBrandSettings}
+                    disabled={!brandSettingsDirty || updateProject.isPending}
+                    className="bg-purple-500/20 border border-purple-500/30 text-purple-400 hover:bg-purple-500/30"
+                  >
+                    {updateProject.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Design Preferences
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

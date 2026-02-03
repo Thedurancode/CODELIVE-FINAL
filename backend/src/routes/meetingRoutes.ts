@@ -6,6 +6,7 @@
 
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import multer from 'multer';
 import { authenticate } from '../middleware/auth';
 import {
   meetingService,
@@ -14,8 +15,25 @@ import {
   MeetingFilters,
 } from '../services/MeetingService';
 import { meetingNotificationService } from '../services/MeetingNotificationService';
+import { meetingTranscriptionService } from '../services/MeetingTranscriptionService';
 import type { MeetingStatus, MeetingType } from '../models/Meeting';
 import type { RsvpStatus, ParticipantRole } from '../models/MeetingParticipant';
+
+// Configure multer for audio file uploads (max 100MB)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100MB limit for audio files
+  },
+  fileFilter: (_req, file, cb) => {
+    // Accept audio and video files
+    if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio and video files are allowed'));
+    }
+  },
+});
 
 const router = Router();
 
@@ -1046,6 +1064,463 @@ router.post('/:id/notifications/remind-all', async (req: Request, res: Response)
     );
 
     res.json({ success: true, data: results });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// =============================================================================
+// TRANSCRIPTION
+// =============================================================================
+
+/**
+ * @swagger
+ * /api/meetings/{id}/transcription:
+ *   get:
+ *     summary: Get transcription status and transcript for a meeting
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Transcription status and data
+ */
+router.get('/:id/transcription', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const status = await meetingTranscriptionService.getTranscriptionStatus(req.params.id);
+
+    if (!status) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    res.json({ success: true, data: status });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/transcription/start:
+ *   post:
+ *     summary: Start transcription for a meeting recording
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               recordingUrl:
+ *                 type: string
+ *                 description: URL to the recording file (optional if already stored on meeting)
+ *               language:
+ *                 type: string
+ *                 description: Language code (e.g., 'en', 'es') or 'auto' for auto-detect
+ *     responses:
+ *       200:
+ *         description: Transcription started
+ */
+router.post('/:id/transcription/start', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const { recordingUrl, language } = req.body || {};
+
+    // Check if Whisper is available
+    if (!meetingTranscriptionService.isWhisperAvailable()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Transcription service not available. OPENAI_API_KEY not configured.',
+      });
+    }
+
+    // Get the meeting to check recording URL
+    const meeting = await meetingService.getMeetingById(req.params.id, user.organizationId);
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    const urlToTranscribe = recordingUrl || meeting.recordingUrl;
+    if (!urlToTranscribe) {
+      return res.status(400).json({
+        success: false,
+        error: 'No recording URL available. Please provide a recordingUrl.',
+      });
+    }
+
+    // Queue transcription asynchronously
+    await meetingTranscriptionService.queueTranscription(req.params.id, urlToTranscribe, {
+      language,
+    });
+
+    res.json({
+      success: true,
+      message: 'Transcription started. Check status with GET /api/meetings/:id/transcription',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/transcription/retry:
+ *   post:
+ *     summary: Retry a failed transcription
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               recordingUrl:
+ *                 type: string
+ *               language:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Transcription retry initiated
+ */
+router.post('/:id/transcription/retry', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const { recordingUrl, language } = req.body || {};
+
+    const result = await meetingTranscriptionService.retryTranscription(
+      req.params.id,
+      recordingUrl,
+      language
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/transcription/upload:
+ *   post:
+ *     summary: Upload a recording file for transcription
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - audio
+ *             properties:
+ *               audio:
+ *                 type: string
+ *                 format: binary
+ *               language:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Transcription started from uploaded file
+ */
+router.post('/:id/transcription/upload', upload.single('audio'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, error: 'No audio file provided' });
+    }
+
+    if (!meetingTranscriptionService.isWhisperAvailable()) {
+      return res.status(503).json({
+        success: false,
+        error: 'Transcription service not available. OPENAI_API_KEY not configured.',
+      });
+    }
+
+    const { language } = req.body || {};
+
+    const result = await meetingTranscriptionService.transcribeMeetingFromBuffer(
+      req.params.id,
+      file.buffer,
+      file.mimetype,
+      { language }
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/recording:
+ *   get:
+ *     summary: Get recording URL for a completed meeting
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Recording info
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     recordingUrl:
+ *                       type: string
+ *                     hasRecording:
+ *                       type: boolean
+ *                     status:
+ *                       type: string
+ */
+router.get('/:id/recording', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const meeting = await meetingService.getMeetingById(req.params.id, user.organizationId);
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    // Get recording URL from meeting
+    const Meeting = (await import('../models/Meeting')).default;
+    const { wasabiStorageService } = await import('../services/WasabiStorageService');
+    const meetingRecord = await Meeting.findByPk(req.params.id);
+
+    // Prefer Wasabi URL if available (permanent storage)
+    let recordingUrl = meetingRecord?.recordingUrl;
+    let wasabiUrl: string | null = null;
+    let storageSource: 'wasabi' | 'daily' | null = null;
+
+    if (meetingRecord?.recordingStoragePath && wasabiStorageService.isConfigured()) {
+      // Get signed URL for Wasabi (valid for 1 hour)
+      wasabiUrl = await wasabiStorageService.getSignedUrl(meetingRecord.recordingStoragePath, 3600);
+      if (wasabiUrl) {
+        storageSource = 'wasabi';
+      }
+    }
+
+    if (!wasabiUrl && recordingUrl) {
+      storageSource = 'daily';
+    }
+
+    res.json({
+      success: true,
+      data: {
+        recordingUrl: wasabiUrl || recordingUrl || null,
+        dailyRecordingUrl: recordingUrl || null,
+        wasabiRecordingUrl: wasabiUrl || null,
+        storageSource,
+        hasRecording: !!(wasabiUrl || recordingUrl),
+        recordingStoragePath: meetingRecord?.recordingStoragePath || null,
+        status: meeting.status,
+        meetingType: meeting.meetingType,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/live-transcription/start:
+ *   post:
+ *     summary: Start live transcription with speaker diarization for an active meeting
+ *     description: Starts real-time transcription using Daily.co's Deepgram integration with speaker diarization enabled
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Live transcription started
+ *       400:
+ *         description: Meeting not in progress or not a video meeting
+ */
+router.post('/:id/live-transcription/start', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const meeting = await meetingService.getMeetingById(req.params.id, user.organizationId);
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    if (meeting.meetingType !== 'video') {
+      return res.status(400).json({
+        success: false,
+        error: 'Live transcription is only available for video meetings',
+      });
+    }
+
+    if (meeting.status !== 'in_progress') {
+      return res.status(400).json({
+        success: false,
+        error: 'Meeting must be in progress to start live transcription',
+      });
+    }
+
+    if (!meeting.room?.roomName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Video room not found for this meeting',
+      });
+    }
+
+    const success = await meetingService.startDailyTranscription(meeting.room.roomName);
+
+    if (!success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to start live transcription. Room may not have active participants.',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Live transcription with speaker diarization started',
+      data: {
+        roomName: meeting.room.roomName,
+        features: ['diarize', 'utterances', 'smart_format'],
+        model: 'nova-2-meeting',
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/meetings/{id}/live-transcription/stop:
+ *   post:
+ *     summary: Stop live transcription for an active meeting
+ *     tags: [Meetings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Live transcription stopped
+ */
+router.post('/:id/live-transcription/stop', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    if (!user?.organizationId) {
+      return res.status(401).json({ success: false, error: 'Not authenticated' });
+    }
+
+    const meeting = await meetingService.getMeetingById(req.params.id, user.organizationId);
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    if (!meeting.room?.roomName) {
+      return res.status(400).json({
+        success: false,
+        error: 'Video room not found for this meeting',
+      });
+    }
+
+    const success = await meetingService.stopDailyTranscription(meeting.room.roomName);
+
+    res.json({
+      success: true,
+      message: success ? 'Live transcription stopped' : 'Transcription may have already stopped',
+    });
   } catch (error) {
     res.status(500).json({
       success: false,

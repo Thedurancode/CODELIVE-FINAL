@@ -232,3 +232,102 @@ export function useMeetingRoomToken(meetingId: string) {
     },
   });
 }
+
+// Transcription
+
+export type TranscriptionStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface MeetingTranscription {
+  status: TranscriptionStatus;
+  transcript?: string;
+  error?: string;
+  duration?: number;
+  language?: string;
+  completedAt?: string;
+  chunks?: number; // Number of chunks for long recordings
+  progress?: number; // Progress percentage (0-100)
+  source?: 'daily' | 'whisper'; // Transcription source
+}
+
+export function useMeetingTranscription(meetingId: string) {
+  return useQuery({
+    queryKey: ['meetingTranscription', meetingId],
+    queryFn: () => api.get<MeetingTranscription>(`/api/meetings/${meetingId}/transcription`),
+    enabled: !!meetingId,
+    refetchInterval: (query) => {
+      // Auto-refetch while processing
+      const status = query.state.data?.status;
+      if (status === 'pending' || status === 'processing') {
+        return 5000; // 5 seconds
+      }
+      return false;
+    },
+  });
+}
+
+export function useStartMeetingTranscription() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      meetingId,
+      recordingUrl,
+      language,
+    }: {
+      meetingId: string;
+      recordingUrl?: string;
+      language?: string;
+    }) =>
+      api.post(`/api/meetings/${meetingId}/transcription/start`, {
+        recordingUrl,
+        language,
+      }),
+    onSuccess: (_, { meetingId }) => {
+      queryClient.invalidateQueries({ queryKey: ['meetingTranscription', meetingId] });
+    },
+  });
+}
+
+export function useRetryMeetingTranscription() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      meetingId,
+      recordingUrl,
+      language,
+    }: {
+      meetingId: string;
+      recordingUrl?: string;
+      language?: string;
+    }) =>
+      api.post(`/api/meetings/${meetingId}/transcription/retry`, {
+        recordingUrl,
+        language,
+      }),
+    onSuccess: (_, { meetingId }) => {
+      queryClient.invalidateQueries({ queryKey: ['meetingTranscription', meetingId] });
+    },
+  });
+}
+
+// Recording
+
+export interface MeetingRecording {
+  recordingUrl: string | null;
+  dailyRecordingUrl: string | null;
+  wasabiRecordingUrl: string | null;
+  storageSource: 'wasabi' | 'daily' | null;
+  hasRecording: boolean;
+  recordingStoragePath: string | null;
+  status: string;
+  meetingType: string;
+}
+
+export function useMeetingRecording(meetingId: string) {
+  return useQuery({
+    queryKey: ['meetingRecording', meetingId],
+    queryFn: () => api.get<MeetingRecording>(`/api/meetings/${meetingId}/recording`),
+    enabled: !!meetingId,
+  });
+}

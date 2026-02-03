@@ -109,7 +109,7 @@ export function ProcessIssueButton({
         className={className}
       >
         <Check className="h-4 w-4 text-green-500" />
-        {showLabel && <span className="ml-1">Queued</span>}
+        {showLabel && <span className="ml-1 hidden sm:inline">Queued</span>}
       </Button>
     );
   }
@@ -127,7 +127,7 @@ export function ProcessIssueButton({
               className={className}
             >
               <ListPlus className="h-4 w-4" />
-              {showLabel && <span className="ml-1">Convert to Task</span>}
+              {showLabel && <span className="ml-1 hidden sm:inline">Convert to Task</span>}
             </Button>
           </TooltipTrigger>
           <TooltipContent>

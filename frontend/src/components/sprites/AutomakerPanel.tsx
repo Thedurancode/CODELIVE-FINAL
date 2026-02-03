@@ -1,0 +1,708 @@
+/**
+ * AutomakerPanel
+ *
+ * Panel for managing Automaker AI agents within a project.
+ * Allows creating tasks, viewing running agents, and controlling execution.
+ * Includes real-time agent output viewing.
+ */
+
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import {
+  Bot,
+  Play,
+  Square,
+  Loader2,
+  ExternalLink,
+  Trash2,
+  RefreshCw,
+  Zap,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Terminal,
+  X,
+  Maximize2,
+  Minimize2,
+  FolderOpen,
+  Settings,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import {
+  useAutomakerHealth,
+  useAutomakerRunningAgents,
+  useAutomakerFeatures,
+  useCreateAutomakerFeature,
+  useRunAutomakerFeature,
+  useStopAutomakerFeature,
+  useDeleteAutomakerFeature,
+  useAutomakerAgentOutput,
+  useAutomakerRawOutput,
+} from '@/hooks/use-automaker';
+
+interface AutomakerPanelProps {
+  projectPath: string;
+  projectTitle?: string;
+  className?: string;
+}
+
+export function AutomakerPanel({
+  projectPath: initialProjectPath,
+  projectTitle,
+  className,
+}: AutomakerPanelProps) {
+  const [projectPath, setProjectPath] = useState(initialProjectPath);
+  const [showPathInput, setShowPathInput] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
+  const [showNewTask, setShowNewTask] = useState(false);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [showOutput, setShowOutput] = useState(false);
+  const [outputExpanded, setOutputExpanded] = useState(false);
+  const [outputMode, setOutputMode] = useState<'formatted' | 'raw'>('formatted');
+  const outputEndRef = useRef<HTMLDivElement>(null);
+
+  const { data: health, isLoading: healthLoading } = useAutomakerHealth();
+  const {
+    data: agentsData,
+    refetch: refetchAgents,
+    isLoading: agentsLoading,
+  } = useAutomakerRunningAgents();
+  const {
+    data: featuresData,
+    refetch: refetchFeatures,
+    isLoading: featuresLoading,
+  } = useAutomakerFeatures(projectPath);
+
+  const createFeature = useCreateAutomakerFeature();
+  const runFeature = useRunAutomakerFeature();
+  const stopFeature = useStopAutomakerFeature();
+  const deleteFeature = useDeleteAutomakerFeature();
+
+  // Agent output hooks
+  const { data: agentOutput } = useAutomakerAgentOutput(projectPath, selectedFeatureId);
+  const { data: rawOutput } = useAutomakerRawOutput(projectPath, selectedFeatureId);
+
+  const isServerOnline = health?.status === 'ok';
+  const runningAgents = agentsData?.runningAgents || [];
+  const projectAgents = runningAgents.filter(
+    (a) => a.projectPath === projectPath
+  );
+  const features = featuresData?.features || [];
+
+  // Auto-select running agent for output viewing
+  useEffect(() => {
+    if (projectAgents.length > 0 && !selectedFeatureId) {
+      setSelectedFeatureId(projectAgents[0].featureId);
+      setShowOutput(true);
+    }
+  }, [projectAgents, selectedFeatureId]);
+
+  // Auto-scroll output to bottom
+  useEffect(() => {
+    if (outputEndRef.current && showOutput) {
+      outputEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [agentOutput, rawOutput, showOutput]);
+
+  const handleStartTask = async () => {
+    if (!taskTitle.trim()) {
+      toast.error('Please enter a task title');
+      return;
+    }
+
+    try {
+      toast.loading('Creating task...');
+
+      // Create feature
+      const result = await createFeature.mutateAsync({
+        projectPath,
+        title: taskTitle.trim(),
+        description: taskDescription.trim() || taskTitle.trim(),
+      });
+
+      // Run it
+      await runFeature.mutateAsync({
+        projectPath,
+        featureId: result.feature.id,
+      });
+
+      toast.dismiss();
+      toast.success('Task started!');
+      setTaskTitle('');
+      setTaskDescription('');
+      setShowNewTask(false);
+      setSelectedFeatureId(result.feature.id);
+      setShowOutput(true);
+      refetchAgents();
+      refetchFeatures();
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to start task');
+    }
+  };
+
+  const handleRunFeature = async (featureId: string) => {
+    try {
+      toast.loading('Starting task...');
+      await runFeature.mutateAsync({ projectPath, featureId });
+      toast.dismiss();
+      toast.success('Task started!');
+      setSelectedFeatureId(featureId);
+      setShowOutput(true);
+      refetchAgents();
+      refetchFeatures();
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to start task');
+    }
+  };
+
+  const handleStopTask = async (featureId: string) => {
+    try {
+      toast.loading('Stopping task...');
+      await stopFeature.mutateAsync({ featureId });
+      toast.dismiss();
+      toast.success('Task stopped');
+      refetchAgents();
+      refetchFeatures();
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to stop task');
+    }
+  };
+
+  const handleDeleteFeature = async (featureId: string) => {
+    try {
+      await deleteFeature.mutateAsync({ projectPath, featureId });
+      toast.success('Task deleted');
+      if (selectedFeatureId === featureId) {
+        setSelectedFeatureId(null);
+        setShowOutput(false);
+      }
+      refetchFeatures();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete task');
+    }
+  };
+
+  const handleViewOutput = (featureId: string) => {
+    setSelectedFeatureId(featureId);
+    setShowOutput(true);
+  };
+
+  const handleRefresh = () => {
+    refetchAgents();
+    refetchFeatures();
+    toast.success('Refreshed');
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'in-progress':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+      case 'backlog':
+        return <Clock className="h-4 w-4 text-zinc-500" />;
+      case 'failed':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-zinc-500" />;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const variants: Record<string, string> = {
+      completed: 'bg-green-500/10 text-green-500 border-green-500/20',
+      'in-progress': 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+      backlog: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
+      failed: 'bg-red-500/10 text-red-500 border-red-500/20',
+    };
+    return variants[status] || variants.backlog;
+  };
+
+  const currentOutput = outputMode === 'formatted' ? agentOutput?.output : rawOutput?.output;
+  const selectedFeature = features.find((f) => f.id === selectedFeatureId);
+  const isSelectedRunning = projectAgents.some((a) => a.featureId === selectedFeatureId);
+
+  // Loading state
+  if (healthLoading) {
+    return (
+      <div
+        className={cn(
+          'rounded-xl bg-zinc-900/80 border border-zinc-800 overflow-hidden',
+          className
+        )}
+      >
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+        </div>
+      </div>
+    );
+  }
+
+  // Offline state
+  if (!isServerOnline) {
+    return (
+      <div
+        className={cn(
+          'rounded-xl bg-zinc-900/80 border border-zinc-800 overflow-hidden',
+          className
+        )}
+      >
+        <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mb-4">
+            <Bot className="h-8 w-8 text-red-400" />
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2">
+            Automaker Offline
+          </h3>
+          <p className="text-sm text-zinc-500 mb-6 max-w-xs">
+            The Automaker server is not running. Start it to enable AI-powered
+            task automation.
+          </p>
+          <code className="text-xs bg-zinc-800 px-3 py-2 rounded-lg text-zinc-400 font-mono">
+            cd automaker && npm run dev
+          </code>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('space-y-3', className)}>
+      {/* Main Panel */}
+      <div className="rounded-xl bg-zinc-900/80 border border-zinc-800 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/50 border-b border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full bg-green-500 shadow-lg shadow-green-500/50" />
+            <span className="font-medium text-white text-sm">Automaker</span>
+            <Badge
+              variant="outline"
+              className="text-xs border-green-500/30 text-green-400"
+            >
+              Online
+            </Badge>
+            {projectAgents.length > 0 && (
+              <Badge className="text-xs bg-purple-500/20 text-purple-400 border-purple-500/30">
+                {projectAgents.length} Running
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              className="h-7 px-2 text-zinc-400 hover:text-white"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.open('http://localhost:3007', '_blank')}
+              className="h-7 px-2 text-zinc-400 hover:text-white"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-1 px-3 py-2 bg-zinc-800/30 border-b border-zinc-800/50">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowNewTask(!showNewTask)}
+            className={cn(
+              'h-8 px-3 text-xs gap-1.5',
+              showNewTask
+                ? 'bg-purple-500/20 text-purple-400'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-700'
+            )}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            New Task
+          </Button>
+          {selectedFeatureId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowOutput(!showOutput)}
+              className={cn(
+                'h-8 px-3 text-xs gap-1.5',
+                showOutput
+                  ? 'bg-blue-500/20 text-blue-400'
+                  : 'text-zinc-300 hover:text-white hover:bg-zinc-700'
+              )}
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              Output
+            </Button>
+          )}
+          <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowPathInput(!showPathInput)}
+            className={cn(
+              'h-8 px-2 text-xs gap-1.5',
+              showPathInput
+                ? 'bg-zinc-700 text-white'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-700'
+            )}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        {/* Project Path Input */}
+        {showPathInput && (
+          <div className="px-4 py-3 bg-zinc-800/20 border-b border-zinc-800/50">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400 shrink-0">Path:</span>
+              <Input
+                value={projectPath}
+                onChange={(e) => setProjectPath(e.target.value)}
+                placeholder="/path/to/project"
+                className="h-7 text-xs bg-zinc-800/50 border-zinc-700 focus:border-purple-500 font-mono"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setProjectPath('/Users/edduran/Desktop');
+                  refetchFeatures();
+                }}
+                className="h-7 px-2 text-xs text-zinc-400 hover:text-white shrink-0"
+              >
+                Desktop
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* New Task Form */}
+        {showNewTask && (
+          <div className="p-4 border-b border-zinc-800/50 bg-zinc-800/20">
+            <div className="space-y-3">
+              <Input
+                placeholder="What should the AI agent do?"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                className="bg-zinc-800/50 border-zinc-700 focus:border-purple-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleStartTask();
+                  }
+                }}
+              />
+              <Textarea
+                placeholder="Additional details (optional)..."
+                value={taskDescription}
+                onChange={(e) => setTaskDescription(e.target.value)}
+                rows={3}
+                className="bg-zinc-800/50 border-zinc-700 focus:border-purple-500 resize-none"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleStartTask}
+                  disabled={
+                    !taskTitle.trim() ||
+                    createFeature.isPending ||
+                    runFeature.isPending
+                  }
+                  className="gap-2 bg-purple-600 hover:bg-purple-500 text-white"
+                >
+                  {createFeature.isPending || runFeature.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                  Start Task
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setShowNewTask(false);
+                    setTaskTitle('');
+                    setTaskDescription('');
+                  }}
+                  className="text-zinc-400 hover:text-white"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Agent Output Viewer */}
+        {showOutput && selectedFeatureId && (
+          <div className={cn(
+            'border-b border-zinc-800/50 bg-zinc-950/50',
+            outputExpanded ? 'fixed inset-4 z-50 rounded-xl border border-zinc-700' : ''
+          )}>
+            {/* Output Header */}
+            <div className="flex items-center justify-between px-4 py-2 bg-zinc-800/30 border-b border-zinc-800/50">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4 w-4 text-zinc-400" />
+                <span className="text-xs font-medium text-zinc-300">
+                  {selectedFeature?.title || 'Agent Output'}
+                </span>
+                {isSelectedRunning && (
+                  <Badge className="text-[10px] bg-green-500/20 text-green-400 border-green-500/30 animate-pulse">
+                    Live
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOutputMode(outputMode === 'formatted' ? 'raw' : 'formatted')}
+                  className="h-6 px-2 text-[10px] text-zinc-400 hover:text-white"
+                >
+                  {outputMode === 'formatted' ? 'Raw' : 'Formatted'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOutputExpanded(!outputExpanded)}
+                  className="h-6 px-1 text-zinc-400 hover:text-white"
+                >
+                  {outputExpanded ? (
+                    <Minimize2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowOutput(false);
+                    setOutputExpanded(false);
+                  }}
+                  className="h-6 px-1 text-zinc-400 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Output Content */}
+            <ScrollArea className={cn(
+              'p-4',
+              outputExpanded ? 'h-[calc(100vh-10rem)]' : 'h-64'
+            )}>
+              {currentOutput ? (
+                <pre className="text-xs text-zinc-300 font-mono whitespace-pre-wrap break-words">
+                  {currentOutput}
+                  <div ref={outputEndRef} />
+                </pre>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <FileText className="h-8 w-8 text-zinc-600 mb-2" />
+                  <p className="text-sm text-zinc-500">No output yet</p>
+                  <p className="text-xs text-zinc-600 mt-1">
+                    {isSelectedRunning
+                      ? 'Waiting for agent to produce output...'
+                      : 'Run a task to see output here'}
+                  </p>
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        )}
+
+        {/* Running Agents */}
+        {projectAgents.length > 0 && (
+          <div className="p-4 border-b border-zinc-800/50">
+            <h4 className="text-xs font-medium text-zinc-400 uppercase mb-3">
+              Running Agents
+            </h4>
+            <div className="space-y-2">
+              {projectAgents.map((agent) => (
+                <div
+                  key={agent.featureId}
+                  className={cn(
+                    'flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer',
+                    selectedFeatureId === agent.featureId
+                      ? 'bg-purple-500/10 border-purple-500/30'
+                      : 'bg-zinc-800/50 border-zinc-700/50 hover:border-zinc-600/50'
+                  )}
+                  onClick={() => handleViewOutput(agent.featureId)}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-white truncate">{agent.title}</p>
+                      <p className="text-xs text-zinc-500 truncate">
+                        {agent.model} • {agent.provider}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewOutput(agent.featureId);
+                      }}
+                      className="h-8 px-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                    >
+                      <Terminal className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStopTask(agent.featureId);
+                      }}
+                      disabled={stopFeature.isPending}
+                      className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    >
+                      {stopFeature.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Square className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Features List */}
+        <div className="p-4">
+          <h4 className="text-xs font-medium text-zinc-400 uppercase mb-3">
+            Tasks
+          </h4>
+          {featuresLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+            </div>
+          ) : features.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-zinc-500">No tasks yet</p>
+              <p className="text-xs text-zinc-600 mt-1">
+                Create a new task to get started
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {features.slice(0, 10).map((feature) => {
+                const isRunning = projectAgents.some(
+                  (a) => a.featureId === feature.id
+                );
+                const isSelected = selectedFeatureId === feature.id;
+                return (
+                  <div
+                    key={feature.id}
+                    className={cn(
+                      'flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer',
+                      isSelected
+                        ? 'bg-zinc-700/30 border-zinc-600/50'
+                        : 'bg-zinc-800/30 border-zinc-800/50 hover:border-zinc-700/50'
+                    )}
+                    onClick={() => handleViewOutput(feature.id)}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {getStatusIcon(feature.status)}
+                      <div className="min-w-0">
+                        <p className="text-sm text-white truncate">
+                          {feature.title}
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'text-[10px] mt-1',
+                            getStatusBadge(feature.status)
+                          )}
+                        >
+                          {feature.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewOutput(feature.id);
+                        }}
+                        className="h-7 px-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </Button>
+                      {!isRunning && feature.status !== 'completed' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRunFeature(feature.id);
+                          }}
+                          disabled={runFeature.isPending}
+                          className="h-7 px-2 text-green-400 hover:text-green-300 hover:bg-green-500/10"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {isRunning && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStopTask(feature.id);
+                          }}
+                          disabled={stopFeature.isPending}
+                          className="h-7 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        >
+                          <Square className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteFeature(feature.id);
+                        }}
+                        disabled={deleteFeature.isPending || isRunning}
+                        className="h-7 px-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

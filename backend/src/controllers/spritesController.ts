@@ -112,22 +112,9 @@ export const listSprites = async (req: Request, res: Response) => {
 export const getSpriteByProject = async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params;
-    const userId = (req as any).user?.id;
-    const organizationId = (req as any).user?.organizationId;
 
-    // Verify project exists and user has access (check by org or creator)
-    const { Op } = require('sequelize');
-    const project = await Project.findOne({
-      where: {
-        id: projectId,
-        [Op.or]: [
-          { organizationId },
-          { createdById: userId },
-          // Also allow if organizationId is null (legacy projects)
-          { organizationId: null },
-        ],
-      },
-    });
+    // Verify project exists (shared workspace - all authenticated users can access all projects)
+    const project = await Project.findByPk(projectId);
 
     if (!project) {
       return res.status(404).json({
@@ -171,18 +158,8 @@ export const createSprite = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify project exists and user has access (check by org or creator)
-    const { Op } = require('sequelize');
-    const project = await Project.findOne({
-      where: {
-        id: projectId,
-        [Op.or]: [
-          { organizationId },
-          { createdById: userId },
-          { organizationId: null },
-        ],
-      },
-    });
+    // Verify project exists (shared workspace - all authenticated users can access all projects)
+    const project = await Project.findByPk(projectId);
 
     if (!project) {
       return res.status(404).json({
@@ -200,15 +177,41 @@ export const createSprite = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if project already has an active sprite
+    // Check if project already has a sprite
     const existingSprite = await ProjectSprite.getByProject(projectId);
-    if (existingSprite && existingSprite.isActive()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Project already has an active Sprite',
-        data: existingSprite,
-        timestamp: new Date().toISOString(),
-      });
+
+    if (existingSprite) {
+      // If sprite is active, return it
+      if (existingSprite.isActive()) {
+        return res.status(400).json({
+          success: false,
+          error: 'Project already has an active Sprite',
+          data: existingSprite,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // If sprite exists but is stopped/hibernated, resume it instead of creating new
+      if (existingSprite.status === 'stopped' || existingSprite.status === 'hibernated') {
+        console.log(`[createSprite] Resuming existing sprite ${existingSprite.id} instead of creating new`);
+        const resumedSprite = await spritesService.resumeSprite(existingSprite.id);
+        return res.status(200).json({
+          success: true,
+          data: resumedSprite,
+          message: 'Resumed existing sprite',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // If sprite is in error state, delete it and create new
+      if (existingSprite.status === 'error') {
+        console.log(`[createSprite] Deleting errored sprite ${existingSprite.id} before creating new`);
+        try {
+          await spritesService.deleteSprite(existingSprite.id);
+        } catch (err) {
+          console.warn('[createSprite] Failed to delete errored sprite:', err);
+        }
+      }
     }
 
     // Create the sprite
@@ -227,9 +230,21 @@ export const createSprite = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[createSprite] Error:', error);
+
+    // Handle rate limit errors specifically
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('Too many requests') || errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+      return res.status(429).json({
+        success: false,
+        error: 'Rate limited by Sprites.dev API. Please wait a few minutes and try again.',
+        retryAfter: 60, // Suggest retry after 60 seconds
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
       timestamp: new Date().toISOString(),
     });
   }
@@ -327,11 +342,10 @@ export const deleteSprite = async (req: Request, res: Response) => {
 export const stopSprite = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const organizationId = (req as any).user?.organizationId;
+    const quick = req.query.quick === 'true' || req.body?.quick === true;
 
-    const sprite = await ProjectSprite.findOne({
-      where: { id, organizationId },
-    });
+    // Shared workspace - all authenticated users can stop sprites
+    const sprite = await ProjectSprite.findByPk(id);
 
     if (!sprite) {
       return res.status(404).json({
@@ -341,7 +355,7 @@ export const stopSprite = async (req: Request, res: Response) => {
       });
     }
 
-    await spritesService.stopSprite(id);
+    await spritesService.stopSprite(id, { quick });
 
     // Refresh sprite data
     await sprite.reload();
@@ -349,7 +363,7 @@ export const stopSprite = async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: sprite,
-      message: 'Sprite stopped successfully',
+      message: quick ? 'Sprite quick stopped (will auto-hibernate)' : 'Sprite stopped successfully',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -367,12 +381,10 @@ export const stopSprite = async (req: Request, res: Response) => {
 export const resumeSprite = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const organizationId = (req as any).user?.organizationId;
     const userId = (req as any).user?.id;
 
-    const sprite = await ProjectSprite.findOne({
-      where: { id, organizationId },
-    });
+    // Shared workspace - all authenticated users can resume sprites
+    const sprite = await ProjectSprite.findByPk(id);
 
     if (!sprite) {
       return res.status(404).json({
@@ -995,6 +1007,118 @@ export const removeGitHubToken = async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'GitHub token removed. New sprites will not have GitHub authentication.',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// ANTHROPIC API KEY MANAGEMENT (Z.AI)
+// ============================================================================
+
+/**
+ * Get Anthropic API key status for organization
+ */
+export const getAnthropicApiKeyStatus = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const hasKey = await spritesService.hasAnthropicApiKey(organizationId);
+    const keyPrefix = hasKey ? await spritesService.getAnthropicApiKeyPrefix(organizationId) : null;
+
+    res.json({
+      success: true,
+      data: {
+        configured: hasKey,
+        keyPrefix: keyPrefix,
+        provider: 'z.ai',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Set Anthropic API key for organization (Z.AI)
+ * This key is used to configure Claude CLI in sprites
+ */
+export const setAnthropicApiKey = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+    const { apiKey } = req.body;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!apiKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'API key is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.setAnthropicApiKey(organizationId, apiKey);
+
+    res.json({
+      success: true,
+      message: 'Anthropic API key configured successfully. New sprites will use Z.AI for Claude.',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Remove Anthropic API key for organization
+ */
+export const removeAnthropicApiKey = async (req: Request, res: Response) => {
+  try {
+    const organizationId = (req as any).user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.removeAnthropicApiKey(organizationId);
+
+    res.json({
+      success: true,
+      message: 'Anthropic API key removed. New sprites will not have Claude configured.',
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

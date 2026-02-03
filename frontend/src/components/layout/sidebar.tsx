@@ -24,14 +24,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  // { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/activity-feed', label: 'Activity Feed', icon: Activity },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/contacts', label: 'Contacts', icon: Users },
-  { href: '/calls', label: 'Calls', icon: Phone },
+  // { href: '/calls', label: 'Calls', icon: Phone },
   { href: '/meetings', label: 'Meetings', icon: Video },
-  { href: '/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/email', label: 'Email', icon: Mail },
+  // { href: '/calendar', label: 'Calendar', icon: Calendar },
+  // { href: '/email', label: 'Email', icon: Mail },
   { href: '/tv-display', label: 'TV Display', icon: Tv },
 ];
 

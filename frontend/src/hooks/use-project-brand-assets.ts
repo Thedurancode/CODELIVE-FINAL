@@ -13,10 +13,13 @@ export function useProjectBrandAssets(
 
   return useQuery({
     queryKey: ['projectBrandAssets', projectId, filters],
-    queryFn: () =>
-      api.get<ProjectBrandAsset[]>(
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectBrandAsset[] }>(
         `/api/projects/${projectId}/brand-assets${queryString ? `?${queryString}` : ''}`
-      ),
+      );
+      // Endpoint is under /api/projects/ which is treated as paginated, so unwrap data
+      return response.data;
+    },
     enabled: !!projectId,
   });
 }

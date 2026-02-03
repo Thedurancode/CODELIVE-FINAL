@@ -31,6 +31,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Video,
+  VideoOff,
   Calendar,
   Clock,
   Users,
@@ -45,7 +46,13 @@ import {
   Link2,
   CheckCircle2,
   Loader2,
+  FileText,
+  RefreshCw,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import Link from 'next/link';
 import { format, isToday, isTomorrow, isPast } from 'date-fns';
 import {
@@ -55,9 +62,14 @@ import {
   useDeleteMeeting,
   useStartMeeting,
   useEndMeeting,
+  useMeetingTranscription,
+  useStartMeetingTranscription,
+  useRetryMeetingTranscription,
 } from '@/hooks/use-meetings';
+import { useProjectContacts } from '@/hooks/use-project-contacts';
 import { MeetingParticipantsPanel } from '@/components/meetings';
-import type { Meeting, MeetingStatus, MeetingType, CreateMeetingInput } from '@/types';
+import { Checkbox } from '@/components/ui/checkbox';
+import type { Meeting, MeetingStatus, MeetingType, CreateMeetingInput, ProjectContact } from '@/types';
 import { toast } from 'sonner';
 
 const statusColors: Record<MeetingStatus, string> = {
@@ -90,6 +102,137 @@ const typeLabels: Record<MeetingType, string> = {
   external_link: 'External Link',
 };
 
+// Transcription Badge Component
+function MeetingTranscriptionBadge({ meetingId, status }: { meetingId: string; status: MeetingStatus }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { data: transcription, isLoading } = useMeetingTranscription(meetingId);
+  const startTranscription = useStartMeetingTranscription();
+  const retryTranscription = useRetryMeetingTranscription();
+
+  // Only show for completed video meetings
+  if (status !== 'completed') return null;
+
+  const handleStartTranscription = async () => {
+    try {
+      await startTranscription.mutateAsync({ meetingId });
+      toast.success('Transcription started');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to start transcription');
+    }
+  };
+
+  const handleRetryTranscription = async () => {
+    try {
+      await retryTranscription.mutateAsync({ meetingId });
+      toast.success('Retrying transcription');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to retry transcription');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Badge variant="outline" className="text-muted-foreground">
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        Loading...
+      </Badge>
+    );
+  }
+
+  const transcriptionStatus = transcription?.status;
+
+  if (!transcriptionStatus || transcriptionStatus === 'pending') {
+    return (
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+        onClick={handleStartTranscription}
+        disabled={startTranscription.isPending}
+      >
+        {startTranscription.isPending ? (
+          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        ) : (
+          <FileText className="h-3 w-3 mr-1" />
+        )}
+        Transcribe
+      </Button>
+    );
+  }
+
+  if (transcriptionStatus === 'processing') {
+    const progress = transcription?.progress;
+    const chunks = transcription?.chunks;
+    const showProgress = progress !== undefined && progress > 0;
+
+    return (
+      <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        {showProgress ? (
+          <span>Transcribing... {progress}%{chunks && chunks > 1 ? ` (${chunks} chunks)` : ''}</span>
+        ) : (
+          <span>Transcribing...</span>
+        )}
+      </Badge>
+    );
+  }
+
+  if (transcriptionStatus === 'failed') {
+    return (
+      <div className="flex items-center gap-1">
+        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          Failed
+        </Badge>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 w-6 p-0"
+          onClick={handleRetryTranscription}
+          disabled={retryTranscription.isPending}
+          title="Retry transcription"
+        >
+          <RefreshCw className={`h-3 w-3 ${retryTranscription.isPending ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+    );
+  }
+
+  if (transcriptionStatus === 'completed' && transcription?.transcript) {
+    return (
+      <div className="w-full mt-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-xs text-green-500 hover:text-green-400"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <FileText className="h-3 w-3 mr-1" />
+          Transcript
+          {isExpanded ? (
+            <ChevronUp className="h-3 w-3 ml-1" />
+          ) : (
+            <ChevronDown className="h-3 w-3 ml-1" />
+          )}
+        </Button>
+        {isExpanded && (
+          <div className="mt-2 p-3 rounded-md bg-secondary/50 border text-sm text-muted-foreground max-h-48 overflow-y-auto">
+            <p className="whitespace-pre-wrap">{transcription.transcript}</p>
+            {transcription.language && (
+              <p className="mt-2 text-xs text-muted-foreground/70">
+                Language: {transcription.language}
+                {transcription.duration && ` · Duration: ${Math.round(transcription.duration / 60)}m`}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 interface ProjectMeetingsPanelProps {
   projectId: string;
   className?: string;
@@ -98,6 +241,7 @@ interface ProjectMeetingsPanelProps {
 export function ProjectMeetingsPanel({ projectId, className }: ProjectMeetingsPanelProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   // Form state
   const [formData, setFormData] = useState<Partial<CreateMeetingInput>>({
@@ -116,6 +260,7 @@ export function ProjectMeetingsPanel({ projectId, className }: ProjectMeetingsPa
     sortBy: 'scheduledAt',
     sortOrder: 'desc',
   });
+  const { data: projectContacts } = useProjectContacts(projectId);
 
   // Mutations
   const createMeeting = useCreateMeeting();
@@ -132,10 +277,26 @@ export function ProjectMeetingsPanel({ projectId, className }: ProjectMeetingsPa
       return;
     }
 
+    // Build participants from selected contacts
+    const participants = selectedContactIds
+      .map((contactId) => {
+        const projectContact = projectContacts?.find((pc) => pc.contactId === contactId);
+        if (!projectContact?.contact) return null;
+        return {
+          contactId: projectContact.contactId,
+          email: projectContact.contact.email || '',
+          name: projectContact.contact.name || '',
+          phone: projectContact.contact.phone || undefined,
+          role: 'attendee' as const,
+        };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null && !!p.email);
+
     try {
       await createMeeting.mutateAsync({
         ...formData,
         projectId,
+        participants: participants.length > 0 ? participants : undefined,
       } as CreateMeetingInput);
       toast.success('Meeting created');
       setIsCreateDialogOpen(false);
@@ -202,6 +363,7 @@ export function ProjectMeetingsPanel({ projectId, className }: ProjectMeetingsPa
       externalLink: '',
       projectId,
     });
+    setSelectedContactIds([]);
   };
 
   const openEditDialog = (meeting: Meeting) => {
@@ -287,6 +449,10 @@ export function ProjectMeetingsPanel({ projectId, className }: ProjectMeetingsPa
                             <Users className="h-3 w-3 mr-1" />
                             {meeting.participantCount}
                           </Badge>
+                        )}
+                        {/* Transcription badge for completed video meetings */}
+                        {meeting.meetingType === 'video' && (
+                          <MeetingTranscriptionBadge meetingId={meeting.id} status={meeting.status} />
                         )}
                       </div>
                     </div>
@@ -428,6 +594,90 @@ export function ProjectMeetingsPanel({ projectId, className }: ProjectMeetingsPa
                 />
               </div>
             </div>
+
+            {/* Contact Selection - only show when creating new meeting */}
+            {!editingMeeting && projectContacts && projectContacts.length > 0 && (
+              <div className="space-y-2">
+                <Label>Invite Contacts</Label>
+                <div className="rounded-lg border p-3 space-y-2 max-h-36 overflow-y-auto">
+                  {projectContacts.map((pc) => {
+                    if (!pc.contact) return null;
+                    const isSelected = selectedContactIds.includes(pc.contactId);
+                    return (
+                      <div
+                        key={pc.contactId}
+                        className="flex items-center gap-3 py-1"
+                      >
+                        <Checkbox
+                          id={`contact-${pc.contactId}`}
+                          checked={isSelected}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedContactIds([...selectedContactIds, pc.contactId]);
+                            } else {
+                              setSelectedContactIds(selectedContactIds.filter((id) => id !== pc.contactId));
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`contact-${pc.contactId}`}
+                          className="flex-1 flex items-center gap-2 cursor-pointer text-sm"
+                        >
+                          <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-medium">{pc.contact.name}</span>
+                          {pc.contact.email && (
+                            <span className="text-muted-foreground text-xs">{pc.contact.email}</span>
+                          )}
+                          {pc.role && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              {pc.role}
+                            </Badge>
+                          )}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+                {selectedContactIds.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {selectedContactIds.length} contact{selectedContactIds.length !== 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            )}
+
+            {formData.meetingType === 'video' && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="flex items-center gap-3">
+                  {formData.roomSettings?.recordingEnabled !== false ? (
+                    <Video className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <VideoOff className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <div className="space-y-0.5">
+                    <Label htmlFor="recordingEnabled" className="text-sm font-medium cursor-pointer">
+                      Record meeting
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Enable automatic recording and transcription
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="recordingEnabled"
+                  checked={formData.roomSettings?.recordingEnabled !== false}
+                  onCheckedChange={(checked) =>
+                    setFormData({
+                      ...formData,
+                      roomSettings: {
+                        ...formData.roomSettings,
+                        recordingEnabled: checked,
+                      },
+                    })
+                  }
+                />
+              </div>
+            )}
 
             {formData.meetingType === 'in_person' && (
               <div className="space-y-2">

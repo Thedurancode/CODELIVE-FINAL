@@ -43,6 +43,21 @@ interface ProjectAttributes {
   // Live site screenshot
   screenshotUrl: string | null;
 
+  // Brand & Design
+  aboutUs: string | null;
+  brandSettings: {
+    primaryColor?: string;
+    secondaryColor?: string;
+    accentColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
+    headingFont?: string;
+    bodyFont?: string;
+    style?: 'modern' | 'classic' | 'minimalist' | 'bold' | 'playful' | 'elegant' | 'tech';
+    moodKeywords?: string[];
+    additionalNotes?: string;
+  } | null;
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -70,6 +85,8 @@ interface ProjectCreationAttributes
     | 'aiRecapUpdatedAt'
     | 'aiRecapAudioUrl'
     | 'screenshotUrl'
+    | 'aboutUs'
+    | 'brandSettings'
     | 'createdAt'
     | 'updatedAt'
   > {}
@@ -102,6 +119,19 @@ class Project
   declare aiRecapUpdatedAt: Date | null;
   declare aiRecapAudioUrl: string | null;
   declare screenshotUrl: string | null;
+  declare aboutUs: string | null;
+  declare brandSettings: {
+    primaryColor?: string;
+    secondaryColor?: string;
+    accentColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
+    headingFont?: string;
+    bodyFont?: string;
+    style?: 'modern' | 'classic' | 'minimalist' | 'bold' | 'playful' | 'elegant' | 'tech';
+    moodKeywords?: string[];
+    additionalNotes?: string;
+  } | null;
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -297,6 +327,19 @@ Project.init(
       allowNull: true,
       field: 'screenshot_url',
       comment: 'Screenshot image URL of the live deployment (base64 data URL)',
+    },
+    aboutUs: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'about_us',
+      comment: 'Company/project about us description',
+    },
+    brandSettings: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      field: 'brand_settings',
+      defaultValue: null,
+      comment: 'Design preferences: colors, fonts, style, mood',
     },
     createdAt: {
       type: DataTypes.DATE,

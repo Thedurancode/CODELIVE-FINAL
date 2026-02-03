@@ -61,6 +61,19 @@ interface UpdateProjectData {
   actualEndDate?: Date | string | null;
   tags?: string[];
   metadata?: Record<string, unknown>;
+  aboutUs?: string | null;
+  brandSettings?: {
+    primaryColor?: string;
+    secondaryColor?: string;
+    accentColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
+    headingFont?: string;
+    bodyFont?: string;
+    style?: string;
+    moodKeywords?: string[];
+    additionalNotes?: string;
+  } | null;
 }
 
 interface ProjectStats {
@@ -296,6 +309,8 @@ class ProjectService {
     }
     if (data.tags !== undefined) updates.tags = data.tags;
     if (data.metadata !== undefined) updates.metadata = data.metadata;
+    if (data.aboutUs !== undefined) updates.aboutUs = data.aboutUs;
+    if (data.brandSettings !== undefined) updates.brandSettings = data.brandSettings;
 
     // If status is being set to completed, set actualEndDate if not already set
     if (data.status === 'completed' && !project.actualEndDate && !data.actualEndDate) {

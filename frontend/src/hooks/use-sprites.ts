@@ -245,9 +245,10 @@ export function useStopSprite() {
   const updateSpriteStatus = useSpriteStore((state) => state.updateSpriteStatus);
 
   return useMutation({
-    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
+    mutationFn: async ({ id, projectId, quick }: { id: string; projectId: string; quick?: boolean }) => {
       // Note: api.post already extracts data.data from response
-      const sprite = await api.post<Sprite>(`/api/sprites/${id}/stop`);
+      // Use quick=true to skip checkpointing for faster shutdown
+      const sprite = await api.post<Sprite>(`/api/sprites/${id}/stop${quick ? '?quick=true' : ''}`);
       return { sprite, projectId };
     },
     onMutate: async ({ projectId }) => {

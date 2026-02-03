@@ -130,9 +130,17 @@ export function SpriteLaunchButton({
     }
   };
 
-  const handleStop = async () => {
+  const handleStop = async (quick: boolean = false) => {
     if (sprite) {
-      await stopSprite.mutateAsync({ id: sprite.id, projectId });
+      toast.loading(quick ? 'Quick stopping...' : 'Stopping and saving checkpoint...');
+      try {
+        await stopSprite.mutateAsync({ id: sprite.id, projectId, quick });
+        toast.dismiss();
+        toast.success(quick ? 'Agent stopped (will auto-hibernate)' : 'Agent stopped with checkpoint');
+      } catch (error) {
+        toast.dismiss();
+        toast.error('Failed to stop agent');
+      }
     }
   };
 
@@ -203,49 +211,60 @@ export function SpriteLaunchButton({
   // Compact button for table rows
   if (compact) {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={isInError ? handleDeleteAndRecreate : handleLaunch}
-              disabled={isPending || isTransitioning || !isLoaded}
-              className={cn(
-                'relative h-9 w-9 rounded-xl',
-                isInError
-                  ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
-                  : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400',
-                className
-              )}
-            >
-              {isPending || isTransitioning ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isInError ? (
-                <AlertTriangle className="h-4 w-4" />
-              ) : (
-                <>
-                  <Bot className="h-4 w-4" />
-                  {hasSprite && (
-                    <span className="absolute -right-0.5 -top-0.5">
-                      <SpriteStatusDot status={sprite!.status} />
-                    </span>
-                  )}
-                </>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {!hasSprite && 'Launch Coding Agent'}
-            {hasSprite && isActive && 'Open Terminal'}
-            {hasSprite && canResume && 'Resume Coding Agent'}
-            {hasSprite && isInError && 'Recreate Coding Agent (checkpoint lost)'}
-            {hasSprite && isRestoring && 'Restoring from checkpoint...'}
-            {hasSprite && isCheckpointing && 'Saving checkpoint...'}
-            {hasSprite && isTransitioning && !isRestoring && !isCheckpointing && `Status: ${sprite?.status}`}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={isInError ? handleDeleteAndRecreate : handleLaunch}
+                disabled={isPending || isTransitioning || !isLoaded}
+                className={cn(
+                  'relative h-9 w-9 rounded-xl',
+                  isInError
+                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                    : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400',
+                  className
+                )}
+              >
+                {isPending || isTransitioning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isInError ? (
+                  <AlertTriangle className="h-4 w-4" />
+                ) : (
+                  <>
+                    <Bot className="h-4 w-4" />
+                    {hasSprite && (
+                      <span className="absolute -right-0.5 -top-0.5">
+                        <SpriteStatusDot status={sprite!.status} />
+                      </span>
+                    )}
+                  </>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {!hasSprite && 'Launch Coding Agent'}
+              {hasSprite && isActive && 'Open Terminal'}
+              {hasSprite && canResume && 'Resume Coding Agent'}
+              {hasSprite && isInError && 'Recreate Coding Agent (checkpoint lost)'}
+              {hasSprite && isRestoring && 'Restoring from checkpoint...'}
+              {hasSprite && isCheckpointing && 'Saving checkpoint...'}
+              {hasSprite && isTransitioning && !isRestoring && !isCheckpointing && `Status: ${sprite?.status}`}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Launch Dialog for Branch Selection (needed for compact mode too) */}
+        <SpriteLaunchDialog
+          open={isLaunchDialogOpen}
+          onOpenChange={setIsLaunchDialogOpen}
+          projectId={projectId}
+          projectTitle={projectTitle}
+          githubUrl={githubUrl ?? null}
+        />
+      </>
     );
   }
 
@@ -318,7 +337,7 @@ export function SpriteLaunchButton({
         </Tooltip>
       </TooltipProvider>
 
-      {/* Stop button - visible when sprite is running */}
+      {/* Stop button - visible when sprite is running (quick stop by default) */}
       {hasSprite && isActive && (
         <TooltipProvider>
           <Tooltip>
@@ -326,7 +345,7 @@ export function SpriteLaunchButton({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleStop}
+                onClick={() => handleStop(true)}
                 disabled={stopSprite.isPending}
                 className="px-2 border-red-500/50 text-red-500 hover:bg-red-500/10 hover:text-red-400"
               >
@@ -337,7 +356,7 @@ export function SpriteLaunchButton({
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Stop Coding Agent</TooltipContent>
+            <TooltipContent>Quick Stop (use dropdown for checkpoint)</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
@@ -403,10 +422,18 @@ export function SpriteLaunchButton({
             )}
 
             {isActive && (
-              <DropdownMenuItem onClick={handleStop}>
-                <Square className="mr-2 h-4 w-4" />
-                Stop Coding Agent
-              </DropdownMenuItem>
+              <>
+                <DropdownMenuItem onClick={() => handleStop(true)}>
+                  <Square className="mr-2 h-4 w-4" />
+                  Quick Stop
+                  <span className="ml-auto text-[10px] text-muted-foreground">fast</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleStop(false)}>
+                  <Square className="mr-2 h-4 w-4" />
+                  Stop with Checkpoint
+                  <span className="ml-auto text-[10px] text-muted-foreground">saves state</span>
+                </DropdownMenuItem>
+              </>
             )}
 
             {checkpoints && checkpoints.length > 0 && !isInError && (
@@ -425,7 +452,10 @@ export function SpriteLaunchButton({
                       {checkpoint.comment || 'Checkpoint'}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(checkpoint.createdAt).toLocaleDateString()}
+                      {checkpoint.createdAt ? (() => {
+                        const date = new Date(checkpoint.createdAt);
+                        return isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+                      })() : ''}
                     </span>
                   </DropdownMenuItem>
                 ))}

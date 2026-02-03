@@ -94,6 +94,7 @@ import { homeAssistantService } from './services/HomeAssistantService';
 import { elevenLabsService } from './services/ElevenLabsService';
 import { meetingService } from './services/MeetingService';
 import { meetingNotificationService } from './services/MeetingNotificationService';
+import { meetingTranscriptionService } from './services/MeetingTranscriptionService';
 import { noteMentionService } from './services/NoteMentionService';
 import { projectNoteAttachmentService } from './services/ProjectNoteAttachmentService';
 import { wasabiStorageService } from './services/WasabiStorageService';
@@ -524,6 +525,18 @@ const startServer = async () => {
       }
     } catch (meetingNotifError) {
       logger.warn('Meeting Notification Service initialization failed', {}, meetingNotifError);
+    }
+
+    // Initialize Meeting Transcription Service (Whisper transcription)
+    try {
+      await meetingTranscriptionService.initialize();
+      if (meetingTranscriptionService.isWhisperAvailable()) {
+        logger.info('Meeting Transcription Service initialized (Whisper enabled)');
+      } else {
+        logger.warn('Meeting Transcription Service initialized (Whisper disabled - missing OPENAI_API_KEY)');
+      }
+    } catch (transcriptionError) {
+      logger.warn('Meeting Transcription Service initialization failed', {}, transcriptionError);
     }
 
     // Initialize Note Mention Service (@mention notifications)

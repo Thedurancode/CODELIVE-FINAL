@@ -87,11 +87,12 @@ export interface ProjectContract {
 export function useProjectContracts(projectId: string, status?: ContractStatus) {
   return useQuery({
     queryKey: ['projects', projectId, 'contracts', { status }],
-    queryFn: () => {
+    queryFn: async () => {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
       const query = params.toString();
-      return api.get<ProjectContract[]>(`/api/projects/${projectId}/contracts${query ? `?${query}` : ''}`);
+      const response = await api.get<{ data: ProjectContract[] }>(`/api/projects/${projectId}/contracts${query ? `?${query}` : ''}`);
+      return response.data;
     },
     enabled: !!projectId && typeof window !== 'undefined', // Only run on client
     retry: false, // Don't retry on failure
@@ -207,7 +208,10 @@ interface ProjectSignersResponse {
 export function useProjectSigners(projectId: string) {
   return useQuery({
     queryKey: ['projects', projectId, 'signers'],
-    queryFn: () => api.get<ProjectSignersResponse>(`/api/projects/${projectId}/signers`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectSignersResponse }>(`/api/projects/${projectId}/signers`);
+      return response.data;
+    },
     enabled: !!projectId && typeof window !== 'undefined',
     staleTime: 30000,
   });

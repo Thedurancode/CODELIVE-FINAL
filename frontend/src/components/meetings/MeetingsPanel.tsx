@@ -50,7 +50,9 @@ import {
   Check,
   UserPlus,
   X,
+  VideoOff,
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import {
   Tooltip,
   TooltipContent,
@@ -464,6 +466,39 @@ export function MeetingsPanel({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {newMeeting.meetingType === 'video' && (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="flex items-center gap-3">
+                      {newMeeting.roomSettings?.recordingEnabled !== false ? (
+                        <Video className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <VideoOff className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <div className="space-y-0.5">
+                        <Label htmlFor="recordingEnabled" className="text-sm font-medium cursor-pointer">
+                          Record meeting
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Enable automatic recording and transcription
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      id="recordingEnabled"
+                      checked={newMeeting.roomSettings?.recordingEnabled !== false}
+                      onCheckedChange={(checked) =>
+                        setNewMeeting({
+                          ...newMeeting,
+                          roomSettings: {
+                            ...newMeeting.roomSettings,
+                            recordingEnabled: checked,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                )}
 
                 {newMeeting.meetingType === 'in_person' && (
                   <div className="space-y-2">

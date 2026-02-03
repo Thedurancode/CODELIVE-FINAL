@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Search, LogOut, User, Settings, Loader2, Users, UserCircle, Phone, Mail, FolderKanban, Command, Volume2, Square, History, Play } from 'lucide-react';
+import { Search, LogOut, User, Settings, Loader2, Users, UserCircle, Phone, Mail, FolderKanban, Command, Volume2, Square, History, Play, LayoutDashboard, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUniversalSearch, type UniversalSearchResult } from '@/hooks/use-universal-search';
 import {
@@ -30,6 +30,7 @@ import { NotificationBell } from './NotificationBell';
 import { TeamProfileEditor } from '@/components/team/TeamProfileEditor';
 import type { TeamConversation } from '@/types';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 // Saved recap interface
 interface SavedRecap {
@@ -59,6 +60,101 @@ function formatRecapTime(timestamp: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// Audio Waveform Visualizer for Recap Playback
+function RecapWaveform({ analyser, isPlaying }: { analyser: AnalyserNode | null; isPlaying: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
+
+  useEffect(() => {
+    if (!analyser || !canvasRef.current || !isPlaying) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        }
+      }
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const draw = () => {
+      animationRef.current = requestAnimationFrame(draw);
+      analyser.getByteFrequencyData(dataArray);
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const barCount = 40;
+      const barWidth = (canvas.width / barCount) - 1.5;
+      const barSpacing = 1.5;
+
+      for (let i = 0; i < barCount; i++) {
+        const dataIndex = Math.floor((i / barCount) * bufferLength);
+        const value = dataArray[dataIndex];
+        const barHeight = Math.max(2, (value / 255) * canvas.height * 0.9);
+
+        const intensity = value / 255;
+        // Cyan to teal gradient (hue 175-190)
+        const hue = 175 + intensity * 15;
+        const saturation = 80 + intensity * 15;
+        const lightness = 50 + intensity * 15;
+
+        if (intensity > 0.5) {
+          ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.6)`;
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${0.8 + intensity * 0.2})`;
+
+        const x = i * (barWidth + barSpacing);
+        const y = (canvas.height - barHeight) / 2;
+
+        ctx.beginPath();
+        ctx.roundRect(x, y, barWidth, barHeight, 1);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+    };
+
+    draw();
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [analyser, isPlaying]);
+
+  if (!isPlaying) return null;
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500/10 to-teal-500/10 border border-cyan-500/20 backdrop-blur-sm">
+      <canvas
+        ref={canvasRef}
+        width={180}
+        height={36}
+        className="rounded-lg"
+      />
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
+      </span>
+    </div>
+  );
+}
+
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
@@ -72,7 +168,9 @@ export function Header() {
   const [isLoadingRecap, setIsLoadingRecap] = useState(false);
   const [isPlayingRecap, setIsPlayingRecap] = useState(false);
   const [savedRecap, setSavedRecap] = useState<SavedRecap | null>(null);
+  const [recapAnalyser, setRecapAnalyser] = useState<AnalyserNode | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Get current user data
   const { data: user } = useCurrentUser();
@@ -193,23 +291,61 @@ export function Header() {
       audioRef.current.pause();
       audioRef.current = null;
     }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    setRecapAnalyser(null);
     setIsPlayingRecap(false);
   };
 
-  // Play audio from base64
+  // Play audio from base64 with waveform visualization
   const playAudioFromBase64 = (base64: string) => {
     const audio = new Audio(`data:audio/mpeg;base64,${base64}`);
+    audio.crossOrigin = 'anonymous';
     audioRef.current = audio;
-    setIsPlayingRecap(true);
+
+    // Set up audio context for waveform
+    const setupAudioAnalyser = () => {
+      try {
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaElementSource(audio);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 128;
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        audioContextRef.current = audioContext;
+        setRecapAnalyser(analyser);
+      } catch (e) {
+        console.log('Could not set up audio analyser:', e);
+      }
+    };
+
+    audio.onplay = () => {
+      if (!audioContextRef.current) {
+        setupAudioAnalyser();
+      }
+      setIsPlayingRecap(true);
+    };
 
     audio.onended = () => {
       setIsPlayingRecap(false);
+      setRecapAnalyser(null);
       audioRef.current = null;
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
     };
 
     audio.onerror = () => {
       setIsPlayingRecap(false);
+      setRecapAnalyser(null);
       audioRef.current = null;
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
     };
 
     audio.play();
@@ -227,7 +363,7 @@ export function Header() {
     playAudioFromBase64(savedRecap.audioBase64);
   };
 
-  // Handle recap button click
+  // Handle recap button click - uses backend API for TTS
   const handleRecapClick = async () => {
     // If already playing, stop
     if (isPlayingRecap) {
@@ -237,106 +373,171 @@ export function Header() {
 
     setIsLoadingRecap(true);
     try {
-      let recap: string;
       const recapType: 'single' | 'all' = isProjectDetailPage && projectId ? 'single' : 'all';
+      console.log('[Recap] Starting recap, type:', recapType, 'projectId:', projectId);
 
       if (isProjectDetailPage && projectId) {
-        // Get single project recap
-        const response = await api.post<{ recap: string }>(`/api/projects/${projectId}/recap/refresh`, {
-          userName: user?.name,
-        });
-        recap = response.recap;
+        // Use the backend cached audio endpoint for single project
+        console.log('[Recap] Fetching audio from backend...');
+        const response = await api.get<{
+          success: boolean;
+          data: {
+            audioUrl: string;
+            cached: boolean;
+            recap: string;
+          };
+        }>(`/api/projects/${projectId}/recap/audio?voice=rachel`);
+
+        console.log('[Recap] Response:', response);
+
+        const audioData = response?.data;
+        if (audioData?.audioUrl) {
+          // Play the audio with waveform visualization
+          const audio = new Audio(audioData.audioUrl);
+          audio.crossOrigin = 'anonymous';
+          audioRef.current = audio;
+
+          // Set up audio context for waveform
+          const setupAudioAnalyser = () => {
+            try {
+              const audioContext = new AudioContext();
+              const source = audioContext.createMediaElementSource(audio);
+              const analyser = audioContext.createAnalyser();
+              analyser.fftSize = 128;
+              source.connect(analyser);
+              analyser.connect(audioContext.destination);
+              audioContextRef.current = audioContext;
+              setRecapAnalyser(analyser);
+            } catch (e) {
+              console.log('Could not set up audio analyser:', e);
+            }
+          };
+
+          audio.onplay = () => {
+            console.log('[Recap] Audio playing');
+            if (!audioContextRef.current) {
+              setupAudioAnalyser();
+            }
+            setIsPlayingRecap(true);
+          };
+
+          audio.onended = () => {
+            console.log('[Recap] Audio ended');
+            setIsPlayingRecap(false);
+            setRecapAnalyser(null);
+            audioRef.current = null;
+            if (audioContextRef.current) {
+              audioContextRef.current.close();
+              audioContextRef.current = null;
+            }
+          };
+
+          audio.onerror = (e) => {
+            console.error('[Recap] Audio error:', e);
+            toast.error('Failed to play audio');
+            setIsPlayingRecap(false);
+            setRecapAnalyser(null);
+            audioRef.current = null;
+            if (audioContextRef.current) {
+              audioContextRef.current.close();
+              audioContextRef.current = null;
+            }
+          };
+
+          await audio.play();
+
+          // Save recap info for quick replay
+          const savedData: SavedRecap = {
+            text: audioData.recap || '',
+            audioBase64: '',
+            timestamp: new Date().toISOString(),
+            projectId,
+            type: 'single',
+          };
+          setSavedRecap(savedData);
+        } else {
+          // Fallback to browser speech if no audio URL
+          console.log('[Recap] No audio URL, using browser speech');
+          if (audioData?.recap) {
+            speakWithBrowserTTS(audioData.recap, projectId, 'single');
+          } else {
+            toast.error('No recap available');
+          }
+        }
       } else {
-        // Get all projects recap
-        const response = await api.post<{ recap: string }>('/api/projects/recap/all', {
+        // For all projects recap, get text and use browser speech synthesis
+        console.log('[Recap] Getting all projects recap...');
+        const response = await api.post<{
+          success: boolean;
+          data: {
+            recap: string;
+            updatedAt: string;
+          };
+        }>('/api/projects/recap/all', {
           userName: user?.name,
           limit: 3,
         });
-        recap = response.recap;
-      }
 
-      // Use ElevenLabs TTS
-      const ELEVENLABS_API_KEY = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY;
-      const VOICE_ID = process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb'; // Default voice
+        console.log('[Recap] All projects response:', response);
 
-      if (!ELEVENLABS_API_KEY) {
-        console.error('ElevenLabs API key not configured');
-        return;
-      }
-
-      const ttsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY,
-        },
-        body: JSON.stringify({
-          text: recap,
-          model_id: 'eleven_turbo_v2_5',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.5,
-            use_speaker_boost: true,
-          },
-        }),
-      });
-
-      if (!ttsResponse.ok) {
-        throw new Error('TTS request failed');
-      }
-
-      const audioBlob = await ttsResponse.blob();
-
-      // Convert blob to base64 for storage
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = (reader.result as string).split(',')[1];
-
-        // Save recap to localStorage
-        const savedData: SavedRecap = {
-          text: recap,
-          audioBase64: base64,
-          timestamp: new Date().toISOString(),
-          projectId: recapType === 'single' ? projectId : undefined,
-          type: recapType,
-        };
-
-        const storageKey = getRecapStorageKey(recapType === 'single' ? projectId : undefined);
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(savedData));
-          setSavedRecap(savedData);
-        } catch (e) {
-          console.warn('Failed to save recap to localStorage:', e);
+        const allProjectsData = response?.data;
+        if (allProjectsData?.recap) {
+          speakWithBrowserTTS(allProjectsData.recap, undefined, 'all');
+        } else {
+          toast.error('No recap available');
         }
-      };
-      reader.readAsDataURL(audioBlob);
-
-      // Play the audio
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      audioRef.current = audio;
-      setIsPlayingRecap(true);
-
-      audio.onended = () => {
-        setIsPlayingRecap(false);
-        audioRef.current = null;
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      audio.onerror = () => {
-        setIsPlayingRecap(false);
-        audioRef.current = null;
-        URL.revokeObjectURL(audioUrl);
-      };
-
-      await audio.play();
+      }
     } catch (error) {
       console.error('Recap error:', error);
+      toast.error('Failed to generate recap');
     } finally {
       setIsLoadingRecap(false);
     }
+  };
+
+  // Browser TTS fallback
+  const speakWithBrowserTTS = (text: string, projectId?: string, type: 'single' | 'all' = 'single') => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      toast.error('Speech synthesis not available');
+      return;
+    }
+
+    window.speechSynthesis.cancel(); // Cancel any ongoing speech
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v =>
+      v.name.includes('Samantha') || v.name.includes('Google') || v.lang.startsWith('en')
+    );
+    if (preferredVoice) utterance.voice = preferredVoice;
+
+    utterance.onstart = () => {
+      console.log('[Recap] Browser TTS started');
+      setIsPlayingRecap(true);
+    };
+    utterance.onend = () => {
+      console.log('[Recap] Browser TTS ended');
+      setIsPlayingRecap(false);
+    };
+    utterance.onerror = (e) => {
+      console.error('[Recap] Browser TTS error:', e);
+      setIsPlayingRecap(false);
+    };
+
+    window.speechSynthesis.speak(utterance);
+
+    // Save for display
+    const savedData: SavedRecap = {
+      text,
+      audioBase64: '',
+      timestamp: new Date().toISOString(),
+      projectId,
+      type,
+    };
+    setSavedRecap(savedData);
   };
 
   // Cleanup on unmount
@@ -345,6 +546,10 @@ export function Header() {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
       }
     };
   }, []);
@@ -581,31 +786,29 @@ export function Header() {
         )}
       </AnimatePresence>
 
-      {/* Right - Recap, Search, Notifications & User */}
-      <div className="flex items-center gap-1" suppressHydrationWarning>
+      {/* Right - Navigation, Recap, Search, Notifications & User */}
+      <div className="flex items-center gap-2" suppressHydrationWarning>
+        {/* Waveform Visualization when playing */}
+        {mounted && isPlayingRecap && (
+          <RecapWaveform analyser={recapAnalyser} isPlaying={isPlayingRecap} />
+        )}
+
         {/* Last Saved Recap Button */}
-        {mounted && savedRecap && !isLoadingRecap && (
+        {mounted && savedRecap && !isLoadingRecap && !isPlayingRecap && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={playSavedRecap}
-                className={cn(
-                  "h-10 px-3 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors gap-2",
-                  isPlayingRecap && "text-purple-500 hover:text-purple-400 bg-purple-500/10"
-                )}
+                className="h-9 px-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200 gap-2 rounded-lg border border-transparent hover:border-cyan-500/20"
               >
-                {isPlayingRecap ? (
-                  <Square className="h-4 w-4 fill-current" />
-                ) : (
-                  <History className="h-4 w-4" />
-                )}
-                <span className="text-xs">{formatRecapTime(savedRecap.timestamp)}</span>
+                <Play className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">{formatRecapTime(savedRecap.timestamp)}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>{isPlayingRecap ? 'Stop' : 'Quick Recap'}</p>
+              <p>Replay last recap</p>
             </TooltipContent>
           </Tooltip>
         )}
@@ -615,30 +818,36 @@ export function Header() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleRecapClick}
+                variant={isPlayingRecap ? "default" : "ghost"}
+                size="sm"
+                onClick={isPlayingRecap ? stopRecap : handleRecapClick}
                 disabled={isLoadingRecap}
                 className={cn(
-                  "h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
-                  isPlayingRecap && !savedRecap && "text-purple-500 hover:text-purple-400 bg-purple-500/10"
+                  "h-10 px-4 gap-2 rounded-lg transition-all duration-200",
+                  isPlayingRecap
+                    ? "bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-lg shadow-cyan-500/25"
+                    : "text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20"
                 )}
               >
                 {isLoadingRecap ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isPlayingRecap ? (
+                  <Square className="h-3.5 w-3.5 fill-current" />
                 ) : (
-                  <Volume2 className="h-5 w-5" />
+                  <Volume2 className="h-4 w-4" />
                 )}
-                <span className="sr-only">
-                  {isProjectDetailPage ? 'New Project Recap' : 'New All Projects Recap'}
+                <span className="hidden sm:inline text-sm font-medium">
+                  {isLoadingRecap ? 'Loading...' : isPlayingRecap ? 'Stop' : 'AI Recap'}
                 </span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
               <p>
-                {isProjectDetailPage
-                  ? 'Generate New Recap'
-                  : 'Generate All Projects Recap'}
+                {isPlayingRecap
+                  ? 'Stop Playback'
+                  : isProjectDetailPage
+                    ? 'Generate Project Recap'
+                    : 'Generate All Projects Recap'}
               </p>
             </TooltipContent>
           </Tooltip>

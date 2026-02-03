@@ -236,4 +236,14 @@
     content: '|';
     @apply animate-pulse text-accent-500;
   }
+
+  /* Sound bar animation for audio playback buttons */
+  @keyframes soundbar {
+    0%, 100% {
+      transform: scaleY(0.4);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
 }

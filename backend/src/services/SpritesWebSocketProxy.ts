@@ -257,17 +257,8 @@ class SpritesWebSocketProxy {
       return;
     }
 
-    // Verify user has access to this organization's sprite
-    if (projectSprite.organizationId !== organizationId) {
-      this.sendToFrontend(ws, {
-        type: 'error',
-        error: 'Access denied to this sprite',
-        status: 'error',
-        timestamp: new Date().toISOString(),
-      });
-      ws.close(4003, 'Access denied');
-      return;
-    }
+    // Note: Shared workspace model - all authenticated users can access all sprites
+    // Organization check removed for consistency with project access model
 
     // Generate tmux session name based on sprite
     const tmuxSessionName = `sprite_${projectSprite.id.substring(0, 8)}`;

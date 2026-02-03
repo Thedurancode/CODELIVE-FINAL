@@ -1561,16 +1561,22 @@ export const getTVDisplayProjects = async (req: Request, res: Response) => {
       sortOrder: 'DESC',
     });
 
-    // Return only public-safe fields for TV display
+    // Return fields needed for TV display
     const tvProjects = result.data.map((project: any) => ({
       id: project.id,
-      name: project.title,
+      title: project.title,
       description: project.description,
       status: project.status,
       logoUrl: project.logoUrl,
+      githubUrl: project.githubUrl,
+      deploymentUrl: project.deploymentUrl,
+      screenshotUrl: project.screenshotUrl,
+      tags: project.tags || [],
+      startDate: project.startDate,
+      targetEndDate: project.targetEndDate,
+      isOverdue: project.isOverdue,
       updatedAt: project.updatedAt,
       createdAt: project.createdAt,
-      clientName: project.clientName || null,
     }));
 
     res.json({

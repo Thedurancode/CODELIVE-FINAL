@@ -5,7 +5,10 @@ import type { ProjectNote } from '@/types';
 export function useProjectNotes(projectId: string) {
   return useQuery({
     queryKey: ['projectNotes', projectId],
-    queryFn: () => api.get<ProjectNote[]>(`/api/projects/${projectId}/notes`),
+    queryFn: async () => {
+      const response = await api.get<{ data: ProjectNote[] }>(`/api/projects/${projectId}/notes`);
+      return response.data;
+    },
     enabled: !!projectId,
   });
 }
@@ -13,8 +16,10 @@ export function useProjectNotes(projectId: string) {
 export function useCreateProjectNote(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { content: string; subject?: string }) =>
-      api.post<ProjectNote>(`/api/projects/${projectId}/notes`, data),
+    mutationFn: async (data: { content: string; subject?: string }) => {
+      const response = await api.post<{ data: ProjectNote }>(`/api/projects/${projectId}/notes`, data);
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectNotes', projectId] });
     },
@@ -24,13 +29,16 @@ export function useCreateProjectNote(projectId: string) {
 export function useUpdateProjectNote(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       noteId,
       data,
     }: {
       noteId: number;
       data: { content?: string; subject?: string | null };
-    }) => api.patch<ProjectNote>(`/api/projects/${projectId}/notes/${noteId}`, data),
+    }) => {
+      const response = await api.patch<{ data: ProjectNote }>(`/api/projects/${projectId}/notes/${noteId}`, data);
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectNotes', projectId] });
     },
@@ -50,11 +58,13 @@ export function useDeleteProjectNote(projectId: string) {
 
 export function useCreateGitHubIssueFromNote(projectId: string) {
   return useMutation({
-    mutationFn: ({ noteId, labels }: { noteId: number; labels?: string[] }) =>
-      api.post<{ issueNumber: number; issueUrl: string; title: string }>(
+    mutationFn: async ({ noteId, labels }: { noteId: number; labels?: string[] }) => {
+      const response = await api.post<{ data: { issueNumber: number; issueUrl: string; title: string } }>(
         `/api/projects/${projectId}/notes/${noteId}/github-issue`,
         { labels }
-      ),
+      );
+      return response.data;
+    },
   });
 }
 
@@ -69,7 +79,10 @@ export interface MentionableUser {
 export function useMentionableUsers(projectId: string) {
   return useQuery({
     queryKey: ['mentionableUsers', projectId],
-    queryFn: () => api.get<MentionableUser[]>(`/api/projects/${projectId}/mentionable-users`),
+    queryFn: async () => {
+      const response = await api.get<{ data: MentionableUser[] }>(`/api/projects/${projectId}/mentionable-users`);
+      return response.data;
+    },
     enabled: !!projectId,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
@@ -106,7 +119,10 @@ export interface NoteAttachment {
 export function useNoteAttachments(projectId: string, noteId: number) {
   return useQuery({
     queryKey: ['noteAttachments', projectId, noteId],
-    queryFn: () => api.get<NoteAttachment[]>(`/api/projects/${projectId}/notes/${noteId}/attachments`),
+    queryFn: async () => {
+      const response = await api.get<{ data: NoteAttachment[] }>(`/api/projects/${projectId}/notes/${noteId}/attachments`);
+      return response.data;
+    },
     enabled: !!projectId && !!noteId,
   });
 }

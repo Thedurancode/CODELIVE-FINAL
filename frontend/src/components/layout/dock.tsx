@@ -20,14 +20,14 @@ import { DockItem } from './dock-item';
 import { DockAgentsItem } from './dock-agents-item';
 
 const dockItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  // { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/chat', label: 'AI Chat', icon: Bot },
   { href: '/activity-feed', label: 'Activity', icon: Activity },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/contacts', label: 'Contacts', icon: Users },
-  { href: '/calls', label: 'Calls', icon: Phone },
-  { href: '/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/email', label: 'Email', icon: Mail },
+  // { href: '/calls', label: 'Calls', icon: Phone },
+  // { href: '/calendar', label: 'Calendar', icon: Calendar },
+  // { href: '/email', label: 'Email', icon: Mail },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

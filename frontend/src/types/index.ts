@@ -264,6 +264,20 @@ export interface TaskStats {
 
 // Project Management Types
 export type ProjectStatus = 'in_talks' | 'now_coding' | 'needs_review' | 'completed' | 'cancelled';
+export type BrandStyle = 'modern' | 'classic' | 'minimalist' | 'bold' | 'playful' | 'elegant' | 'tech';
+
+export interface BrandSettings {
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  backgroundColor?: string;
+  textColor?: string;
+  headingFont?: string;
+  bodyFont?: string;
+  style?: BrandStyle;
+  moodKeywords?: string[];
+  additionalNotes?: string;
+}
 
 export interface Project {
   id: string;
@@ -283,6 +297,8 @@ export interface Project {
   actualEndDate: string | null;
   tags: string[];
   metadata: Record<string, unknown> | null;
+  aboutUs: string | null;
+  brandSettings: BrandSettings | null;
   createdAt: string;
   updatedAt: string;
   isOverdue?: boolean;

@@ -79,6 +79,8 @@ import {
   Download,
   Phone,
   LayoutDashboard,
+  Server,
+  Eye,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -98,6 +100,7 @@ import { CodingTasksList } from '@/components/projects/CodingTasksList';
 import { ProjectActivityFeed } from '@/components/projects/ProjectActivityFeed';
 import { SpriteLaunchButton, SpritePanel, SpriteTaskQueuePanel, SpriteFileBrowser, SpriteMcpPanel } from '@/components/sprites';
 import { SpriteChatPanel } from '@/components/sprites/SpriteChatPanel';
+import { AutomakerPanel } from '@/components/sprites/AutomakerPanel';
 import { useSpriteByProject } from '@/hooks/use-sprites';
 import { useProjectContracts, getContractStatusColor, getContractStatusLabel, type ProjectContract } from '@/hooks/use-project-contracts';
 import { ProjectSignersPanel } from '@/components/contracts/ProjectSignersPanel';
@@ -950,6 +953,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <StickyNote className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Overview</span>
               </TabsTrigger>
+              <TabsTrigger value="brand" className="data-[state=active]:bg-secondary shrink-0">
+                <Palette className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Brand</span>
+              </TabsTrigger>
               {project.githubUrl && (
                 <TabsTrigger value="agent" className="data-[state=active]:bg-secondary shrink-0">
                   <Bot className="h-4 w-4 sm:mr-2" />
@@ -972,9 +979,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <Key className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Secrets</span>
               </TabsTrigger>
-              <TabsTrigger value="brand" className="data-[state=active]:bg-secondary shrink-0">
-                <Palette className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Brand</span>
+              <TabsTrigger value="automaker" className="data-[state=active]:bg-secondary shrink-0">
+                <Server className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Automaker</span>
               </TabsTrigger>
             </TabsList>
 
@@ -1026,6 +1033,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       <Plug className="h-4 w-4 mr-2" />
                       MCP
                     </TabsTrigger>
+                    <TabsTrigger value="automaker-agent" className="data-[state=active]:bg-background/80">
+                      <Server className="h-4 w-4 mr-2" />
+                      Automaker
+                    </TabsTrigger>
                   </TabsList>
                   <TabsContent value="agent-status">
                     <SpritePanel
@@ -1073,6 +1084,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       </CardContent>
                     </Card>
                   </TabsContent>
+                  <TabsContent value="automaker-agent">
+                    <AutomakerPanel
+                      projectPath={project.githubUrl ? `/Users/edduran/Documents/GitHub/${project.title.replace(/\s+/g, '-')}` : `/tmp/automaker/${project.id}`}
+                      projectTitle={project.title}
+                    />
+                  </TabsContent>
                 </Tabs>
               </TabsContent>
             )}
@@ -1110,6 +1127,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <ProjectEnvVariablesPanel projectId={id} />
             </TabsContent>
 
+            <TabsContent value="automaker">
+              <AutomakerPanel
+                projectPath={project.githubUrl ? `/Users/edduran/Documents/GitHub/${project.title.replace(/\s+/g, '-')}` : `/tmp/automaker/${project.id}`}
+                projectTitle={project.title}
+              />
+            </TabsContent>
+
             <TabsContent value="brand">
               <ProjectBrandPanel projectId={id} />
             </TabsContent>
@@ -1126,6 +1150,60 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   screenshotUrl={project.screenshotUrl}
                   deploymentUrl={project.deploymentUrl}
                 />
+              )}
+
+              {/* Quick Links Section */}
+              {(project.deploymentUrl || project.githubUrl || project.apiUrl || project.previewUrl) && (
+                <div className="grid grid-cols-2 gap-2">
+                  {project.deploymentUrl && (
+                    <a
+                      href={project.deploymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 rounded-xl bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 transition-all group flex items-center justify-center gap-2"
+                    >
+                      <Globe className="h-4 w-4 text-green-400" />
+                      <span className="text-sm font-medium text-green-400">Live</span>
+                      <ExternalLink className="h-3 w-3 text-green-400/50 group-hover:text-green-400" />
+                    </a>
+                  )}
+                  {project.previewUrl && (
+                    <a
+                      href={project.previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all group flex items-center justify-center gap-2"
+                    >
+                      <Eye className="h-4 w-4 text-blue-400" />
+                      <span className="text-sm font-medium text-blue-400">Preview</span>
+                      <ExternalLink className="h-3 w-3 text-blue-400/50 group-hover:text-blue-400" />
+                    </a>
+                  )}
+                  {project.apiUrl && (
+                    <a
+                      href={project.apiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-all group flex items-center justify-center gap-2"
+                    >
+                      <Server className="h-4 w-4 text-amber-400" />
+                      <span className="text-sm font-medium text-amber-400">API</span>
+                      <ExternalLink className="h-3 w-3 text-amber-400/50 group-hover:text-amber-400" />
+                    </a>
+                  )}
+                  {project.githubUrl && (
+                    <a
+                      href={project.githubUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 rounded-xl bg-muted/50 border border-border/50 hover:bg-muted/70 transition-all group flex items-center justify-center gap-2"
+                    >
+                      <Github className="h-4 w-4 text-foreground" />
+                      <span className="text-sm font-medium">Repo</span>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-foreground" />
+                    </a>
+                  )}
+                </div>
               )}
 
               {/* Quick Stats Section */}
@@ -1162,36 +1240,6 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   )}
                 </div>
               </div>
-
-              {/* Quick Links Section */}
-              {(project.deploymentUrl || project.githubUrl) && (
-                <div className="flex items-center gap-2">
-                  {project.deploymentUrl && (
-                    <a
-                      href={project.deploymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 p-3 rounded-xl bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 transition-all group flex items-center justify-center gap-2"
-                    >
-                      <Globe className="h-5 w-5 text-green-400" />
-                      <span className="text-sm font-medium text-green-400">Live</span>
-                      <ExternalLink className="h-3 w-3 text-green-400/50 group-hover:text-green-400" />
-                    </a>
-                  )}
-                  {project.githubUrl && (
-                    <a
-                      href={project.githubUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 p-3 rounded-xl bg-muted/50 border border-border/50 hover:bg-muted/70 transition-all group flex items-center justify-center gap-2"
-                    >
-                      <Github className="h-5 w-5 text-foreground" />
-                      <span className="text-sm font-medium">Repo</span>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-foreground" />
-                    </a>
-                  )}
-                </div>
-              )}
 
               {/* Activity Feed Section */}
               <div className="p-4 rounded-xl bg-muted/50 border border-border/50">

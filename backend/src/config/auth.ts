@@ -8,6 +8,13 @@ import { betterAuth } from 'better-auth';
 import { admin } from 'better-auth/plugins';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
+
+// Load environment variables early
+dotenv.config();
+
+console.log('[Better Auth] Initializing with DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+console.log('[Better Auth] NODE_ENV:', process.env.NODE_ENV);
 
 // Build connection URL from environment
 const getDatabaseUrl = (): string => {
@@ -25,12 +32,22 @@ const getDatabaseUrl = (): string => {
 };
 
 // Create PostgreSQL connection pool for Better Auth
+const dbUrl = getDatabaseUrl();
+console.log('[Better Auth] Database URL prefix:', dbUrl.slice(0, 30) + '...');
+
+// Don't override SSL if connection string specifies sslmode
+const useSSL = process.env.NODE_ENV === 'production' && !dbUrl.includes('sslmode=disable');
+console.log('[Better Auth] SSL enabled:', useSSL);
+
 const pool = new Pool({
-  connectionString: getDatabaseUrl(),
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
-    : false,
+  connectionString: dbUrl,
+  ssl: useSSL ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' } : false,
 });
+
+// Test pool connection
+pool.query('SELECT 1')
+  .then(() => console.log('[Better Auth] Database pool connected successfully'))
+  .catch((err: Error) => console.error('[Better Auth] Database pool connection failed:', err.message));
 
 /**
  * Better Auth instance
