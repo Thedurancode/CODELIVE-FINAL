@@ -1,0 +1,67 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.codelive.tvapp'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.codelive.tvapp"
+        minSdk 22  // Fire TV 1st gen support
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+
+        // TV-specific settings
+        vectorDrawables {
+            useSupportLibrary true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        viewBinding true
+    }
+
+    // Fire TV / Android TV specific
+    lintOptions {
+        disable 'MissingLeanbackLauncher'
+    }
+}
+
+dependencies {
+    // AndroidX Core
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+
+    // Leanback (Android TV / Fire TV UI components)
+    implementation 'androidx.leanback:leanback:1.0.0'
+
+    // WebView
+    implementation 'androidx.webkit:webkit:1.10.0'
+
+    // Lifecycle
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+}

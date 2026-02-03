@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Codelive TV</string>
+    <string name="loading">Loading Codelive TV...</string>
+    <string name="error_network">Network error. Please check your connection.</string>
+</resources>

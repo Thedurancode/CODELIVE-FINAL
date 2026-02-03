@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Codelive Brand Colors -->
+    <color name="primary">#EF4444</color>
+    <color name="primary_dark">#DC2626</color>
+    <color name="accent">#F97316</color>
+
+    <!-- Background -->
+    <color name="background">#09090B</color>
+    <color name="surface">#18181B</color>
+
+    <!-- Text -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A1A1AA</color>
+
+    <!-- Status -->
+    <color name="success">#22C55E</color>
+    <color name="error">#EF4444</color>
+    <color name="warning">#F59E0B</color>
+</resources>
