@@ -8,12 +8,13 @@ import type { Project, ProjectStatus, PaginatedResponse } from '@/types';
 import { RefreshCw, Wifi, WifiOff, Loader2, Github, AlertTriangle, Calendar, Clock, Rocket, PauseCircle, CheckCircle2, Archive, XCircle, X, ExternalLink, CalendarDays, User, GitCommit, CircleDot, MessageSquare, Globe, Play, Maximize, Minimize, Settings, Pause, SkipForward, ChevronLeft, ChevronRight, QrCode, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTVRemoteReceiver, generateRoomCode, type TVRemoteHandlers, type SlideConfig as RemoteSlideConfig } from '@/hooks/use-tv-remote';
+import { AIActivitySlide } from '@/components/tv/AIActivitySlide';
 
 // Create a client for this standalone page
 const queryClient = new QueryClient();
 
 // ============ SLIDESHOW TYPES ============
-type SlideType = 'overview' | 'column-in_talks' | 'column-now_coding' | 'column-needs_review' | 'column-completed' | 'logo' | 'top3' | 'video' | 'youtube' | 'recent-issues' | 'recent-commits' | 'hacker-news' | 'reddit';
+type SlideType = 'overview' | 'column-in_talks' | 'column-now_coding' | 'column-needs_review' | 'column-completed' | 'logo' | 'top3' | 'video' | 'youtube' | 'recent-issues' | 'recent-commits' | 'hacker-news' | 'reddit' | 'ai-activity';
 
 interface SlideConfig {
   type: SlideType;
@@ -74,6 +75,7 @@ function SettingsPanel({
 
   const availableSlides: { type: SlideType; label: string; hasUrl?: boolean }[] = [
     { type: 'overview', label: 'All Projects (Kanban)' },
+    { type: 'ai-activity', label: 'Live Agents' },
     { type: 'top3', label: 'Top 3 Active Projects' },
     { type: 'recent-issues', label: 'Recent GitHub Issues' },
     { type: 'recent-commits', label: 'Recent Commits' },
@@ -3100,6 +3102,8 @@ function TVBoard() {
     switch (currentSlide.type) {
       case 'logo':
         return <LogoSlide />;
+      case 'ai-activity':
+        return <AIActivitySlide />;
       case 'top3':
         return <Top3Slide projects={projects} />;
       case 'recent-issues':

@@ -30,6 +30,14 @@ import {
   Minimize2,
   FolderOpen,
   Settings,
+  Brain,
+  Sparkles,
+  ListTodo,
+  Wand2,
+  BookOpen,
+  Lightbulb,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,7 +56,17 @@ import {
   useDeleteAutomakerFeature,
   useAutomakerAgentOutput,
   useAutomakerRawOutput,
+  // AI Planning hooks
+  useGenerateTitle,
+  useAnalyzeProject,
+  useProjectAnalysis,
+  useGenerateBacklogPlan,
+  useApplyBacklogPlan,
+  useGenerateSpec,
+  useGenerateSuggestions,
+  useEnhancePrompt,
 } from '@/hooks/use-automaker';
+import { useAutomakerSuggestions } from '@/hooks/use-automaker-websocket';
 
 interface AutomakerPanelProps {
   projectPath: string;
@@ -72,6 +90,15 @@ export function AutomakerPanel({
   const [outputMode, setOutputMode] = useState<'formatted' | 'raw'>('formatted');
   const outputEndRef = useRef<HTMLDivElement>(null);
 
+  // AI Planning state
+  const [showAiPlanning, setShowAiPlanning] = useState(false);
+  const [aiPlanningTab, setAiPlanningTab] = useState<'analyze' | 'backlog' | 'suggestions'>('analyze');
+  const [backlogPrompt, setBacklogPrompt] = useState('');
+  const [generatedPlan, setGeneratedPlan] = useState<{
+    features: Array<{ title: string; description: string; priority: number; category?: string }>;
+    reasoning: string;
+  } | null>(null);
+
   const { data: health, isLoading: healthLoading } = useAutomakerHealth();
   const {
     data: agentsData,
@@ -92,6 +119,27 @@ export function AutomakerPanel({
   // Agent output hooks
   const { data: agentOutput } = useAutomakerAgentOutput(projectPath, selectedFeatureId);
   const { data: rawOutput } = useAutomakerRawOutput(projectPath, selectedFeatureId);
+
+  // AI Planning hooks
+  const { data: projectAnalysisData, refetch: refetchAnalysis } = useProjectAnalysis(projectPath);
+  const analyzeProject = useAnalyzeProject();
+  const generateBacklogPlan = useGenerateBacklogPlan();
+  const applyBacklogPlan = useApplyBacklogPlan();
+  const generateSuggestions = useGenerateSuggestions();
+  const generateTitle = useGenerateTitle();
+  const enhancePrompt = useEnhancePrompt();
+
+  // WebSocket for real-time suggestions
+  const {
+    isConnected: wsConnected,
+    isGenerating: wsSuggestionsGenerating,
+    progress: wsSuggestionsProgress,
+    suggestions: wsSuggestions,
+    error: wsSuggestionsError,
+    toolCalls: wsToolCalls,
+    reset: resetWsSuggestions,
+    startGenerating: startWsSuggestions,
+  } = useAutomakerSuggestions();
 
   const isServerOnline = health?.status === 'ok';
   const runningAgents = agentsData?.runningAgents || [];
@@ -207,6 +255,146 @@ export function AutomakerPanel({
     toast.success('Refreshed');
   };
 
+  // AI Planning handlers
+  const handleAnalyzeProject = async () => {
+    try {
+      toast.loading('Analyzing project...');
+      await analyzeProject.mutateAsync({ projectPath });
+      toast.dismiss();
+      toast.success('Project analyzed!');
+      refetchAnalysis();
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to analyze project');
+    }
+  };
+
+  const handleGenerateBacklog = async () => {
+    try {
+      toast.loading('Generating backlog plan...');
+      const result = await generateBacklogPlan.mutateAsync({
+        projectPath,
+        prompt: backlogPrompt || undefined,
+      });
+      toast.dismiss();
+      toast.success('Backlog plan generated!');
+      setGeneratedPlan(result.plan);
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to generate backlog');
+    }
+  };
+
+  const handleApplyBacklog = async () => {
+    if (!generatedPlan) return;
+    try {
+      toast.loading('Creating tasks from plan...');
+      const result = await applyBacklogPlan.mutateAsync({
+        projectPath,
+        plan: generatedPlan,
+      });
+      toast.dismiss();
+      toast.success(`Created ${result.createdCount} tasks!`);
+      setGeneratedPlan(null);
+      setBacklogPrompt('');
+      refetchFeatures();
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to apply backlog');
+    }
+  };
+
+  const handleGenerateSuggestions = async () => {
+    try {
+      // Reset WebSocket state and mark as generating
+      resetWsSuggestions();
+      startWsSuggestions();
+
+      // Start generation via HTTP (triggers background process)
+      await generateSuggestions.mutateAsync({ projectPath });
+
+      // Toast will be shown when WebSocket receives complete event
+      if (!wsConnected) {
+        toast.info('Generating suggestions... (WebSocket not connected, results may be delayed)');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate suggestions');
+    }
+  };
+
+  // Handle WebSocket suggestions completion - auto-add to backlog
+  useEffect(() => {
+    if (wsSuggestions && wsSuggestions.length > 0) {
+      // Convert suggestions to features and create them directly
+      const createFeatures = async () => {
+        let createdCount = 0;
+
+        for (const suggestion of wsSuggestions) {
+          try {
+            await createFeature.mutateAsync({
+              projectPath,
+              title: suggestion.description.substring(0, 60) + (suggestion.description.length > 60 ? '...' : ''),
+              description: suggestion.description,
+            });
+            createdCount++;
+          } catch (error) {
+            console.error('Failed to create feature:', error);
+          }
+        }
+
+        if (createdCount > 0) {
+          toast.success(`Created ${createdCount} tasks in backlog!`);
+          refetchFeatures();
+        } else {
+          toast.error('Failed to create tasks');
+        }
+        resetWsSuggestions();
+      };
+
+      createFeatures();
+    }
+  }, [wsSuggestions, projectPath, createFeature, refetchFeatures, resetWsSuggestions]);
+
+  // Handle WebSocket suggestions error
+  useEffect(() => {
+    if (wsSuggestionsError) {
+      toast.error(`Suggestions failed: ${wsSuggestionsError}`);
+    }
+  }, [wsSuggestionsError]);
+
+  const handleEnhanceDescription = async () => {
+    if (!taskDescription.trim()) return;
+    try {
+      toast.loading('Enhancing description...');
+      const result = await enhancePrompt.mutateAsync({
+        text: taskDescription,
+        mode: 'improve',
+      });
+      toast.dismiss();
+      setTaskDescription(result.enhanced);
+      toast.success('Description enhanced!');
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to enhance');
+    }
+  };
+
+  const handleGenerateTitle = async () => {
+    if (!taskDescription.trim()) return;
+    try {
+      toast.loading('Generating title...');
+      const result = await generateTitle.mutateAsync({
+        description: taskDescription,
+      });
+      toast.dismiss();
+      setTaskTitle(result.title);
+      toast.success('Title generated!');
+    } catch (error) {
+      toast.dismiss();
+      toast.error(error instanceof Error ? error.message : 'Failed to generate title');
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -295,6 +483,23 @@ export function AutomakerPanel({
             >
               Online
             </Badge>
+            {/* WebSocket connection indicator */}
+            <div
+              className={cn(
+                'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]',
+                wsConnected
+                  ? 'text-cyan-400 bg-cyan-500/10'
+                  : 'text-zinc-500 bg-zinc-800/50'
+              )}
+              title={wsConnected ? 'Real-time updates active' : 'Real-time updates disconnected'}
+            >
+              {wsConnected ? (
+                <Wifi className="h-3 w-3" />
+              ) : (
+                <WifiOff className="h-3 w-3" />
+              )}
+              <span className="hidden sm:inline">{wsConnected ? 'Live' : 'Offline'}</span>
+            </div>
             {projectAgents.length > 0 && (
               <Badge className="text-xs bg-purple-500/20 text-purple-400 border-purple-500/30">
                 {projectAgents.length} Running
@@ -336,6 +541,20 @@ export function AutomakerPanel({
           >
             <Zap className="h-3.5 w-3.5" />
             New Task
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowAiPlanning(!showAiPlanning)}
+            className={cn(
+              'h-8 px-3 text-xs gap-1.5',
+              showAiPlanning
+                ? 'bg-cyan-500/20 text-cyan-400'
+                : 'text-zinc-300 hover:text-white hover:bg-zinc-700'
+            )}
+          >
+            <Brain className="h-3.5 w-3.5" />
+            AI Planning
           </Button>
           {selectedFeatureId && (
             <Button
@@ -399,25 +618,57 @@ export function AutomakerPanel({
         {showNewTask && (
           <div className="p-4 border-b border-zinc-800/50 bg-zinc-800/20">
             <div className="space-y-3">
-              <Input
-                placeholder="What should the AI agent do?"
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                className="bg-zinc-800/50 border-zinc-700 focus:border-purple-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleStartTask();
-                  }
-                }}
-              />
-              <Textarea
-                placeholder="Additional details (optional)..."
-                value={taskDescription}
-                onChange={(e) => setTaskDescription(e.target.value)}
-                rows={3}
-                className="bg-zinc-800/50 border-zinc-700 focus:border-purple-500 resize-none"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="What should the AI agent do?"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  className="bg-zinc-800/50 border-zinc-700 focus:border-purple-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleStartTask();
+                    }
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleGenerateTitle}
+                  disabled={!taskDescription.trim() || generateTitle.isPending}
+                  className="h-9 px-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 shrink-0"
+                  title="Generate title from description"
+                >
+                  {generateTitle.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <div className="relative">
+                <Textarea
+                  placeholder="Additional details (optional)..."
+                  value={taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                  rows={3}
+                  className="bg-zinc-800/50 border-zinc-700 focus:border-purple-500 resize-none pr-10"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleEnhanceDescription}
+                  disabled={!taskDescription.trim() || enhancePrompt.isPending}
+                  className="absolute right-2 top-2 h-7 px-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                  title="Enhance with AI"
+                >
+                  {enhancePrompt.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   onClick={handleStartTask}
@@ -448,6 +699,324 @@ export function AutomakerPanel({
                 </Button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* AI Planning Panel */}
+        {showAiPlanning && (
+          <div className="border-b border-zinc-800/50 bg-zinc-800/20">
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/30">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAiPlanningTab('analyze')}
+                className={cn(
+                  'h-7 px-3 text-xs',
+                  aiPlanningTab === 'analyze'
+                    ? 'bg-cyan-500/20 text-cyan-400'
+                    : 'text-zinc-400 hover:text-white'
+                )}
+              >
+                <BookOpen className="h-3.5 w-3.5 mr-1.5" />
+                Analyze
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAiPlanningTab('backlog')}
+                className={cn(
+                  'h-7 px-3 text-xs',
+                  aiPlanningTab === 'backlog'
+                    ? 'bg-cyan-500/20 text-cyan-400'
+                    : 'text-zinc-400 hover:text-white'
+                )}
+              >
+                <ListTodo className="h-3.5 w-3.5 mr-1.5" />
+                Backlog
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAiPlanningTab('suggestions')}
+                className={cn(
+                  'h-7 px-3 text-xs',
+                  aiPlanningTab === 'suggestions'
+                    ? 'bg-cyan-500/20 text-cyan-400'
+                    : 'text-zinc-400 hover:text-white'
+                )}
+              >
+                <Lightbulb className="h-3.5 w-3.5 mr-1.5" />
+                Ideas
+              </Button>
+              <div className="flex-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAiPlanning(false)}
+                className="h-7 px-2 text-zinc-400 hover:text-white"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
+            {/* Analyze Tab */}
+            {aiPlanningTab === 'analyze' && (
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-white">Project Analysis</h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAnalyzeProject}
+                    disabled={analyzeProject.isPending}
+                    className="h-7 text-xs gap-1.5 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                  >
+                    {analyzeProject.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Brain className="h-3.5 w-3.5" />
+                    )}
+                    {projectAnalysisData?.analysis ? 'Re-analyze' : 'Analyze Project'}
+                  </Button>
+                </div>
+                {projectAnalysisData?.analysis ? (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50">
+                      <p className="text-xs text-zinc-400 mb-1">Summary</p>
+                      <p className="text-sm text-zinc-200">{projectAnalysisData.analysis.summary}</p>
+                    </div>
+                    {projectAnalysisData?.analysis?.technologies?.length > 0 && (
+                      <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50">
+                        <p className="text-xs text-zinc-400 mb-2">Technologies</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {projectAnalysisData.analysis.technologies.map((tech, i) => (
+                            <Badge key={i} variant="outline" className="text-xs border-zinc-600 text-zinc-300">
+                              {tech}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-zinc-500">
+                    <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No analysis yet</p>
+                    <p className="text-xs mt-1">Click "Analyze Project" to understand your codebase</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Backlog Tab */}
+            {aiPlanningTab === 'backlog' && (
+              <div className="p-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-zinc-400 mb-1.5 block">
+                      What do you want to build? (optional)
+                    </label>
+                    <Textarea
+                      placeholder="Describe your goals, features you want, or areas to improve..."
+                      value={backlogPrompt}
+                      onChange={(e) => setBacklogPrompt(e.target.value)}
+                      rows={2}
+                      className="bg-zinc-800/50 border-zinc-700 focus:border-cyan-500 resize-none text-sm"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleGenerateBacklog}
+                    disabled={generateBacklogPlan.isPending}
+                    className="w-full gap-2 bg-cyan-600 hover:bg-cyan-500 text-white"
+                  >
+                    {generateBacklogPlan.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ListTodo className="h-4 w-4" />
+                    )}
+                    Generate Backlog Plan
+                  </Button>
+
+                  {generatedPlan && (
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium text-white">Generated Plan</h4>
+                        <Badge className="text-xs bg-cyan-500/20 text-cyan-400 border-cyan-500/30">
+                          {generatedPlan.features?.length || 0} tasks
+                        </Badge>
+                      </div>
+                      {generatedPlan.reasoning && (
+                        <p className="text-xs text-zinc-400 italic">{generatedPlan.reasoning}</p>
+                      )}
+                      <ScrollArea className="h-48">
+                        <div className="space-y-2">
+                          {(generatedPlan.features || []).map((feature, i) => (
+                            <div
+                              key={i}
+                              className="p-2.5 rounded-lg bg-zinc-900/50 border border-zinc-700/50"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-sm text-white font-medium truncate">{feature.title}</p>
+                                  <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">{feature.description}</p>
+                                </div>
+                                <Badge variant="outline" className="text-[10px] shrink-0 border-zinc-600">
+                                  P{feature.priority}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={handleApplyBacklog}
+                          disabled={applyBacklogPlan.isPending}
+                          className="flex-1 gap-2 bg-green-600 hover:bg-green-500 text-white"
+                        >
+                          {applyBacklogPlan.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4" />
+                          )}
+                          Apply Plan
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setGeneratedPlan(null)}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          Discard
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Suggestions Tab */}
+            {aiPlanningTab === 'suggestions' && (
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-medium text-white">AI Suggestions</h4>
+                    {/* WebSocket status indicator */}
+                    <div
+                      className={cn(
+                        'w-2 h-2 rounded-full',
+                        wsConnected ? 'bg-green-500' : 'bg-zinc-500'
+                      )}
+                      title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateSuggestions}
+                    disabled={generateSuggestions.isPending || wsSuggestionsGenerating}
+                    className="h-7 text-xs gap-1.5 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                  >
+                    {(generateSuggestions.isPending || wsSuggestionsGenerating) ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Lightbulb className="h-3.5 w-3.5" />
+                    )}
+                    {wsSuggestionsGenerating ? 'Analyzing...' : 'Generate & Add to Backlog'}
+                  </Button>
+                </div>
+
+                {/* Real-time progress during generation */}
+                {wsSuggestionsGenerating && (
+                  <div className="mb-4 space-y-2">
+                    {/* Tool calls indicator */}
+                    {wsToolCalls.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-cyan-400">
+                        <Terminal className="h-3 w-3" />
+                        <span>Reading: {wsToolCalls[wsToolCalls.length - 1]?.tool}</span>
+                      </div>
+                    )}
+                    {/* Progress text */}
+                    {wsSuggestionsProgress && (
+                      <ScrollArea className="h-32 rounded-lg bg-zinc-900/50 border border-zinc-700/50 p-2">
+                        <pre className="text-xs text-zinc-400 whitespace-pre-wrap">
+                          {wsSuggestionsProgress}
+                        </pre>
+                      </ScrollArea>
+                    )}
+                    {!wsSuggestionsProgress && (
+                      <div className="flex items-center gap-2 text-xs text-zinc-400">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span>AI is analyzing your codebase...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {generatedPlan && !wsSuggestionsGenerating ? (
+                  <div className="space-y-3">
+                    <ScrollArea className="h-48">
+                      <div className="space-y-2">
+                        {(generatedPlan.features || []).map((feature, i) => (
+                          <div
+                            key={i}
+                            className="p-2.5 rounded-lg bg-zinc-900/50 border border-zinc-700/50"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm text-white font-medium truncate">{feature.title}</p>
+                                <p className="text-xs text-zinc-400 mt-0.5 line-clamp-2">{feature.description}</p>
+                              </div>
+                              {feature.category && (
+                                <Badge variant="outline" className="text-[10px] shrink-0 border-zinc-600">
+                                  {feature.category}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={handleApplyBacklog}
+                        disabled={applyBacklogPlan.isPending}
+                        className="flex-1 gap-2 bg-green-600 hover:bg-green-500 text-white"
+                      >
+                        {applyBacklogPlan.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
+                        Create Tasks
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setGeneratedPlan(null);
+                          resetWsSuggestions();
+                        }}
+                        className="text-zinc-400 hover:text-white"
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
+                ) : !wsSuggestionsGenerating && (
+                  <div className="text-center py-6 text-zinc-500">
+                    <Lightbulb className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No suggestions yet</p>
+                    <p className="text-xs mt-1">Click "Generate Ideas" - AI will analyze your codebase and automatically add tasks to your backlog</p>
+                    {!wsConnected && (
+                      <p className="text-xs mt-2 text-amber-500">
+                        WebSocket disconnected - results may be delayed
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -371,3 +371,256 @@ export function useAutomakerRawOutput(projectPath: string, featureId: string | n
     refetchInterval: 3000, // Poll every 3 seconds for real-time updates
   });
 }
+
+// ============================================
+// 🧠 AI PLANNING FEATURES
+// ============================================
+
+/**
+ * Generate AI title from task description
+ */
+export function useGenerateTitle() {
+  return useMutation({
+    mutationFn: async ({ description }: { description: string }) => {
+      return automakerFetch<{ success: boolean; title: string }>(
+        '/api/features/generate-title',
+        {
+          method: 'POST',
+          body: JSON.stringify({ description }),
+        }
+      );
+    },
+  });
+}
+
+/**
+ * Analyze project structure with AI
+ */
+export function useAnalyzeProject() {
+  return useMutation({
+    mutationFn: async ({ projectPath }: { projectPath: string }) => {
+      return automakerFetch<{
+        success: boolean;
+        analysis: {
+          summary: string;
+          technologies: string[];
+          structure: string;
+          suggestions: string[];
+        };
+      }>('/api/auto-mode/analyze-project', {
+        method: 'POST',
+        body: JSON.stringify({ projectPath }),
+      });
+    },
+  });
+}
+
+/**
+ * Get cached project analysis
+ */
+export function useProjectAnalysis(projectPath: string) {
+  return useQuery({
+    queryKey: ['automaker', 'analysis', projectPath],
+    queryFn: () =>
+      automakerFetch<{
+        success: boolean;
+        analysis: {
+          summary: string;
+          technologies: string[];
+          structure: string;
+        } | null;
+      }>('/api/ideation/analysis', {
+        method: 'POST',
+        body: JSON.stringify({ projectPath }),
+      }),
+    enabled: !!projectPath,
+    staleTime: 300000, // Cache for 5 minutes
+  });
+}
+
+/**
+ * Generate backlog plan - AI organizes and prioritizes tasks
+ */
+export function useGenerateBacklogPlan() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ projectPath, prompt }: { projectPath: string; prompt?: string }) => {
+      return automakerFetch<{
+        success: boolean;
+        plan: {
+          features: Array<{
+            title: string;
+            description: string;
+            priority: number;
+            category?: string;
+          }>;
+          reasoning: string;
+        };
+      }>('/api/backlog-plan/generate', {
+        method: 'POST',
+        body: JSON.stringify({ projectPath, prompt }),
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['automaker', 'features', variables.projectPath],
+      });
+    },
+  });
+}
+
+/**
+ * Apply backlog plan - creates features from plan
+ */
+export function useApplyBacklogPlan() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectPath,
+      plan
+    }: {
+      projectPath: string;
+      plan: {
+        features: Array<{
+          title: string;
+          description: string;
+          priority: number;
+          category?: string;
+        }>;
+      };
+    }) => {
+      return automakerFetch<{ success: boolean; createdCount: number }>(
+        '/api/backlog-plan/apply',
+        {
+          method: 'POST',
+          body: JSON.stringify({ projectPath, plan }),
+        }
+      );
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['automaker', 'features', variables.projectPath],
+      });
+    },
+  });
+}
+
+/**
+ * Generate project specification/documentation
+ */
+export function useGenerateSpec() {
+  return useMutation({
+    mutationFn: async ({ projectPath }: { projectPath: string }) => {
+      return automakerFetch<{
+        success: boolean;
+        spec: {
+          overview: string;
+          architecture: string;
+          features: string[];
+          techStack: string[];
+        };
+      }>('/api/spec-regeneration/generate', {
+        method: 'POST',
+        body: JSON.stringify({ projectPath }),
+      });
+    },
+  });
+}
+
+/**
+ * Stop suggestions generation (clears stuck state)
+ */
+export function useStopSuggestions() {
+  return useMutation({
+    mutationFn: async () => {
+      return automakerFetch<{ success: boolean }>('/api/suggestions/stop', {
+        method: 'POST',
+      });
+    },
+  });
+}
+
+/**
+ * Get suggestions generation status
+ */
+export function useSuggestionsStatus() {
+  return useQuery({
+    queryKey: ['automaker', 'suggestions-status'],
+    queryFn: () =>
+      automakerFetch<{ success: boolean; isRunning: boolean }>('/api/suggestions/status'),
+    refetchInterval: 2000,
+  });
+}
+
+/**
+ * Generate feature suggestions based on project analysis
+ * Note: This starts a background process. Results come via WebSocket events.
+ * For simple integration, we poll the status and wait for completion.
+ */
+export function useGenerateSuggestions() {
+  return useMutation({
+    mutationFn: async ({ projectPath }: { projectPath: string }) => {
+      // First stop any stuck process
+      try {
+        await automakerFetch<{ success: boolean }>('/api/suggestions/stop', {
+          method: 'POST',
+        });
+      } catch {
+        // Ignore stop errors
+      }
+
+      // Start generation
+      const result = await automakerFetch<{
+        success: boolean;
+        suggestions?: Array<{
+          id: string;
+          title: string;
+          description: string;
+          category: string;
+          priority: number;
+        }>;
+      }>('/api/suggestions/generate', {
+        method: 'POST',
+        body: JSON.stringify({ projectPath }),
+      });
+
+      // If API returns suggestions directly, return them
+      if (result.suggestions) {
+        return result;
+      }
+
+      // Otherwise, the generation runs in background via WebSocket
+      // Return empty suggestions with a note
+      return {
+        success: true,
+        suggestions: [],
+        note: 'Suggestions are being generated in the background. Check Automaker UI for results.',
+      };
+    },
+  });
+}
+
+/**
+ * Enhance/improve text with AI
+ */
+export function useEnhancePrompt() {
+  return useMutation({
+    mutationFn: async ({
+      text,
+      mode = 'improve'
+    }: {
+      text: string;
+      mode?: 'improve' | 'expand' | 'simplify' | 'technical';
+    }) => {
+      return automakerFetch<{ success: boolean; enhanced: string }>(
+        '/api/enhance-prompt',
+        {
+          method: 'POST',
+          body: JSON.stringify({ text, mode }),
+        }
+      );
+    },
+  });
+}
