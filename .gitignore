@@ -77,6 +77,9 @@ redis-data/
 *.key
 credentials.json
 service-account.json
+cookies.txt
+backend/cookies.txt
+backend/data/credentials/
 
 # Debug
 debug/
