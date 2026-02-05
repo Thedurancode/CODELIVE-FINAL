@@ -1,0 +1,51 @@
+name: Claude Issue Triage
+
+# Automatically triages new issues with Claude Code
+# Adds appropriate labels, estimates complexity, and suggests assignments
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  claude-triage:
+    name: Claude Issue Triage
+    runs-on: ubuntu-latest
+
+    # Run on new issues or when @claude triage is mentioned
+    if: |
+      github.event_name == 'issues' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude triage'))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Claude Triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            Please triage this issue by:
+
+            1. **Understanding the Issue**: Read and analyze the issue description
+            2. **Categorization**: Determine if it's a bug, feature request, documentation, or question
+            3. **Priority Assessment**: Estimate priority (low/medium/high/critical)
+            4. **Complexity Estimation**: Simple/Medium/Complex
+            5. **Related Components**: Identify which parts of the codebase are affected
+            6. **Suggested Labels**: Recommend appropriate labels
+            7. **Additional Context**: Add any clarifying questions if the issue is unclear
+
+            Please respond in a structured format with clear sections.
+
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          claude_args: |
+            --max-turns 3
+            --model claude-sonnet-4-5-20250929

@@ -1,10 +1,62 @@
 # Claude GitHub Actions Workflows
 
-These workflows can be triggered using `@claude` mentions in GitHub issue comments.
+This directory contains two types of Claude-powered workflows:
+1. **Autonomous Agent** - Uses Anthropic's official action to write code and create PRs
+2. **Manual Triggers** - Executes predefined workflows (deploy, test, build)
 
-## Available Workflows
+## 🤖 Autonomous Coding Agent (NEW)
 
-### 1. Deploy Workflow (`claudecode-deploy.yml`)
+### Claude Autonomous Agent (`claude-autonomous-agent.yml`)
+
+**The main feature** - Uses Anthropic's official `claude-code-action` to automatically work on issues and create PRs.
+
+**Triggers:**
+- `@claude work on this` - Analyzes issue and implements solution
+- `@claude implement this` - Writes code based on requirements
+- `@claude fix this bug` - Debugs and fixes issues
+- Issue assignment to Claude
+
+**What it does:**
+1. Clones your repository
+2. Analyzes the issue completely
+3. Writes/modifies code to solve the problem
+4. Runs tests to verify changes
+5. Creates a pull request with detailed description
+6. Links PR back to original issue
+
+**Example:**
+```
+@claude work on this
+
+Please implement the password reset feature described in the issue.
+Make sure to follow our existing authentication patterns.
+```
+
+### Claude PR Review (`claude-pr-review.yml`)
+
+Automatically reviews pull requests with intelligent analysis.
+
+**Trigger:** PR opened, or `@claude review`
+
+**Reviews:**
+- Code quality and best practices
+- Security vulnerabilities
+- Performance issues
+- TypeScript type safety
+
+### Claude Issue Triage (`claude-issue-triage.yml`)
+
+Automatically categorizes and analyzes new issues.
+
+**Trigger:** New issue opened, or `@claude triage`
+
+---
+
+## 🚀 Manual Trigger Workflows
+
+These workflows execute predefined tasks:
+
+### 1. Deploy Workflow (`claude-deploy.yml`)
 
 **Trigger**: `@claude deploy`
 
@@ -19,7 +71,7 @@ These workflows can be triggered using `@claude` mentions in GitHub issue commen
 @claude deploy environment=production version=1.2.3
 ```
 
-### 2. Test Workflow (`claudecode-test.yml`)
+### 2. Test Workflow (`claude-test.yml`)
 
 **Trigger**: `@claude test`
 
@@ -34,7 +86,7 @@ These workflows can be triggered using `@claude` mentions in GitHub issue commen
 @claude test suite=integration coverage=true
 ```
 
-### 3. Build Workflow (`claudecode-build.yml`)
+### 3. Build Workflow (`claude-build.yml`)
 
 **Trigger**: `@claude build`
 
@@ -118,7 +170,36 @@ To create your own workflow that works with `@claude`:
 
 Trigger with: `@claude custom` or `@claude run custom.yml`
 
+## Setup Instructions
+
+### Quick Setup for Autonomous Agent
+
+```bash
+# In Claude Code CLI
+claude
+/install-github-app
+```
+
+Or manually:
+1. Install: https://github.com/apps/claude
+2. Add secret: `ANTHROPIC_API_KEY` to repository settings
+3. Done! Start using `@claude` in issues
+
+### Full Setup for Manual Triggers
+
+1. Add `workflow` scope to GitHub token
+2. Configure webhooks (for production)
+3. See setup guide for details
+
+## Documentation
+
+- **🆕 Autonomous Agent Setup**: [docs/CLAUDE_AUTONOMOUS_AGENT_SETUP.md](../../docs/CLAUDE_AUTONOMOUS_AGENT_SETUP.md)
+- **Manual Triggers Guide**: [docs/CLAUDE_GITHUB_ACTIONS.md](../../docs/CLAUDE_GITHUB_ACTIONS.md)
+- **Local Testing**: [LOCAL_TESTING_GUIDE.md](../../LOCAL_TESTING_GUIDE.md)
+- **Project Guidelines**: [CLAUDE.md](../../CLAUDE.md)
+- **API Documentation**: http://localhost:3001/api-docs
+
 ## See Also
 
-- [Full Documentation](../../docs/CLAUDECODE_GITHUB_ACTIONS.md)
-- [API Documentation](http://localhost:3001/api-docs)
+- Official Action: https://github.com/anthropics/claude-code-action
+- Claude Code Docs: https://code.claude.com/docs/en/github-actions

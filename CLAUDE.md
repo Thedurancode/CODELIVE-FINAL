@@ -666,5 +666,145 @@ Additional documentation is available in the `docs/` folder:
 - `BROKER_MEDIATED_COMPLIANCE_IMPLEMENTATION.md` - Broker compliance implementation
 - `WHITEPAPER.md` - Platform whitepaper
 
+## GitHub Actions Integration
+
+### Claude Autonomous Agent
+
+This repository uses **Anthropic's official Claude Code action** to automatically work on GitHub issues and create pull requests. When you're triggered via GitHub Actions, follow these guidelines:
+
+#### When Working on Issues
+
+1. **Understand the Issue Completely**
+   - Read the full issue description and all comments
+   - Identify the type: bug fix, feature request, refactoring, documentation
+   - Look for related issues or PRs mentioned
+   - Check acceptance criteria if provided
+
+2. **Analyze the Codebase**
+   - Use Grep/Glob to find relevant files
+   - Read existing implementations to understand patterns
+   - Check for similar features or fixes in the codebase
+   - Review related tests
+
+3. **Plan Your Changes**
+   - Identify all files that need modification
+   - Consider backward compatibility
+   - Plan test coverage
+   - Think about edge cases
+
+4. **Implement Changes**
+   - Follow existing code style and patterns
+   - Add proper TypeScript types
+   - Include comprehensive error handling
+   - Add JSDoc comments for complex logic
+   - Update related documentation
+
+5. **Testing Requirements**
+   - Add or update unit tests for backend changes
+   - Test API endpoints if modified
+   - Verify frontend components render correctly
+   - Check database migrations if models changed
+   - Run existing tests to ensure no regressions
+
+6. **Create Quality PRs**
+   - Write clear, descriptive PR titles
+   - Include detailed description of changes
+   - Reference the original issue number
+   - Add "Fixes #123" to auto-close issues
+   - List testing steps performed
+   - Note any breaking changes
+
+#### Code Review Guidelines
+
+When reviewing PRs:
+- Check TypeScript type safety
+- Verify error handling
+- Review security implications
+- Check for SQL injection, XSS, auth bypasses
+- Validate input sanitization
+- Assess performance impact
+- Suggest optimizations for database queries
+- Review code readability and maintainability
+
+#### Common Patterns to Follow
+
+**Backend Services**:
+```typescript
+// Services are singletons with initialize()
+class MyService {
+  private initialized = false;
+
+  async initialize(): Promise<void> {
+    // Setup logic
+    this.initialized = true;
+  }
+}
+export const myService = new MyService();
+```
+
+**API Responses**:
+```typescript
+// Always return consistent format
+{ success: true, data: result }
+{ success: false, error: "message" }
+```
+
+**Frontend Hooks**:
+```typescript
+// Use React Query for data fetching
+export function useMyData(id: string) {
+  return useQuery({
+    queryKey: ['mydata', id],
+    queryFn: () => api.get(`/api/mydata/${id}`),
+  });
+}
+```
+
+#### Issue Triage
+
+When triaging issues, provide:
+- **Category**: bug | feature | docs | question
+- **Priority**: low | medium | high | critical
+- **Complexity**: simple | medium | complex
+- **Affected Components**: List relevant services/components
+- **Suggested Labels**: Appropriate GitHub labels
+- **Questions**: Any clarifications needed
+
+#### Commit Message Format
+
+Follow this format:
+```
+<type>: <short description>
+
+<detailed description if needed>
+
+Fixes #<issue-number>
+
+Generated with [Claude Code](https://claude.ai/code)
+via [Happy](https://happy.engineering)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Happy <yesreply@happy.engineering>
+```
+
+Types: feat, fix, docs, refactor, test, chore
+
+#### Environment Awareness
+
+- Backend runs on port 3001
+- Frontend runs on port 3000
+- Database is PostgreSQL
+- Redis is optional (falls back to in-memory)
+- Check `.env.example` for required variables
+
+#### When Stuck
+
+If you encounter issues:
+1. Leave detailed comments in the PR
+2. Add TODO comments in code for unresolved items
+3. Request clarification in the issue
+4. Suggest alternative approaches
+5. Document assumptions made
+
 ---
-*Last Updated: January 2026*
+*Last Updated: February 2026*

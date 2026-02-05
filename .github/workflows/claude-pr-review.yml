@@ -1,0 +1,54 @@
+name: Claude PR Review
+
+# Automatically reviews pull requests with Claude Code
+# Provides intelligent code review, suggests improvements, and checks for issues
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  claude-review:
+    name: Claude Code Review
+    runs-on: ubuntu-latest
+
+    # Only run on PRs when @claude review is mentioned or on PR open
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude'))
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            /review
+
+            Please provide a comprehensive code review focusing on:
+            1. Code quality and best practices
+            2. Potential bugs or security issues
+            3. Performance considerations
+            4. TypeScript type safety
+            5. Consistency with existing codebase patterns
+            6. Suggestions for improvements
+
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          claude_args: |
+            --max-turns 5
+            --model claude-sonnet-4-5-20250929
