@@ -1,0 +1,110 @@
+name: Claude Test
+
+# Trigger via: @claude test
+# Trigger via: @claude run test.yml suite=integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+          - e2e
+
+      coverage:
+        description: 'Generate coverage report'
+        required: false
+        default: 'true'
+        type: boolean
+
+      issue_number:
+        description: 'GitHub issue number'
+        required: false
+        type: string
+
+      triggered_by:
+        description: 'Trigger source'
+        required: false
+        default: 'manual'
+        type: string
+
+      comment_id:
+        description: 'Comment ID'
+        required: false
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+
+      - name: Run unit tests
+        if: inputs.suite == 'all' || inputs.suite == 'unit'
+        run: |
+          cd backend
+          npm run test:unit -- --ci --coverage=${{ inputs.coverage }}
+
+      - name: Run integration tests
+        if: inputs.suite == 'all' || inputs.suite == 'integration'
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        run: |
+          cd backend
+          npm run test:integration -- --ci
+
+      - name: Upload coverage
+        if: inputs.coverage == 'true'
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./backend/coverage
+
+      - name: Comment test results on issue
+        if: always() && inputs.issue_number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+            const suite = '${{ inputs.suite }}';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.issue_number }},
+              body: `${emoji} **Test Suite: \`${suite}\`**\n\n` +
+                    `Status: ${status}\n` +
+                    `Workflow: [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });

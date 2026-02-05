@@ -8,8 +8,6 @@ import express from 'express';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import path from 'path';
-import { toNodeHandler } from 'better-auth/node';
-import { auth } from './config/auth';
 import { corsOptions } from './middleware/cors';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import healthRoutes from './routes/healthRoutes';
@@ -17,7 +15,7 @@ import aiRoutes from './routes/aiRoutes';
 import agentRoutes from './routes/agentRoutes';
 import knowledgeRoutes from './routes/knowledgeRoutes';
 import documentRoutes from './routes/documentRoutes';
-// Auth routes handled by Better Auth at /api/auth/*
+import authRoutes from './routes/authRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import openaiRoutes from './routes/openaiRoutes';
 import webhookRoutes from './routes/webhookRoutes';
@@ -33,6 +31,7 @@ import taskRoutes from './routes/taskRoutes';
 import reminderRoutes from './routes/reminderRoutes';
 import projectRoutes from './routes/projectRoutes';
 import githubRoutes from './routes/githubRoutes';
+import githubActionsRoutes from './routes/githubActionsRoutes';
 import webhookManagementRoutes from './routes/webhookManagementRoutes';
 import activityFeedRoutes from './routes/activityFeedRoutes';
 import voiceRoutes from './routes/voiceRoutes';
@@ -143,11 +142,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS must be applied before Better Auth handler
+// CORS must be applied before other handlers
 app.use(corsOptions);
-
-// Better Auth handler - MUST be mounted before express.json()
-app.all('/api/auth/*', toNodeHandler(auth));
 
 // Middleware
 app.use(helmet({
@@ -175,9 +171,9 @@ app.use(express.urlencoded({ extended: true }));
 // Health check routes - MUST be before authenticated routes
 app.use('/api/health', healthRoutes);
 app.use('/api/setup', setupRoutes); // First-run setup (no auth required)
+app.use('/api/auth', authRoutes); // Auth routes (Supabase-based)
 
 // Routes
-// Note: /api/auth/* routes are handled by Better Auth mounted above
 app.use('/api/ai', aiRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/voice', voiceRoutes);
@@ -202,6 +198,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/github', githubRoutes);
+app.use('/api/github-actions', githubActionsRoutes);
 app.use('/api/webhooks/manage', webhookManagementRoutes);
 app.use('/api/activity-feed', activityFeedRoutes);
 app.use('/api/entity-search', entitySearchRoutes);
@@ -322,7 +319,7 @@ const startServer = async () => {
         logger.info('Skipping database sync (production mode)');
       } else {
         logger.info('Syncing database models (this may take a moment)...');
-        await sequelize.sync({ alter: true });
+        await sequelize.sync({ alter: false }); // Changed from alter: true to avoid Sequelize sync issues
         logger.info('Database models synchronized');
       }
 
@@ -389,6 +386,12 @@ const startServer = async () => {
       await projectBrandAssetService.initialize();
       await projectRecapService.initialize();
       await gitHubService.initialize();
+
+      // Initialize GitHub Actions service
+      const { githubActionsService } = await import('./services/GitHubActionsService');
+      await githubActionsService.initialize();
+      logger.info('GitHub Actions Service initialized successfully');
+
       await codingTaskService.initialize();
       logger.info('Project Services initialized successfully');
     } catch (projectError) {

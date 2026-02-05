@@ -1,0 +1,117 @@
+name: Claude Deploy
+
+# This workflow can be triggered via @claude mentions in GitHub issues
+# Usage: @claude deploy environment=production
+# Usage: @claude run deploy.yml --ref staging environment=staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+      version:
+        description: 'Version to deploy'
+        required: false
+        default: 'latest'
+        type: string
+
+      issue_number:
+        description: 'GitHub issue number that triggered this'
+        required: false
+        type: string
+
+      triggered_by:
+        description: 'How this was triggered'
+        required: false
+        default: 'manual'
+        type: string
+
+      comment_id:
+        description: 'Comment ID that triggered this'
+        required: false
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Echo deployment info
+        run: |
+          echo "🚀 Deploying to ${{ inputs.environment }}"
+          echo "📦 Version: ${{ inputs.version }}"
+          echo "🔗 Triggered by: ${{ inputs.triggered_by }}"
+          if [ -n "${{ inputs.issue_number }}" ]; then
+            echo "📋 Issue: #${{ inputs.issue_number }}"
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Run tests
+        run: |
+          cd backend && npm test
+
+      - name: Build
+        run: |
+          cd backend && npm run build
+          cd ../frontend && npm run build
+
+      - name: Deploy to ${{ inputs.environment }}
+        run: |
+          echo "Deploying to ${{ inputs.environment }}..."
+          # Add your deployment commands here
+          # For example:
+          # - Deploy to Fly.io: flyctl deploy
+          # - Deploy to Vercel: vercel --prod
+          # - Deploy to AWS: aws deploy ...
+
+      - name: Comment on issue (success)
+        if: success() && inputs.issue_number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.issue_number }},
+              body: `✅ **Deployment Successful**\n\n` +
+                    `Environment: \`${{ inputs.environment }}\`\n` +
+                    `Version: \`${{ inputs.version }}\`\n` +
+                    `Workflow: [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
+
+      - name: Comment on issue (failure)
+        if: failure() && inputs.issue_number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.issue_number }},
+              body: `❌ **Deployment Failed**\n\n` +
+                    `Environment: \`${{ inputs.environment }}\`\n` +
+                    `Workflow: [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n\n` +
+                    `Please check the workflow logs for details.`
+            });

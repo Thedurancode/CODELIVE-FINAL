@@ -21,6 +21,7 @@ import { githubIssueSyncService } from '../services/GitHubIssueSyncService';
 import { githubSyncWebSocketService } from '../services/GitHubSyncWebSocketService';
 import { deployHookService } from '../services/DeployHookService';
 import { projectRecapService } from '../services/ProjectRecapService';
+import { githubActionsService } from '../services/GitHubActionsService';
 import Project from '../models/Project';
 
 const router = Router();
@@ -262,6 +263,45 @@ router.post('/', webhookLimiter, async (req: Request, res: Response) => {
         }
 
         console.log(`💬 Issue #${issue.number} received comment in ${repository.full_name}`);
+
+        // Check for @claude mention to trigger GitHub Actions
+        if (comment.body && comment.body.toLowerCase().includes('@claude')) {
+          console.log(`🤖 @claude mentioned in issue #${issue.number}`);
+
+          try {
+            const parsed = gitHubService.parseGitHubUrl(repository.html_url);
+            if (parsed) {
+              // Handle the @claudecode command
+              const result = await githubActionsService.handleMentionCommand(
+                parsed.owner,
+                parsed.repo,
+                issue.number,
+                comment.body,
+                comment.id
+              );
+
+              // Post response comment
+              await githubActionsService.postResponseComment(
+                parsed.owner,
+                parsed.repo,
+                issue.number,
+                result
+              );
+
+              console.log(`[ClaudeCode] Command processed: ${result.message}`);
+
+              return res.json({
+                success: true,
+                message: 'ClaudeCode command processed',
+                workflowTriggered: result.success,
+                workflowRun: result.workflowRun,
+              });
+            }
+          } catch (error) {
+            console.error('[ClaudeCode] Failed to process command:', error);
+            // Continue with normal comment sync even if command fails
+          }
+        }
 
         // Find tasks linked to this issue and trigger sync
         const SpriteTask = await import('../models/SpriteTask').then((m) => m.default);

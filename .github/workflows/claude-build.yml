@@ -1,0 +1,87 @@
+name: Claude Build
+
+# Trigger via: @claude build
+# Trigger via: @claude run build.yml target=frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Build target'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - backend
+          - frontend
+
+      issue_number:
+        description: 'GitHub issue number'
+        required: false
+        type: string
+
+      triggered_by:
+        description: 'Trigger source'
+        required: false
+        default: 'manual'
+        type: string
+
+      comment_id:
+        description: 'Comment ID'
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Build backend
+        if: inputs.target == 'all' || inputs.target == 'backend'
+        run: |
+          cd backend
+          npm ci
+          npm run build
+
+      - name: Build frontend
+        if: inputs.target == 'all' || inputs.target == 'frontend'
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ inputs.target }}-${{ github.run_number }}
+          path: |
+            backend/dist/
+            frontend/.next/
+          retention-days: 7
+
+      - name: Comment on issue
+        if: always() && inputs.issue_number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.issue_number }},
+              body: `${emoji} **Build: \`${{ inputs.target }}\`**\n\n` +
+                    `Status: ${status}\n` +
+                    `Workflow: [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
