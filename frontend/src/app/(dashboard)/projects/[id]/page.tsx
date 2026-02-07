@@ -81,6 +81,7 @@ import {
   LayoutDashboard,
   Server,
   Eye,
+  Rocket,
 } from 'lucide-react';
 import { useProject, useUpdateProject, useDeleteProject, useProjectRecap, useRefreshProjectRecap } from '@/hooks/use-projects';
 import { useCreateGitHubIssue, useGitHubIssues, useGitHubCommits, useGitHubPullRequests, parseGitHubUrl } from '@/hooks/use-github-repo';
@@ -107,6 +108,9 @@ import { ProjectSignersPanel } from '@/components/contracts/ProjectSignersPanel'
 import { ContractSignersPanel } from '@/components/contracts/ContractSignersPanel';
 import { ProjectMeetingsPanel } from '@/components/projects/ProjectMeetingsPanel';
 import { ProjectScreenshotPreview } from '@/components/projects/ProjectScreenshotPreview';
+import DeployHookSettings from '@/components/settings/DeployHookSettings';
+import { VercelProjectPanel } from '@/components/projects/VercelProjectPanel';
+import { FlyProjectPanel } from '@/components/projects/FlyProjectPanel';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 
@@ -979,6 +983,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <Key className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Secrets</span>
               </TabsTrigger>
+              <TabsTrigger value="deploys" className="data-[state=active]:bg-secondary shrink-0">
+                <Rocket className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Deploys</span>
+              </TabsTrigger>
               <TabsTrigger value="automaker" className="data-[state=active]:bg-secondary shrink-0">
                 <Server className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Automaker</span>
@@ -1124,7 +1132,40 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </TabsContent>
 
             <TabsContent value="secrets">
-              <ProjectEnvVariablesPanel projectId={id} />
+              <ProjectEnvVariablesPanel
+                projectId={id}
+                vercelProjectId={(project.metadata as any)?.vercelProjectId || null}
+              />
+            </TabsContent>
+
+            <TabsContent value="deploys">
+              <div className="space-y-6">
+                <VercelProjectPanel
+                  projectId={id}
+                  githubUrl={project.githubUrl}
+                  vercelProjectId={(project.metadata as any)?.vercelProjectId || null}
+                  onVercelLinked={(vercelId) => {
+                    // Store the linked Vercel project ID in project metadata
+                    if (vercelId) {
+                      api.patch(`/api/projects/${id}`, {
+                        metadata: { ...(project.metadata as any), vercelProjectId: vercelId },
+                      }).catch(() => {});
+                    }
+                  }}
+                />
+                <FlyProjectPanel
+                  projectId={id}
+                  flyAppName={(project.metadata as any)?.flyAppName || null}
+                  onFlyLinked={(appName) => {
+                    if (appName) {
+                      api.patch(`/api/projects/${id}`, {
+                        metadata: { ...(project.metadata as any), flyAppName: appName },
+                      }).catch(() => {});
+                    }
+                  }}
+                />
+                <DeployHookSettings projectId={id} />
+              </div>
             </TabsContent>
 
             <TabsContent value="automaker">

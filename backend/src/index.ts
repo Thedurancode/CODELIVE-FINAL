@@ -47,12 +47,15 @@ import codingTaskRoutes from './routes/codingTaskRoutes';
 import spritesRoutes from './routes/spritesRoutes';
 import spriteTasksRoutes from './routes/spriteTasksRoutes';
 import deployHooksRoutes from './routes/deployHooksRoutes';
+import vercelRoutes from './routes/vercelRoutes';
+import flyRoutes from './routes/flyRoutes';
 import githubWebhookRoutes from './routes/githubWebhookRoutes';
 import redditRoutes from './routes/redditRoutes';
 import clientPortalRoutes from './routes/clientPortalRoutes';
 import publicApiRoutes from './routes/publicApiRoutes';
 import apiKeyRoutes from './routes/apiKeyRoutes';
 import meetingRoutes from './routes/meetingRoutes';
+import codeliveRoutes from './routes/codeliveRoutes';
 // Voice calling module (Twilio + OpenAI Realtime)
 import { twilioRoutes as voiceTwilioRoutes, callRoutes as voiceCallRoutes, handleTwilioConnection, closeAllSessions as closeVoiceSessions } from './voice';
 import { syncDatabase, sequelize } from './models';
@@ -97,6 +100,7 @@ import { meetingTranscriptionService } from './services/MeetingTranscriptionServ
 import { noteMentionService } from './services/NoteMentionService';
 import { projectNoteAttachmentService } from './services/ProjectNoteAttachmentService';
 import { wasabiStorageService } from './services/WasabiStorageService';
+import { codeliveService } from './services/CodeliveService';
 import setupSwagger from './config/swagger';
 import { WebSocketServer, WebSocket } from 'ws';
 import { parse as parseUrl } from 'url';
@@ -210,11 +214,14 @@ app.use('/api/coding-tasks', codingTaskRoutes);
 app.use('/api/sprites', spritesRoutes);
 app.use('/api/sprite-tasks', spriteTasksRoutes);
 app.use('/api/deploy-hooks', deployHooksRoutes);
+app.use('/api/vercel', vercelRoutes);
+app.use('/api/fly', flyRoutes);
 app.use('/api/reddit', redditRoutes);
 app.use('/api/client', clientPortalRoutes);
 app.use('/api/api-keys', apiKeyRoutes); // API key management (JWT auth)
 app.use('/api/v1', publicApiRoutes); // Public API (API key auth)
 app.use('/api/meetings', meetingRoutes); // Meeting management with video rooms
+app.use('/api/codelive', codeliveRoutes); // Codelive (Automaker) integration
 app.use('/api', documentRoutes);
 
 // OpenAI-compatible endpoints (for OpenWebUI, LangChain, etc.)
@@ -396,6 +403,44 @@ const startServer = async () => {
       logger.info('Project Services initialized successfully');
     } catch (projectError) {
       logger.warn('Project Services initialization failed', {}, projectError);
+    }
+
+    // Initialize Codelive Integration (Automaker)
+    try {
+      await codeliveService.initialize();
+      if (codeliveService.isReady()) {
+        logger.info('Codelive Integration initialized successfully');
+      } else {
+        logger.warn('Codelive Integration disabled (server not available)');
+      }
+    } catch (codeliveError) {
+      logger.warn('Codelive Integration initialization failed', {}, codeliveError);
+    }
+
+    // Initialize Vercel Integration
+    try {
+      const { vercelService } = await import('./services/VercelService');
+      await vercelService.initialize();
+      if (vercelService.isReady()) {
+        logger.info('Vercel Integration initialized successfully');
+      } else {
+        logger.warn('Vercel Integration disabled (no VERCEL_TOKEN configured)');
+      }
+    } catch (vercelError) {
+      logger.warn('Vercel Integration initialization failed', {}, vercelError);
+    }
+
+    // Initialize Fly.io Integration
+    try {
+      const { flyService } = await import('./services/FlyService');
+      await flyService.initialize();
+      if (flyService.isReady()) {
+        logger.info('Fly.io Integration initialized successfully');
+      } else {
+        logger.warn('Fly.io Integration disabled (no FLY_API_TOKEN configured)');
+      }
+    } catch (flyError) {
+      logger.warn('Fly.io Integration initialization failed', {}, flyError);
     }
 
     // Initialize AI Agent (Admin - full access)
