@@ -18,7 +18,7 @@ interface MarketplaceUserAttributes {
   verified: boolean;
   avatar?: string;
   fundId?: string; // Link to Fund for institutional buyers (from Fast Buy Box)
-  betterAuthUserId?: string; // Link to Better Auth user
+  supabaseUserId?: string; // Link to Supabase Auth user
 
   // Team member profile fields
   bio?: string; // Team member biography/about section
@@ -69,7 +69,7 @@ interface MarketplaceUserCreationAttributes
     | 'verified'
     | 'avatar'
     | 'fundId'
-    | 'betterAuthUserId'
+    | 'supabaseUserId'
     | 'bio'
     | 'expertise'
     | 'title'
@@ -113,7 +113,7 @@ class MarketplaceUser
   declare verified: boolean;
   declare avatar: string | undefined;
   declare fundId: string | undefined;
-  declare betterAuthUserId: string | undefined;
+  declare supabaseUserId: string | undefined;
 
   // Team member profile fields
   declare bio: string | undefined;
@@ -201,12 +201,12 @@ MarketplaceUser.init(
         key: 'id',
       },
     },
-    betterAuthUserId: {
+    supabaseUserId: {
       type: DataTypes.TEXT,
       allowNull: true,
       unique: true,
-      field: 'better_auth_user_id',
-      comment: 'Link to Better Auth user table',
+      field: 'supabase_user_id',
+      comment: 'Link to Supabase Auth user',
     },
     // Team member profile fields
     bio: {
@@ -354,7 +354,7 @@ MarketplaceUser.init(
       { fields: ['verified'] },
       { fields: ['lastActiveAt'] },
       { fields: ['fundId'] },
-      { fields: ['better_auth_user_id'], unique: true },
+      { fields: ['supabase_user_id'], unique: true },
     ],
   }
 );

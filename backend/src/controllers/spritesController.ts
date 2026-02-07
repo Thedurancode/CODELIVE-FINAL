@@ -146,7 +146,7 @@ export const getSpriteByProject = async (req: Request, res: Response) => {
 export const createSprite = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-    const organizationId = (req as any).user?.organizationId;
+    const userOrgId = (req as any).user?.organizationId;
 
     const { projectId, branch, initScript, cpus, memoryMb } = req.body;
 
@@ -165,6 +165,17 @@ export const createSprite = async (req: Request, res: Response) => {
       return res.status(404).json({
         success: false,
         error: 'Project not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Use project's organization_id, or user's organizationId, or fail
+    const organizationId = (project as any).organization_id || userOrgId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Organization ID is required. Please ensure you belong to an organization.',
         timestamp: new Date().toISOString(),
       });
     }
@@ -464,6 +475,124 @@ export const initializeSprite = async (req: Request, res: Response) => {
       success: true,
       data: sprite,
       message: 'Sprite initialized successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+// ============================================================================
+// DEV SERVER
+// ============================================================================
+
+/**
+ * Start the dev server on a sprite
+ */
+export const startDevServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.startDevServer(id);
+    await sprite.reload();
+
+    res.json({
+      success: true,
+      data: sprite,
+      message: `Dev server started on port ${sprite.devServerPort}`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Stop the dev server on a sprite
+ */
+export const stopDevServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.stopDevServer(id);
+    await sprite.reload();
+
+    res.json({
+      success: true,
+      data: sprite,
+      message: 'Dev server stopped',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+/**
+ * Restart the dev server on a sprite
+ */
+export const restartDevServer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    const sprite = await ProjectSprite.findOne({
+      where: { id, organizationId },
+    });
+
+    if (!sprite) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sprite not found',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await spritesService.restartDevServer(id);
+    await sprite.reload();
+
+    res.json({
+      success: true,
+      data: sprite,
+      message: `Dev server restarted on port ${sprite.devServerPort}`,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

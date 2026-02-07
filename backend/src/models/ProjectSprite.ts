@@ -82,6 +82,12 @@ interface ProjectSpriteAttributes {
   mcpPort: number | null; // Port the MCP server is listening on
   mcpInstalledAt: Date | null; // When MCP server was installed
 
+  // Auto dev server settings
+  autoDevServer: boolean; // Whether to auto-start dev server on port 8080
+  devServerPort: number; // Port for dev server (default 8080)
+  devServerCommand: string | null; // Custom dev command (auto-detect if not set)
+  devServerStatus: 'stopped' | 'starting' | 'running' | 'error'; // Status of dev server
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -119,6 +125,10 @@ interface ProjectSpriteCreationAttributes
     | 'mcpEnabled'
     | 'mcpPort'
     | 'mcpInstalledAt'
+    | 'autoDevServer'
+    | 'devServerPort'
+    | 'devServerCommand'
+    | 'devServerStatus'
     | 'createdAt'
     | 'updatedAt'
   > {}
@@ -167,6 +177,12 @@ class ProjectSprite
   declare mcpEnabled: boolean;
   declare mcpPort: number | null;
   declare mcpInstalledAt: Date | null;
+
+  // Auto dev server
+  declare autoDevServer: boolean;
+  declare devServerPort: number;
+  declare devServerCommand: string | null;
+  declare devServerStatus: 'stopped' | 'starting' | 'running' | 'error';
 
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -536,6 +552,33 @@ ProjectSprite.init(
       allowNull: true,
       field: 'mcp_installed_at',
       comment: 'When MCP server was installed',
+    },
+    autoDevServer: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: 'auto_dev_server',
+      comment: 'Whether to auto-start dev server on port 8080',
+    },
+    devServerPort: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 8080,
+      field: 'dev_server_port',
+      comment: 'Port for the dev server',
+    },
+    devServerCommand: {
+      type: DataTypes.STRING(1024),
+      allowNull: true,
+      field: 'dev_server_command',
+      comment: 'Custom dev server command (auto-detect if not set)',
+    },
+    devServerStatus: {
+      type: DataTypes.ENUM('stopped', 'starting', 'running', 'error'),
+      allowNull: false,
+      defaultValue: 'stopped',
+      field: 'dev_server_status',
+      comment: 'Current status of the dev server',
     },
     createdAt: {
       type: DataTypes.DATE,

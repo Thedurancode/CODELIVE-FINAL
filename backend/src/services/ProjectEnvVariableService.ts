@@ -9,6 +9,8 @@
 
 import ProjectEnvVariable from '../models/ProjectEnvVariable';
 import MarketplaceUser from '../models/MarketplaceUser';
+import Project from '../models/Project';
+import { vercelService } from './VercelService';
 
 // =============================================================================
 // TYPES
@@ -21,12 +23,16 @@ interface CreateEnvVariableInput {
   name: string;
   value: string;
   description?: string;
+  syncToVercel?: boolean;
+  vercelTarget?: string[];
 }
 
 interface UpdateEnvVariableInput {
   name?: string;
   value?: string;
   description?: string;
+  syncToVercel?: boolean;
+  vercelTarget?: string[];
 }
 
 interface EnvVariableResponse {
@@ -36,6 +42,8 @@ interface EnvVariableResponse {
   organizationId: string;
   name: string;
   description: string | null;
+  syncToVercel: boolean;
+  vercelTarget: string[] | null;
   createdAt: Date;
   updatedAt: Date;
   author?: {
@@ -74,7 +82,7 @@ class ProjectEnvVariableService {
    * Create a new environment variable
    */
   async createEnvVariable(input: CreateEnvVariableInput): Promise<EnvVariableResponse> {
-    const { projectId, userId, organizationId, name, value, description } = input;
+    const { projectId, userId, organizationId, name, value, description, syncToVercel, vercelTarget } = input;
 
     // Check for duplicate name
     const existing = await ProjectEnvVariable.findOne({
@@ -97,7 +105,14 @@ class ProjectEnvVariableService {
       iv: encrypted.iv,
       authTag: encrypted.authTag,
       description: description || null,
+      syncToVercel: syncToVercel || false,
+      vercelTarget: syncToVercel ? (vercelTarget || ['production', 'preview', 'development']) : null,
     });
+
+    // Sync to Vercel if enabled (fire-and-forget)
+    if (envVar.syncToVercel) {
+      this.syncToVercelProject(envVar, value).catch(() => {});
+    }
 
     // Return without value
     return this.formatEnvVariable(envVar);
@@ -223,7 +238,26 @@ class ProjectEnvVariableService {
       updateData.description = updates.description || null;
     }
 
+    if (updates.syncToVercel !== undefined) {
+      updateData.syncToVercel = updates.syncToVercel;
+      updateData.vercelTarget = updates.syncToVercel
+        ? (updates.vercelTarget || envVar.vercelTarget || ['production', 'preview', 'development'])
+        : envVar.vercelTarget;
+    } else if (updates.vercelTarget !== undefined) {
+      updateData.vercelTarget = updates.vercelTarget;
+    }
+
+    const wasSynced = envVar.syncToVercel;
     await envVar.update(updateData);
+
+    // Handle Vercel sync changes (fire-and-forget)
+    if (envVar.syncToVercel && (updates.value !== undefined || updates.name !== undefined || (!wasSynced && envVar.syncToVercel))) {
+      const decryptedValue = updates.value || envVar.getDecryptedValue();
+      this.syncToVercelProject(envVar, decryptedValue).catch(() => {});
+    } else if (wasSynced && !envVar.syncToVercel) {
+      // Sync was turned off — remove from Vercel
+      this.deleteFromVercelProject(envVar).catch(() => {});
+    }
 
     // Reload with author
     await envVar.reload({
@@ -263,6 +297,11 @@ class ProjectEnvVariableService {
       throw new Error('Only the author can delete this environment variable');
     }
 
+    // Remove from Vercel if synced (fire-and-forget)
+    if (envVar.syncToVercel) {
+      await this.deleteFromVercelProject(envVar).catch(() => {});
+    }
+
     await envVar.destroy();
     return true;
   }
@@ -291,6 +330,8 @@ class ProjectEnvVariableService {
       organizationId: envVar.organizationId,
       name: envVar.name,
       description: envVar.description,
+      syncToVercel: envVar.syncToVercel || false,
+      vercelTarget: envVar.vercelTarget || null,
       createdAt: envVar.createdAt,
       updatedAt: envVar.updatedAt,
       author: envVar.author
@@ -301,6 +342,91 @@ class ProjectEnvVariableService {
           }
         : undefined,
     };
+  }
+
+  // ===========================================================================
+  // VERCEL SYNC
+  // ===========================================================================
+
+  /**
+   * Sync a single env var to the linked Vercel project.
+   * Fire-and-forget: logs warnings but does not throw.
+   */
+  private async syncToVercelProject(envVar: ProjectEnvVariable, decryptedValue: string): Promise<void> {
+    try {
+      const project = await Project.findByPk(envVar.projectId);
+      if (!project) return;
+
+      const vercelProjectId = (project.metadata as any)?.vercelProjectId;
+      if (!vercelProjectId) {
+        console.warn(`[ProjectEnvVariableService] No Vercel project linked for project ${envVar.projectId}`);
+        return;
+      }
+
+      if (!vercelService.isConfigured()) {
+        console.warn('[ProjectEnvVariableService] Vercel not configured, skipping sync');
+        return;
+      }
+
+      const target = envVar.vercelTarget || ['production', 'preview', 'development'];
+
+      await vercelService.createEnvVar(vercelProjectId, {
+        key: envVar.name,
+        value: decryptedValue,
+        type: 'encrypted',
+        target,
+      });
+
+      console.log(`[ProjectEnvVariableService] Synced ${envVar.name} to Vercel project ${vercelProjectId}`);
+    } catch (error) {
+      console.error(`[ProjectEnvVariableService] Failed to sync ${envVar.name} to Vercel:`, (error as Error).message);
+    }
+  }
+
+  /**
+   * Delete an env var from the linked Vercel project.
+   */
+  private async deleteFromVercelProject(envVar: ProjectEnvVariable): Promise<void> {
+    try {
+      const project = await Project.findByPk(envVar.projectId);
+      if (!project) return;
+
+      const vercelProjectId = (project.metadata as any)?.vercelProjectId;
+      if (!vercelProjectId || !vercelService.isConfigured()) return;
+
+      const vercelEnvVars = await vercelService.getEnvVars(vercelProjectId);
+      const match = vercelEnvVars.find((v: any) => v.key === envVar.name);
+      if (match) {
+        await vercelService.deleteEnvVar(vercelProjectId, match.id);
+        console.log(`[ProjectEnvVariableService] Deleted ${envVar.name} from Vercel project ${vercelProjectId}`);
+      }
+    } catch (error) {
+      console.error(`[ProjectEnvVariableService] Failed to delete ${envVar.name} from Vercel:`, (error as Error).message);
+    }
+  }
+
+  /**
+   * Bulk sync all env vars marked with syncToVercel=true for a project.
+   */
+  async bulkSyncToVercel(projectId: string, organizationId: string): Promise<{ synced: number; failed: number }> {
+    const envVars = await ProjectEnvVariable.findAll({
+      where: { projectId, organizationId, syncToVercel: true },
+    });
+
+    let synced = 0;
+    let failed = 0;
+
+    for (const envVar of envVars) {
+      try {
+        const value = envVar.getDecryptedValue();
+        await this.syncToVercelProject(envVar, value);
+        synced++;
+      } catch {
+        failed++;
+      }
+    }
+
+    return { synced, failed };
   }
 
   /**

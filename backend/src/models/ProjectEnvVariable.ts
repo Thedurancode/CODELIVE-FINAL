@@ -23,6 +23,8 @@ export interface ProjectEnvVariableAttributes {
   iv: string;
   authTag: string;
   description: string | null;
+  syncToVercel: boolean;
+  vercelTarget: string[] | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,7 +32,7 @@ export interface ProjectEnvVariableAttributes {
 export interface ProjectEnvVariableCreationAttributes
   extends Optional<
     ProjectEnvVariableAttributes,
-    'id' | 'description' | 'createdAt' | 'updatedAt'
+    'id' | 'description' | 'syncToVercel' | 'vercelTarget' | 'createdAt' | 'updatedAt'
   > {}
 
 class ProjectEnvVariable
@@ -46,6 +48,8 @@ class ProjectEnvVariable
   declare iv: string;
   declare authTag: string;
   declare description: string | null;
+  declare syncToVercel: boolean;
+  declare vercelTarget: string[] | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 
@@ -181,6 +185,18 @@ ProjectEnvVariable.init(
     description: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    syncToVercel: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'sync_to_vercel',
+    },
+    vercelTarget: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: ['production', 'preview', 'development'],
+      field: 'vercel_target',
     },
     createdAt: {
       type: DataTypes.DATE,

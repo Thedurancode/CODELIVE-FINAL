@@ -590,6 +590,79 @@ router.post('/:id/resume', spritesController.resumeSprite);
 router.post('/:id/initialize', spritesController.initializeSprite);
 
 // ============================================================================
+// DEV SERVER
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/sprites/{id}/dev-server/start:
+ *   post:
+ *     summary: Start the dev server on a sprite
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Dev server started
+ *       404:
+ *         description: Sprite not found
+ */
+router.post('/:id/dev-server/start', spritesController.startDevServer);
+
+/**
+ * @swagger
+ * /api/sprites/{id}/dev-server/stop:
+ *   post:
+ *     summary: Stop the dev server on a sprite
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Dev server stopped
+ *       404:
+ *         description: Sprite not found
+ */
+router.post('/:id/dev-server/stop', spritesController.stopDevServer);
+
+/**
+ * @swagger
+ * /api/sprites/{id}/dev-server/restart:
+ *   post:
+ *     summary: Restart the dev server on a sprite
+ *     tags: [Sprites]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Dev server restarted
+ *       404:
+ *         description: Sprite not found
+ */
+router.post('/:id/dev-server/restart', spritesController.restartDevServer);
+
+// ============================================================================
 // CHECKPOINTS
 // ============================================================================
 

@@ -158,7 +158,7 @@ export default function ActivityFeedPage() {
         project: {
           id: project.id,
           title: project.title,
-          logoUrl: project.logoUrl,
+          logoUrl: project.logoUrl ?? undefined,
         },
         metadata: { sha: commit.sha },
       });
@@ -180,7 +180,7 @@ export default function ActivityFeedPage() {
         project: {
           id: project.id,
           title: project.title,
-          logoUrl: project.logoUrl,
+          logoUrl: project.logoUrl ?? undefined,
         },
         metadata: { number: pr.number, labels: pr.labels },
       });
@@ -202,7 +202,7 @@ export default function ActivityFeedPage() {
         project: {
           id: project.id,
           title: project.title,
-          logoUrl: project.logoUrl,
+          logoUrl: project.logoUrl ?? undefined,
         },
         metadata: { number: issue.number, labels: issue.labels },
       });

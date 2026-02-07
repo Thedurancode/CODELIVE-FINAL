@@ -1,14 +1,17 @@
 /**
- * Better Auth Middleware
+ * Supabase Auth Middleware
  *
- * Session-based authentication middleware using Better Auth.
- * Provides authenticate, optionalAuth, and authorize functions.
+ * Token-based authentication middleware using Supabase Auth.
+ * Validates JWT tokens from Authorization: Bearer header.
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { fromNodeHeaders } from 'better-auth/node';
-import { auth, VALID_ROLES, type Role } from '../config/auth';
+import { supabaseAdmin } from '../config/supabase';
 import MarketplaceUser from '../models/MarketplaceUser';
+
+// Valid roles for the application
+export const VALID_ROLES = ['admin', 'team_member', 'client', 'contact'] as const;
+export type Role = (typeof VALID_ROLES)[number];
 
 // Extend Express Request to include user and session
 declare global {
@@ -20,7 +23,7 @@ declare global {
         email: string;
         name: string;
         role: Role;
-        betterAuthUserId?: string;
+        supabaseUserId?: string;
         organizationId?: string; // Deprecated: kept for backward compatibility
       };
       session?: {
@@ -33,17 +36,28 @@ declare global {
 }
 
 /**
- * Get or create MarketplaceUser linked to Better Auth user
+ * Extract bearer token from Authorization header
+ */
+function extractBearerToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  return authHeader.slice(7);
+}
+
+/**
+ * Get or create MarketplaceUser linked to Supabase user
  */
 async function getOrCreateMarketplaceUser(
-  betterAuthUserId: string,
+  supabaseUserId: string,
   email: string,
   name: string
 ): Promise<MarketplaceUser> {
-  // First try to find by Better Auth user ID
+  // First try to find by Supabase user ID
   let dbUser = await MarketplaceUser.findOne({
-    where: { betterAuthUserId },
-    attributes: ['id', 'email', 'name', 'role', 'betterAuthUserId'],
+    where: { supabaseUserId },
+    attributes: ['id', 'email', 'name', 'role', 'supabaseUserId', 'organizationId'],
   });
 
   if (dbUser) {
@@ -53,18 +67,18 @@ async function getOrCreateMarketplaceUser(
   // Try to find by email (existing user before migration)
   dbUser = await MarketplaceUser.findOne({
     where: { email },
-    attributes: ['id', 'email', 'name', 'role', 'betterAuthUserId'],
+    attributes: ['id', 'email', 'name', 'role', 'supabaseUserId', 'organizationId'],
   });
 
   if (dbUser) {
-    // Link existing user to Better Auth
-    await dbUser.update({ betterAuthUserId });
+    // Link existing user to Supabase
+    await dbUser.update({ supabaseUserId });
     return dbUser;
   }
 
   // Create new user
   dbUser = await MarketplaceUser.create({
-    betterAuthUserId,
+    supabaseUserId,
     email,
     name: name || email.split('@')[0],
     role: 'team_member',
@@ -75,7 +89,7 @@ async function getOrCreateMarketplaceUser(
 }
 
 /**
- * Authentication middleware - requires valid session
+ * Authentication middleware - requires valid Supabase session
  */
 export const authenticate = async (
   req: Request,
@@ -83,24 +97,34 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
+    const token = extractBearerToken(req);
 
-    if (!session || !session.user) {
+    if (!token) {
       res.status(401).json({
         success: false,
         error: 'Authentication required',
-        message: 'No valid session found',
+        message: 'No authorization token provided',
+      });
+      return;
+    }
+
+    // Verify token with Supabase
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !user) {
+      res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        message: error?.message || 'Invalid or expired token',
       });
       return;
     }
 
     // Get or create MarketplaceUser
     const dbUser = await getOrCreateMarketplaceUser(
-      session.user.id,
-      session.user.email,
-      session.user.name || ''
+      user.id,
+      user.email || '',
+      user.user_metadata?.name || user.user_metadata?.full_name || ''
     );
 
     // Attach user to request
@@ -110,14 +134,14 @@ export const authenticate = async (
       email: dbUser.email,
       name: dbUser.name,
       role: dbUser.role as Role,
-      betterAuthUserId: session.user.id,
-      organizationId: dbUser.id, // Use user ID as org ID for backward compatibility (orgs removed)
+      supabaseUserId: user.id,
+      organizationId: dbUser.organizationId || undefined,
     };
 
     req.session = {
-      id: session.session.id,
-      userId: session.user.id,
-      expiresAt: new Date(session.session.expiresAt),
+      id: user.id,
+      userId: user.id,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
     };
 
     next();
@@ -132,7 +156,7 @@ export const authenticate = async (
 };
 
 /**
- * Optional authentication - attaches user if session present, continues if not
+ * Optional authentication - attaches user if token present, continues if not
  */
 export const optionalAuth = async (
   req: Request,
@@ -140,37 +164,39 @@ export const optionalAuth = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
+    const token = extractBearerToken(req);
 
-    if (session && session.user) {
-      const dbUser = await getOrCreateMarketplaceUser(
-        session.user.id,
-        session.user.email,
-        session.user.name || ''
-      );
+    if (token) {
+      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
 
-      req.user = {
-        id: dbUser.id,
-        userId: dbUser.id, // Alias for backward compatibility
-        email: dbUser.email,
-        name: dbUser.name,
-        role: dbUser.role as Role,
-        betterAuthUserId: session.user.id,
-        organizationId: dbUser.id, // Use user ID as org ID for backward compatibility (orgs removed)
-      };
+      if (user && !error) {
+        const dbUser = await getOrCreateMarketplaceUser(
+          user.id,
+          user.email || '',
+          user.user_metadata?.name || user.user_metadata?.full_name || ''
+        );
 
-      req.session = {
-        id: session.session.id,
-        userId: session.user.id,
-        expiresAt: new Date(session.session.expiresAt),
-      };
+        req.user = {
+          id: dbUser.id,
+          userId: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.name,
+          role: dbUser.role as Role,
+          supabaseUserId: user.id,
+          organizationId: dbUser.organizationId || undefined,
+        };
+
+        req.session = {
+          id: user.id,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        };
+      }
     }
 
     next();
   } catch (error) {
-    // Session invalid but that's okay for optional auth
+    // Token invalid but that's okay for optional auth
     next();
   }
 };

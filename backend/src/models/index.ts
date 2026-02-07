@@ -143,6 +143,9 @@ import { Webhook, WebhookDelivery } from './Webhook';
 // Task Management Models
 import Task from './Task';
 
+// Codelive Integration Models
+import CodeliveSync from './CodeliveSync';
+
 // Reminder Models
 import Reminder from './Reminder';
 
@@ -1019,6 +1022,17 @@ Task.hasMany(Task, {
 Task.belongsTo(Task, {
   foreignKey: 'parentTaskId',
   as: 'parentTask',
+});
+
+// Task -> CodeliveSync (one-to-one)
+Task.hasOne(CodeliveSync, {
+  foreignKey: 'taskId',
+  as: 'codeliveSync',
+  onDelete: 'CASCADE',
+});
+CodeliveSync.belongsTo(Task, {
+  foreignKey: 'taskId',
+  as: 'task',
 });
 
 // ============================================================================
@@ -1977,6 +1991,8 @@ export async function syncDatabase(options: { force?: boolean; alter?: boolean }
         WebhookDelivery,
         // Task Management Models
         Task,
+        // Codelive Integration Models
+        CodeliveSync,
         // Reminder Models
         Reminder,
         // Activity Feed Models
@@ -2162,6 +2178,8 @@ export {
   WebhookDelivery,
   // Task Management Models
   Task,
+  // Codelive Integration Models
+  CodeliveSync,
   // Reminder Models
   Reminder,
   // Activity Feed Models
@@ -2319,6 +2337,8 @@ export default {
   WebhookDelivery,
   // Task Management Models
   Task,
+  // Codelive Integration Models
+  CodeliveSync,
   // Reminder Models
   Reminder,
   // Activity Feed Models

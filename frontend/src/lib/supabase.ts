@@ -1,3 +1,10 @@
+/**
+ * Supabase Client
+ *
+ * Browser client for Supabase services including auth and database.
+ * Uses @supabase/ssr for proper cookie handling in Next.js.
+ */
+
 import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';

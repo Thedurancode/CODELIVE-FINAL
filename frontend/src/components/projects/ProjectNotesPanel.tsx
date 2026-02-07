@@ -1968,8 +1968,35 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
             .map((audioNote) => (
             <Card key={audioNote.id} className="bg-secondary/50 border border-accent-500/30">
               <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  {/* Author Avatar */}
+                  <div className="flex-shrink-0">
+                    {audioNote.author?.avatar ? (
+                      <img
+                        src={audioNote.author.avatar}
+                        alt={audioNote.author?.name || 'Author'}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-accent-500/30"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-accent-500/20 border-2 border-accent-500/30 flex items-center justify-center">
+                        <span className="text-sm font-semibold text-accent-400">
+                          {(audioNote.author?.name || 'U').charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex-1 min-w-0">
+                    {/* Author Name & Time */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-semibold text-foreground">
+                        {audioNote.author?.name || 'Unknown'}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(audioNote.createdAt)}
+                      </span>
+                    </div>
+
                     {/* Audio Player Controls */}
                     <div className="flex items-center gap-3 mb-3">
                       <Button
@@ -2099,12 +2126,6 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                       </div>
                     )}
 
-                    {/* Metadata */}
-                    <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
-                      <span>{audioNote.author?.name || 'Unknown'}</span>
-                      <span>•</span>
-                      <span>{formatDate(audioNote.createdAt)}</span>
-                    </div>
                   </div>
 
                   {/* Actions */}
@@ -2221,27 +2242,42 @@ export function ProjectNotesPanel({ projectId, githubUrl, externalDialogOpen, on
                               </div>
                             )}
 
-                            <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                              {/* Author Avatar */}
+                              <div className="flex-shrink-0">
+                                {(note.author?.avatar || note.user?.avatar) ? (
+                                  <img
+                                    src={note.author?.avatar || note.user?.avatar}
+                                    alt={note.author?.name || note.user?.name || 'Author'}
+                                    className="w-10 h-10 rounded-full object-cover border-2 border-accent-500/30"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-accent-500/20 border-2 border-accent-500/30 flex items-center justify-center">
+                                    <span className="text-sm font-semibold text-accent-400">
+                                      {(note.author?.name || note.user?.name || 'U').charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
                               <div className="flex-1 min-w-0">
+                                {/* Author Name & Time */}
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`text-sm font-semibold ${isThreaded && isLast ? 'text-accent-400' : 'text-foreground'}`}>
+                                    {note.author?.name || note.user?.name || 'Unknown'}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatDate(note.createdAt)}
+                                    {note.updatedAt !== note.createdAt && ' (edited)'}
+                                  </span>
+                                </div>
+
                                 {note.subject && (
                                   <h4 className="font-medium text-foreground mb-1">{note.subject}</h4>
                                 )}
                                 <p className="text-base text-foreground/90 whitespace-pre-wrap leading-relaxed">
                                   {note.content}
                                 </p>
-                                <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
-                                  <span className={isThreaded && isLast ? 'text-accent-400 font-medium' : ''}>
-                                    {note.author?.name || note.user?.name || 'Unknown'}
-                                  </span>
-                                  <span>•</span>
-                                  <span>{formatDate(note.createdAt)}</span>
-                                  {note.updatedAt !== note.createdAt && (
-                                    <>
-                                      <span>•</span>
-                                      <span className="italic">edited</span>
-                                    </>
-                                  )}
-                                </div>
                               </div>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>

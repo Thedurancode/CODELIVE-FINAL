@@ -3,13 +3,21 @@
 /**
  * Authentication Hook
  *
- * Wrapper around Better Auth client providing login, register, logout functions
+ * Wrapper around Supabase Auth providing login, register, logout functions
  * with automatic navigation and error handling.
  */
 
 import { useRouter } from 'next/navigation';
-import { useCallback } from 'react';
-import { useSession, signIn, signOut, signUp, type Session } from '@/lib/auth-client';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  signIn,
+  signUp,
+  signOut,
+  getSession,
+  onAuthStateChange,
+  type Session,
+  type User,
+} from '@/lib/auth-client';
 
 export interface AuthUser {
   id: string;
@@ -27,7 +35,7 @@ export interface UseAuthReturn {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
-  refetch: () => void;
+  refetch: () => Promise<void>;
 }
 
 /**
@@ -35,63 +43,183 @@ export interface UseAuthReturn {
  */
 export function useAuth(): UseAuthReturn {
   const router = useRouter();
-  const { data: session, isPending, error, refetch } = useSession();
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Fetch initial session
+  const fetchSession = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const { data, error: sessionError } = await getSession();
+
+      if (sessionError) {
+        console.error('Session fetch error:', sessionError);
+        setError(new Error(sessionError.message));
+        setSession(null);
+        setUser(null);
+        return;
+      }
+
+      setSession(data.session);
+      if (data.session?.user) {
+        setUser({
+          id: data.session.user.id,
+          email: data.session.user.email || '',
+          name: data.session.user.user_metadata?.name ||
+                data.session.user.user_metadata?.full_name ||
+                data.session.user.email?.split('@')[0] || '',
+          image: data.session.user.user_metadata?.avatar_url,
+        });
+      } else {
+        setUser(null);
+      }
+      setError(null);
+    } catch (err) {
+      console.error('Session fetch error:', err);
+      setError(err instanceof Error ? err : new Error('Failed to fetch session'));
+      setSession(null);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Subscribe to auth state changes
+  useEffect(() => {
+    fetchSession();
+
+    const { data: { subscription } } = onAuthStateChange((event, newSession) => {
+      setSession(newSession);
+      if (newSession?.user) {
+        setUser({
+          id: newSession.user.id,
+          email: newSession.user.email || '',
+          name: newSession.user.user_metadata?.name ||
+                newSession.user.user_metadata?.full_name ||
+                newSession.user.email?.split('@')[0] || '',
+          image: newSession.user.user_metadata?.avatar_url,
+        });
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchSession]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const result = await signIn.email({
-      email,
-      password,
-    });
+    setIsLoading(true);
+    setError(null);
 
-    if (result.error) {
-      throw new Error(result.error.message || 'Login failed');
+    try {
+      const { data, error: loginError } = await signIn(email, password);
+
+      if (loginError) {
+        throw new Error(loginError.message || 'Login failed');
+      }
+
+      if (!data?.session) {
+        throw new Error('No session returned from login');
+      }
+
+      // Update session state immediately
+      setSession(data.session);
+      if (data.session.user) {
+        setUser({
+          id: data.session.user.id,
+          email: data.session.user.email || '',
+          name: data.session.user.user_metadata?.name ||
+                data.session.user.user_metadata?.full_name ||
+                data.session.user.email?.split('@')[0] || '',
+          image: data.session.user.user_metadata?.avatar_url,
+        });
+      }
+      setIsLoading(false);
+
+      // Navigate to projects page
+      router.push('/projects');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      setError(new Error(errorMessage));
+      setIsLoading(false);
+      throw err;
     }
-
-    // Refresh session after login
-    await refetch();
-
-    // Navigate to projects page
-    router.push('/projects');
-  }, [router, refetch]);
+  }, [router]);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
-    const result = await signUp.email({
-      email,
-      password,
-      name,
-    });
+    setIsLoading(true);
+    setError(null);
 
-    if (result.error) {
-      throw new Error(result.error.message || 'Registration failed');
+    try {
+      const { data, error: signUpError } = await signUp(email, password, name);
+
+      if (signUpError) {
+        throw new Error(signUpError.message || 'Registration failed');
+      }
+
+      // Check if email confirmation is required
+      if (data?.user && !data?.session) {
+        setIsLoading(false);
+        throw new Error('Please check your email to confirm your account');
+      }
+
+      if (!data?.session) {
+        throw new Error('No session returned from registration');
+      }
+
+      // Update session state immediately
+      setSession(data.session);
+      if (data.session.user) {
+        setUser({
+          id: data.session.user.id,
+          email: data.session.user.email || '',
+          name: data.session.user.user_metadata?.name ||
+                data.session.user.user_metadata?.full_name ||
+                data.session.user.email?.split('@')[0] || '',
+          image: data.session.user.user_metadata?.avatar_url,
+        });
+      }
+      setIsLoading(false);
+
+      // Navigate to projects page
+      router.push('/projects');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Registration failed';
+      setError(new Error(errorMessage));
+      setIsLoading(false);
+      throw err;
     }
-
-    // Refresh session after registration
-    await refetch();
-
-    // Navigate to projects page
-    router.push('/projects');
-  }, [router, refetch]);
+  }, [router]);
 
   const logout = useCallback(async () => {
-    await signOut();
-    router.push('/login');
+    setIsLoading(true);
+    try {
+      await signOut();
+      setSession(null);
+      setUser(null);
+      router.push('/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setIsLoading(false);
+    }
   }, [router]);
 
   return {
-    user: session?.user ? {
-      id: session.user.id,
-      email: session.user.email,
-      name: session.user.name || '',
-      image: session.user.image || undefined,
-    } : null,
-    session: session || null,
-    isLoading: isPending,
+    user,
+    session,
+    isLoading,
     isAuthenticated: !!session?.user,
-    error: error || null,
+    error,
     login,
     register,
     logout,
-    refetch,
+    refetch: fetchSession,
   };
 }
 

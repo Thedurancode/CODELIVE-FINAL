@@ -16119,6 +16119,218 @@
         }
       }
     },
+    "/api/github-actions/workflows": {
+      "get": {
+        "summary": "List available workflows in a repository",
+        "tags": [
+          "GitHub Actions"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repo",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflows"
+          }
+        }
+      }
+    },
+    "/api/github-actions/trigger": {
+      "post": {
+        "summary": "Trigger a GitHub Actions workflow",
+        "tags": [
+          "GitHub Actions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner",
+                  "repo",
+                  "workflowId"
+                ],
+                "properties": {
+                  "owner": {
+                    "type": "string",
+                    "description": "Repository owner"
+                  },
+                  "repo": {
+                    "type": "string",
+                    "description": "Repository name"
+                  },
+                  "workflowId": {
+                    "type": "string",
+                    "description": "Workflow file name (e.g., deploy.yml) or workflow ID"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "description": "Branch or tag to run on",
+                    "default": "main"
+                  },
+                  "inputs": {
+                    "type": "object",
+                    "description": "Workflow input parameters"
+                  }
+                }
+              },
+              "example": {
+                "owner": "myorg",
+                "repo": "myrepo",
+                "workflowId": "deploy.yml",
+                "ref": "main",
+                "inputs": {
+                  "environment": "production",
+                  "version": "1.2.3"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow triggered successfully"
+          }
+        }
+      }
+    },
+    "/api/github-actions/runs/{runId}": {
+      "get": {
+        "summary": "Get workflow run status",
+        "tags": [
+          "GitHub Actions"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "repo",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow run details"
+          }
+        }
+      }
+    },
+    "/api/github-actions/runs/{runId}/cancel": {
+      "post": {
+        "summary": "Cancel a workflow run",
+        "tags": [
+          "GitHub Actions"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner",
+                  "repo"
+                ],
+                "properties": {
+                  "owner": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow run cancelled"
+          }
+        }
+      }
+    },
+    "/api/github-actions/parse-command": {
+      "post": {
+        "summary": "Parse a @claude command",
+        "description": "Test command parsing without actually triggering a workflow",
+        "tags": [
+          "GitHub Actions"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "comment"
+                ],
+                "properties": {
+                  "comment": {
+                    "type": "string",
+                    "description": "Comment text containing @claude"
+                  }
+                }
+              },
+              "example": {
+                "comment": "@claude deploy environment=production version=1.2.3"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parsed command"
+          }
+        }
+      }
+    },
     "/api/github/status": {
       "get": {
         "summary": "Check GitHub integration status",
@@ -16797,6 +17009,131 @@
         "responses": {
           "200": {
             "description": "Collaborator access status"
+          }
+        }
+      }
+    },
+    "/api/github/repos/{owner}/{repo}/download-info": {
+      "get": {
+        "summary": "Get download info for a repository",
+        "tags": [
+          "GitHub"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "repo",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Download info with available branches and URLs"
+          }
+        }
+      }
+    },
+    "/api/github/repos/{owner}/{repo}/download/zip": {
+      "get": {
+        "summary": "Download repository as ZIP",
+        "tags": [
+          "GitHub"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "repo",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ref",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Branch name or commit SHA (defaults to default branch)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ZIP file download",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/github/repos/{owner}/{repo}/download/tarball": {
+      "get": {
+        "summary": "Download repository as tarball",
+        "tags": [
+          "GitHub"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "repo",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ref",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Branch name or commit SHA (defaults to default branch)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tarball file download",
+            "content": {
+              "application/gzip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           }
         }
       }
@@ -21614,6 +21951,951 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/meetings": {
+      "get": {
+        "summary": "Get meetings with filters",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "projectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of meetings"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "scheduledAt"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "meetingType": {
+                    "type": "string",
+                    "enum": [
+                      "video",
+                      "in_person",
+                      "phone",
+                      "external_link"
+                    ]
+                  },
+                  "scheduledAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "duration": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "participants": {
+                    "type": "array"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Meeting created"
+          }
+        }
+      }
+    },
+    "/api/meetings/upcoming": {
+      "get": {
+        "summary": "Get upcoming meetings",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "projectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of upcoming meetings"
+          }
+        }
+      }
+    },
+    "/api/meetings/project/{projectId}": {
+      "get": {
+        "summary": "Get meetings for a specific project",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "projectId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of project meetings"
+          }
+        }
+      }
+    },
+    "/api/meetings/stats": {
+      "get": {
+        "summary": "Get meeting statistics",
+        "tags": [
+          "Meetings"
+        ],
+        "responses": {
+          "200": {
+            "description": "Meeting statistics"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}": {
+      "get": {
+        "summary": "Get meeting by ID",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Meeting details"
+          },
+          "404": {
+            "description": "Meeting not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Meeting updated"
+          },
+          "404": {
+            "description": "Meeting not found"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Meeting deleted"
+          },
+          "404": {
+            "description": "Meeting not found"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/start": {
+      "post": {
+        "summary": "Start a meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Meeting started"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/end": {
+      "post": {
+        "summary": "End a meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Meeting ended"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/participants": {
+      "get": {
+        "summary": "Get meeting participants",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of participants"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add participant to meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "name"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "userId": {
+                    "type": "string"
+                  },
+                  "contactId": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Participant added"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/participants/{participantId}": {
+      "delete": {
+        "summary": "Remove participant from meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "participantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Participant removed"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/participants/{participantId}/rsvp": {
+      "patch": {
+        "summary": "Update participant RSVP status",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "participantId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "accepted",
+                      "declined",
+                      "tentative"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "RSVP updated"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/room/token": {
+      "post": {
+        "summary": "Get video room access token",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room token generated"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/notifications/invite": {
+      "post": {
+        "summary": "Send invitation to a specific participant",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "participantId"
+                ],
+                "properties": {
+                  "participantId": {
+                    "type": "integer"
+                  },
+                  "sendSms": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invitation sent"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/notifications/invite-all": {
+      "post": {
+        "summary": "Send invitations to all participants who haven't received one",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sendSms": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invitations sent"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/notifications/reminder": {
+      "post": {
+        "summary": "Send reminder to a specific participant",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "participantId"
+                ],
+                "properties": {
+                  "participantId": {
+                    "type": "integer"
+                  },
+                  "sendSms": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reminder sent"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/notifications/remind-all": {
+      "post": {
+        "summary": "Send reminders to all participants who haven't received one",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sendSms": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reminders sent"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/transcription": {
+      "get": {
+        "summary": "Get transcription status and transcript for a meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transcription status and data"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/transcription/start": {
+      "post": {
+        "summary": "Start transcription for a meeting recording",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "recordingUrl": {
+                    "type": "string",
+                    "description": "URL to the recording file (optional if already stored on meeting)"
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Language code (e.g., 'en', 'es') or 'auto' for auto-detect"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcription started"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/transcription/retry": {
+      "post": {
+        "summary": "Retry a failed transcription",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "recordingUrl": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcription retry initiated"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/transcription/upload": {
+      "post": {
+        "summary": "Upload a recording file for transcription",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "audio"
+                ],
+                "properties": {
+                  "audio": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "language": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcription started from uploaded file"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/recording": {
+      "get": {
+        "summary": "Get recording URL for a completed meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recording info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "recordingUrl": {
+                          "type": "string"
+                        },
+                        "hasRecording": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/live-transcription/start": {
+      "post": {
+        "summary": "Start live transcription with speaker diarization for an active meeting",
+        "description": "Starts real-time transcription using Daily.co's Deepgram integration with speaker diarization enabled",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live transcription started"
+          },
+          "400": {
+            "description": "Meeting not in progress or not a video meeting"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/live-transcription/stop": {
+      "post": {
+        "summary": "Stop live transcription for an active meeting",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live transcription stopped"
+          }
+        }
+      }
+    },
+    "/api/meetings/{id}/cancel": {
+      "post": {
+        "summary": "Cancel a meeting and notify all participants",
+        "tags": [
+          "Meetings"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "sendNotifications": {
+                    "type": "boolean"
+                  },
+                  "sendSms": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Meeting cancelled"
           }
         }
       }
@@ -27625,6 +28907,73 @@
         }
       }
     },
+    "/api/projects/{id}/mentionable-users": {
+      "get": {
+        "summary": "Get users that can be @mentioned in notes",
+        "description": "Returns team members and contacts that can be mentioned in project notes",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of mentionable users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "contact"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/projects/{id}/notes/{noteId}/github-issue": {
       "post": {
         "summary": "Create a GitHub issue from a note",
@@ -27710,6 +29059,234 @@
           },
           "404": {
             "description": "Project or note not found"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/notes/{noteId}/attachments": {
+      "get": {
+        "summary": "Get all attachments for a note",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "noteId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of note attachments"
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload a file attachment to a note",
+        "description": "Upload images, documents, audio files, etc. to attach to a note",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "noteId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "File to upload (images, documents, audio, video)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Attachment uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "noteId": {
+                          "type": "integer"
+                        },
+                        "filename": {
+                          "type": "string"
+                        },
+                        "originalFilename": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "type": "string"
+                        },
+                        "size": {
+                          "type": "integer"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "image",
+                            "document",
+                            "audio",
+                            "video",
+                            "other"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file uploaded or file too large"
+          },
+          "404": {
+            "description": "Note not found"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/notes/{noteId}/attachments/{attachmentId}": {
+      "delete": {
+        "summary": "Delete a note attachment (uploader only)",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "noteId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachmentId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attachment deleted"
+          },
+          "403": {
+            "description": "Only the uploader can delete this attachment"
+          },
+          "404": {
+            "description": "Attachment not found"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/attachments": {
+      "get": {
+        "summary": "Get all attachments for a project",
+        "description": "Returns all attachments across all notes for a project",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of project attachments"
           }
         }
       }
@@ -29441,6 +31018,153 @@
         "responses": {
           "200": {
             "description": "Assets reordered"
+          }
+        }
+      }
+    },
+    "/api/projects/{id}/screenshot": {
+      "get": {
+        "summary": "Get project screenshot URL",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project screenshot URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "screenshotUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "deploymentUrl": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found"
+          }
+        }
+      },
+      "post": {
+        "summary": "Capture a new screenshot of the project's live deployment",
+        "description": "Uses Browserless API to capture a screenshot of the deployment URL",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Screenshot captured successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "screenshotUrl": {
+                          "type": "string"
+                        },
+                        "storagePath": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Project has no deployment URL"
+          },
+          "404": {
+            "description": "Project not found"
+          },
+          "503": {
+            "description": "Screenshot service not available (Browserless not configured)"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete project screenshot",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Screenshot deleted"
+          },
+          "404": {
+            "description": "Project not found"
           }
         }
       }
@@ -34718,6 +36442,72 @@
         }
       }
     },
+    "/api/sprites/config/anthropic": {
+      "get": {
+        "summary": "Check if Anthropic API key (Z.AI) is configured",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key status"
+          }
+        }
+      },
+      "post": {
+        "summary": "Set Anthropic API key (Z.AI) for sprites",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "apiKey": {
+                    "type": "string",
+                    "description": "Z.AI API key"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "API key configured"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove Anthropic API key",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key removed"
+          }
+        }
+      }
+    },
     "/api/sprites": {
       "get": {
         "summary": "List all sprites for the organization",
@@ -35008,6 +36798,102 @@
         "responses": {
           "200": {
             "description": "Sprite initialized"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/dev-server/start": {
+      "post": {
+        "summary": "Start the dev server on a sprite",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dev server started"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/dev-server/stop": {
+      "post": {
+        "summary": "Stop the dev server on a sprite",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dev server stopped"
+          },
+          "404": {
+            "description": "Sprite not found"
+          }
+        }
+      }
+    },
+    "/api/sprites/{id}/dev-server/restart": {
+      "post": {
+        "summary": "Restart the dev server on a sprite",
+        "tags": [
+          "Sprites"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dev server restarted"
           },
           "404": {
             "description": "Sprite not found"

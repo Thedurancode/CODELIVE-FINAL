@@ -1,8 +1,8 @@
 /**
  * Authentication Middleware
  *
- * Re-exports Better Auth middleware for backward compatibility.
- * All authentication now uses Better Auth session-based auth.
+ * Re-exports Supabase Auth middleware for backward compatibility.
+ * All authentication now uses Supabase token-based auth.
  */
 
 export {
@@ -11,8 +11,8 @@ export {
   authorize,
   authorizeOwner,
   requireAdmin,
-} from './betterAuth';
+} from './supabaseAuth';
 
 // For default export compatibility
-import betterAuthMiddleware from './betterAuth';
-export default betterAuthMiddleware;
+import supabaseAuthMiddleware from './supabaseAuth';
+export default supabaseAuthMiddleware;

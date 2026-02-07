@@ -1,3 +1,5 @@
+import { getAccessToken } from './auth-client';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 class ApiError extends Error {
@@ -10,15 +12,33 @@ class ApiError extends Error {
 // List of endpoints that return paginated responses (don't unwrap data.data)
 const PAGINATED_ENDPOINTS = ['/api/listings', '/api/hedgefunds', '/api/contacts', '/api/buyers', '/api/email-client/folders', '/api/reminders', '/api/tasks', '/api/projects', '/api/contracts', '/api/meetings'];
 
+/**
+ * Get authorization headers with Supabase token
+ */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const token = await getAccessToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const authHeaders = await getAuthHeaders();
+
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    credentials: 'include', // Send cookies for session-based auth
+    credentials: 'include', // Keep cookies for backward compatibility
     headers: {
-      'Content-Type': 'application/json',
+      ...authHeaders,
       ...options.headers,
     },
   });
@@ -76,9 +96,17 @@ export const api = {
     }),
 
   upload: async <T>(endpoint: string, formData: FormData): Promise<T> => {
+    const token = await getAccessToken();
+    const headers: HeadersInit = {};
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
-      credentials: 'include', // Send cookies for session-based auth
+      credentials: 'include',
+      headers,
       body: formData,
     });
 
@@ -110,14 +138,21 @@ export async function streamChat(
   onToolEvent?: (event: ToolEvent) => void,
   abortSignal?: AbortSignal
 ): Promise<string> {
+  const token = await getAccessToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const requestChat = async (useCompat: boolean) => {
     const endpoint = useCompat ? '/v1/chat/completions' : '/api/agent/chat/stream';
     return fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
-      credentials: 'include', // Send cookies for session-based auth
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      credentials: 'include',
+      headers,
       body: JSON.stringify(
         useCompat
           ? {
@@ -285,12 +320,19 @@ export async function streamSpriteChat(
     abortSignal?: AbortSignal;
   } = {}
 ): Promise<{ fullContent: string; sessionId?: string }> {
+  const token = await getAccessToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_URL}/api/sprites/${spriteId}/chat/stream`, {
     method: 'POST',
-    credentials: 'include', // Send cookies for session-based auth
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    credentials: 'include',
+    headers,
     body: JSON.stringify({
       prompt,
       conversationId: options.conversationId,

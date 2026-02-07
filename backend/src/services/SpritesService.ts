@@ -930,6 +930,14 @@ class SpritesService {
       console.log(`✅ Sprite initialized: ${sprite.spriteName}`);
       console.log(`   GitHub: ${githubConfigured ? 'yes' : 'no'}`);
       console.log(`   Feature branch: ${featureBranchCreated ? featureBranch : 'none (working on ' + sprite.branch + ')'}`);
+
+      // Auto-start dev server if enabled
+      if (sprite.autoDevServer) {
+        console.log(`[SpritesService] Starting auto dev server on port ${sprite.devServerPort}...`);
+        this.startDevServer(sprite.id).catch((error) => {
+          console.error(`[SpritesService] Failed to start dev server for ${sprite.id}:`, error);
+        });
+      }
     } catch (error) {
       await sprite.update({
         status: 'error',
@@ -937,6 +945,252 @@ class SpritesService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Start the dev server on the sprite
+   *
+   * Auto-detects project type and runs appropriate commands:
+   * - Node.js (package.json): npm install && npm run dev
+   * - Python (requirements.txt): pip install -r requirements.txt
+   * - Shows a welcome page on port 8080 while starting
+   */
+  async startDevServer(spriteId: string): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    const port = sprite.devServerPort || 8080;
+    const workDir = sprite.workingDirectory;
+
+    try {
+      await sprite.update({
+        devServerStatus: 'starting',
+      });
+
+      // Create welcome server script that shows until real code runs
+      const welcomeScript = `
+const http = require('http');
+const PORT = ${port};
+
+const html = \`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sprite Dev Server</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #e4e4e4;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      text-align: center;
+      padding: 40px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      max-width: 600px;
+    }
+    .logo { font-size: 64px; margin-bottom: 20px; }
+    h1 { font-size: 28px; margin-bottom: 10px; color: #fff; }
+    .subtitle { color: #888; margin-bottom: 30px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 24px;
+      background: rgba(0,255,136,0.1);
+      border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 30px;
+      color: #00ff88;
+    }
+    .pulse {
+      width: 10px;
+      height: 10px;
+      background: #00ff88;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+    .info { margin-top: 30px; color: #666; font-size: 14px; }
+    .sprite-name { color: #00d4ff; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🚀</div>
+    <h1>Sprite Dev Server</h1>
+    <p class="subtitle">Your development environment is ready</p>
+    <div class="status">
+      <span class="pulse"></span>
+      <span>Running on port ${port}</span>
+    </div>
+    <p class="info">
+      Sprite: <span class="sprite-name">${sprite.spriteName}</span><br>
+      Start your app to replace this page
+    </p>
+  </div>
+</body>
+</html>\`;
+
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end(html);
+}).listen(PORT, '0.0.0.0', () => {
+  console.log('Welcome server running on port ' + PORT);
+});
+`;
+
+      // Write welcome server script
+      await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `cat > /tmp/welcome-server.js << 'WELCOMEEOF'
+${welcomeScript}
+WELCOMEEOF`
+      );
+
+      // Create tmux session for dev server if it doesn't exist
+      const tmuxSession = `dev-${sprite.spriteName.slice(-8)}`;
+      await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `tmux has-session -t ${tmuxSession} 2>/dev/null || tmux new-session -d -s ${tmuxSession}`
+      );
+
+      // Start welcome server first (will be replaced by real dev server)
+      await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `tmux send-keys -t ${tmuxSession} 'node /tmp/welcome-server.js' Enter`
+      );
+
+      // Detect project type and install dependencies
+      const hasPackageJson = await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `[ -f "${workDir}/package.json" ] && echo "yes" || echo "no"`
+      );
+
+      const hasRequirementsTxt = await this.execCommand(
+        sprite.organizationId,
+        sprite.spriteName,
+        `[ -f "${workDir}/requirements.txt" ] && echo "yes" || echo "no"`
+      );
+
+      let devCommand = sprite.devServerCommand;
+
+      if (hasPackageJson.output.trim() === 'yes') {
+        console.log(`[SpritesService] Detected Node.js project, installing dependencies...`);
+
+        // Install dependencies
+        await this.execCommand(
+          sprite.organizationId,
+          sprite.spriteName,
+          `cd ${workDir} && npm install`
+        );
+
+        // Auto-detect dev command from package.json if not set
+        if (!devCommand) {
+          const pkgResult = await this.execCommand(
+            sprite.organizationId,
+            sprite.spriteName,
+            `cd ${workDir} && cat package.json | grep -E '"dev"|"start"' | head -1`
+          );
+
+          if (pkgResult.output.includes('"dev"')) {
+            devCommand = `PORT=${port} npm run dev`;
+          } else if (pkgResult.output.includes('"start"')) {
+            devCommand = `PORT=${port} npm start`;
+          }
+        }
+      } else if (hasRequirementsTxt.output.trim() === 'yes') {
+        console.log(`[SpritesService] Detected Python project, installing dependencies...`);
+
+        await this.execCommand(
+          sprite.organizationId,
+          sprite.spriteName,
+          `cd ${workDir} && pip install -r requirements.txt`
+        );
+      }
+
+      // If we have a dev command, kill welcome server and start real one
+      if (devCommand) {
+        console.log(`[SpritesService] Starting dev server: ${devCommand}`);
+
+        // Kill welcome server and start real dev server
+        await this.execCommand(
+          sprite.organizationId,
+          sprite.spriteName,
+          `tmux send-keys -t ${tmuxSession} C-c`
+        );
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        await this.execCommand(
+          sprite.organizationId,
+          sprite.spriteName,
+          `tmux send-keys -t ${tmuxSession} 'cd ${workDir} && ${devCommand}' Enter`
+        );
+      }
+
+      await sprite.update({
+        devServerStatus: 'running',
+        devServerCommand: devCommand,
+        tmuxSessionName: tmuxSession,
+      });
+
+      console.log(`✅ Dev server started for ${sprite.spriteName} on port ${port}`);
+    } catch (error) {
+      console.error(`[SpritesService] Failed to start dev server:`, error);
+      await sprite.update({
+        devServerStatus: 'error',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Stop the dev server on the sprite
+   */
+  async stopDevServer(spriteId: string): Promise<void> {
+    const sprite = await ProjectSprite.findByPk(spriteId);
+    if (!sprite) throw new Error('Sprite not found');
+
+    if (sprite.tmuxSessionName) {
+      try {
+        await this.execCommand(
+          sprite.organizationId,
+          sprite.spriteName,
+          `tmux kill-session -t ${sprite.tmuxSessionName} 2>/dev/null || true`
+        );
+      } catch {
+        // Session may not exist
+      }
+    }
+
+    await sprite.update({
+      devServerStatus: 'stopped',
+    });
+
+    console.log(`✅ Dev server stopped for ${sprite.spriteName}`);
+  }
+
+  /**
+   * Restart the dev server on the sprite
+   */
+  async restartDevServer(spriteId: string): Promise<void> {
+    await this.stopDevServer(spriteId);
+    await this.startDevServer(spriteId);
   }
 
   /**

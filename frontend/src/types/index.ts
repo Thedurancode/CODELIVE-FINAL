@@ -343,11 +343,13 @@ export interface ProjectNote {
     id: string;
     name?: string;
     email?: string;
+    avatar?: string;
   };
   user?: {
     id: string;
     name?: string;
     email?: string;
+    avatar?: string;
   };
 }
 
@@ -374,6 +376,7 @@ export interface ProjectAudioNote {
     id: string;
     name?: string;
     email?: string;
+    avatar?: string;
   };
 }
 
@@ -384,6 +387,8 @@ export interface ProjectEnvVariable {
   organizationId: string;
   name: string;
   description: string | null;
+  syncToVercel: boolean;
+  vercelTarget: string[] | null;
   createdAt: string;
   updatedAt: string;
   author?: {

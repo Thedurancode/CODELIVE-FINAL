@@ -71,6 +71,12 @@ export interface Sprite {
   mcpPort: number | null;
   mcpInstalledAt: string | null;
 
+  // Auto dev server settings
+  autoDevServer: boolean;
+  devServerPort: number;
+  devServerCommand: string | null;
+  devServerStatus: 'stopped' | 'starting' | 'running' | 'error';
+
   createdAt: string;
   updatedAt: string;
 

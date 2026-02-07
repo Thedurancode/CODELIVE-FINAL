@@ -1184,7 +1184,7 @@ export const createProjectEnvVariable = async (req: Request, res: Response) => {
     const { id } = req.params;
     const userId = (req as any).user?.id;
     const organizationId = (req as any).user?.organizationId;
-    const { name, value, description } = req.body;
+    const { name, value, description, syncToVercel, vercelTarget } = req.body;
 
     if (!name || !value) {
       return res.status(400).json({
@@ -1223,6 +1223,8 @@ export const createProjectEnvVariable = async (req: Request, res: Response) => {
       name,
       value,
       description,
+      syncToVercel: syncToVercel || false,
+      vercelTarget,
     });
 
     res.status(201).json({
@@ -1276,13 +1278,13 @@ export const updateProjectEnvVariable = async (req: Request, res: Response) => {
     const { id, envId } = req.params;
     const userId = (req as any).user?.id;
     const organizationId = (req as any).user?.organizationId;
-    const { name, value, description } = req.body;
+    const { name, value, description, syncToVercel, vercelTarget } = req.body;
 
     const envVariable = await projectEnvVariableService.updateEnvVariable(
       parseInt(envId, 10),
       userId,
       organizationId,
-      { name, value, description }
+      { name, value, description, syncToVercel, vercelTarget }
     );
 
     if (!envVariable) {
@@ -1347,6 +1349,35 @@ export const deleteProjectEnvVariable = async (req: Request, res: Response) => {
         timestamp: new Date().toISOString(),
       });
     }
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+  }
+};
+
+export const bulkSyncEnvVariablesToVercel = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const organizationId = (req as any).user?.organizationId;
+
+    if (!organizationId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await projectEnvVariableService.bulkSyncToVercel(id, organizationId);
+
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : String(error),

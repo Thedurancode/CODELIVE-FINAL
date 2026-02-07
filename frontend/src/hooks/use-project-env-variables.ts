@@ -16,7 +16,13 @@ export function useProjectEnvVariables(projectId: string) {
 export function useCreateProjectEnvVariable(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; value: string; description?: string }) =>
+    mutationFn: (data: {
+      name: string;
+      value: string;
+      description?: string;
+      syncToVercel?: boolean;
+      vercelTarget?: string[];
+    }) =>
       api.post<ProjectEnvVariable>(`/api/projects/${projectId}/env-variables`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectEnvVariables', projectId] });
@@ -27,7 +33,16 @@ export function useCreateProjectEnvVariable(projectId: string) {
 export function useUpdateProjectEnvVariable(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ envId, data }: { envId: number; data: { name?: string; value?: string; description?: string } }) =>
+    mutationFn: ({ envId, data }: {
+      envId: number;
+      data: {
+        name?: string;
+        value?: string;
+        description?: string;
+        syncToVercel?: boolean;
+        vercelTarget?: string[];
+      };
+    }) =>
       api.patch<ProjectEnvVariable>(`/api/projects/${projectId}/env-variables/${envId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectEnvVariables', projectId] });
@@ -51,6 +66,17 @@ export function useGetEnvVariableValue(projectId: string) {
     mutationFn: async (envId: number) => {
       const response = await api.get<{ data: { value: string } }>(`/api/projects/${projectId}/env-variables/${envId}/value`);
       return response.data;
+    },
+  });
+}
+
+export function useBulkSyncEnvVariablesToVercel(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ data: { synced: number; failed: number } }>(`/api/projects/${projectId}/env-variables/sync-to-vercel`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectEnvVariables', projectId] });
     },
   });
 }

@@ -4,7 +4,7 @@
 # Deploy with: fly deploy --config backend/fly.toml
 # ==============================================================================
 
-app = 'dispotree-api'
+app = 'dispotree-v2-api'
 primary_region = 'dfw'
 
 [build]

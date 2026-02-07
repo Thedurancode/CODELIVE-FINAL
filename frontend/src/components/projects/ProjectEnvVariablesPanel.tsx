@@ -7,6 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +35,8 @@ import {
   Loader2,
   Check,
   Lock,
+  Triangle,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -45,12 +50,14 @@ import {
   useUpdateProjectEnvVariable,
   useDeleteProjectEnvVariable,
   useGetEnvVariableValue,
+  useBulkSyncEnvVariablesToVercel,
 } from '@/hooks/use-project-env-variables';
 import { toast } from 'sonner';
 import type { ProjectEnvVariable } from '@/types';
 
 interface ProjectEnvVariablesPanelProps {
   projectId: string;
+  vercelProjectId?: string | null;
 }
 
 function formatDate(dateString: string): string {
@@ -70,13 +77,15 @@ function formatDate(dateString: string): string {
   }
 }
 
-export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanelProps) {
+export function ProjectEnvVariablesPanel({ projectId, vercelProjectId }: ProjectEnvVariablesPanelProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingVariable, setEditingVariable] = useState<ProjectEnvVariable | null>(null);
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
+  const [syncToVercel, setSyncToVercel] = useState(false);
+  const [vercelTargets, setVercelTargets] = useState<string[]>(['production', 'preview', 'development']);
   const [revealedValues, setRevealedValues] = useState<Record<number, string>>({});
   const [loadingValues, setLoadingValues] = useState<Record<number, boolean>>({});
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -86,11 +95,14 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
   const updateEnvVariable = useUpdateProjectEnvVariable(projectId);
   const deleteEnvVariable = useDeleteProjectEnvVariable(projectId);
   const getEnvVariableValue = useGetEnvVariableValue(projectId);
+  const bulkSync = useBulkSyncEnvVariablesToVercel(projectId);
 
   // Extract array from potentially wrapped response
   const envVariables: ProjectEnvVariable[] = Array.isArray(envVariablesData)
     ? envVariablesData
     : ((envVariablesData as any)?.data || []);
+
+  const hasSyncedVars = envVariables?.some(v => v.syncToVercel);
 
   const handleCreate = async () => {
     if (!name.trim() || !value.trim()) {
@@ -103,8 +115,10 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
         name: name.trim(),
         value: value.trim(),
         description: description.trim() || undefined,
+        syncToVercel,
+        vercelTarget: syncToVercel ? vercelTargets : undefined,
       });
-      toast.success('Environment variable created');
+      toast.success(syncToVercel ? 'Secret created and synced to Vercel' : 'Secret created');
       setIsCreateDialogOpen(false);
       resetForm();
     } catch (error: any) {
@@ -122,9 +136,11 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
           name: name.trim() || undefined,
           value: value.trim() || undefined,
           description: description.trim(),
+          syncToVercel,
+          vercelTarget: syncToVercel ? vercelTargets : undefined,
         },
       });
-      toast.success('Environment variable updated');
+      toast.success(syncToVercel ? 'Secret updated and synced to Vercel' : 'Secret updated');
       setIsEditDialogOpen(false);
       setEditingVariable(null);
       resetForm();
@@ -150,11 +166,23 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
     }
   };
 
+  const handleBulkSync = async () => {
+    try {
+      const result: any = await bulkSync.mutateAsync();
+      const data = result?.data || result;
+      toast.success(`Synced ${data.synced || 0} variable${(data.synced || 0) !== 1 ? 's' : ''} to Vercel${data.failed > 0 ? ` (${data.failed} failed)` : ''}`);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to sync to Vercel');
+    }
+  };
+
   const openEditDialog = (envVar: ProjectEnvVariable) => {
     setEditingVariable(envVar);
     setName(envVar.name);
     setValue(''); // Don't pre-fill value for security
     setDescription(envVar.description || '');
+    setSyncToVercel(envVar.syncToVercel || false);
+    setVercelTargets(envVar.vercelTarget || ['production', 'preview', 'development']);
     setIsEditDialogOpen(true);
   };
 
@@ -162,6 +190,8 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
     setName('');
     setValue('');
     setDescription('');
+    setSyncToVercel(false);
+    setVercelTargets(['production', 'preview', 'development']);
   };
 
   const toggleRevealValue = useCallback(async (envId: number) => {
@@ -211,6 +241,48 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
     }
   }, [revealedValues, getEnvVariableValue]);
 
+  // Vercel sync toggle section (shared between create and edit dialogs)
+  const VercelSyncSection = () => {
+    if (!vercelProjectId) return null;
+
+    return (
+      <div className="space-y-3 p-3 rounded-lg bg-secondary/50 border border-border/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Triangle className="h-4 w-4" />
+            <Label className="text-sm font-medium">Sync to Vercel</Label>
+          </div>
+          <Switch
+            checked={syncToVercel}
+            onCheckedChange={setSyncToVercel}
+          />
+        </div>
+        {syncToVercel && (
+          <div>
+            <Label className="text-xs text-muted-foreground">Target Environments</Label>
+            <div className="flex gap-4 mt-1.5">
+              {(['production', 'preview', 'development'] as const).map((env) => (
+                <label key={env} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={vercelTargets.includes(env)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setVercelTargets(prev => [...prev, env]);
+                      } else {
+                        setVercelTargets(prev => prev.filter(t => t !== env));
+                      }
+                    }}
+                  />
+                  <span className="capitalize">{env}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -231,83 +303,101 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
           <Lock className="h-4 w-4" />
           {envVariables?.length || 0} Secret{envVariables?.length !== 1 ? 's' : ''}
         </h3>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="bg-accent-600 hover:bg-accent-700 text-white">
-              <Plus className="h-4 w-4 mr-1" />
-              Add Secret
+        <div className="flex items-center gap-2">
+          {vercelProjectId && hasSyncedVars && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkSync}
+              disabled={bulkSync.isPending}
+            >
+              {bulkSync.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-1" />
+              )}
+              Sync All to Vercel
             </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-foreground flex items-center gap-2">
-                <Key className="h-5 w-5" />
-                Add Environment Variable
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div>
-                <Label className="text-muted-foreground text-sm">Name *</Label>
-                <Input
-                  placeholder="API_KEY"
-                  value={name}
-                  onChange={(e) => setName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
-                  className="mt-1 bg-secondary border text-foreground font-mono"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use SCREAMING_SNAKE_CASE (e.g., DATABASE_URL)
-                </p>
+          )}
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="bg-accent-600 hover:bg-accent-700 text-white">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Secret
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-foreground flex items-center gap-2">
+                  <Key className="h-5 w-5" />
+                  Add Environment Variable
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div>
+                  <Label className="text-muted-foreground text-sm">Name *</Label>
+                  <Input
+                    placeholder="API_KEY"
+                    value={name}
+                    onChange={(e) => setName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
+                    className="mt-1 bg-secondary border text-foreground font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use SCREAMING_SNAKE_CASE (e.g., DATABASE_URL)
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">Value *</Label>
+                  <Textarea
+                    placeholder="Your secret value..."
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    className="mt-1 bg-secondary border text-foreground font-mono min-h-24"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Values are encrypted and stored securely
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-sm">Description</Label>
+                  <Input
+                    placeholder="What is this variable for?"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="mt-1 bg-secondary border text-foreground"
+                  />
+                </div>
+                <VercelSyncSection />
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border text-foreground"
+                    onClick={() => {
+                      setIsCreateDialogOpen(false);
+                      resetForm();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300"
+                    onClick={handleCreate}
+                    disabled={!name.trim() || !value.trim() || createEnvVariable.isPending}
+                  >
+                    {createEnvVariable.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Secret'
+                    )}
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label className="text-muted-foreground text-sm">Value *</Label>
-                <Textarea
-                  placeholder="Your secret value..."
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  className="mt-1 bg-secondary border text-foreground font-mono min-h-24"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Values are encrypted and stored securely
-                </p>
-              </div>
-              <div>
-                <Label className="text-muted-foreground text-sm">Description</Label>
-                <Input
-                  placeholder="What is this variable for?"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="mt-1 bg-secondary border text-foreground"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="flex-1 border text-foreground"
-                  onClick={() => {
-                    setIsCreateDialogOpen(false);
-                    resetForm();
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300"
-                  onClick={handleCreate}
-                  disabled={!name.trim() || !value.trim() || createEnvVariable.isPending}
-                >
-                  {createEnvVariable.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Secret'
-                  )}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {envVariables && envVariables.length > 0 ? (
@@ -320,6 +410,21 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
                     <div className="flex items-center gap-2 mb-2">
                       <Key className="h-4 w-4 text-accent-400 shrink-0" />
                       <span className="font-mono font-medium text-foreground">{envVar.name}</span>
+                      {envVar.syncToVercel && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <Badge variant="outline" className="text-xs border-blue-500/30 text-blue-400 gap-1">
+                                <Triangle className="h-3 w-3" />
+                                Vercel
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Synced to: {(envVar.vercelTarget || []).join(', ')}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
 
                     {/* Value display */}
@@ -471,6 +576,7 @@ export function ProjectEnvVariablesPanel({ projectId }: ProjectEnvVariablesPanel
                 className="mt-1 bg-secondary border text-foreground"
               />
             </div>
+            <VercelSyncSection />
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"

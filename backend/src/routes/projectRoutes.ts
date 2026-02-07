@@ -1490,6 +1490,27 @@ router.patch('/:id/env-variables/:envId', authenticate, projectController.update
  */
 router.delete('/:id/env-variables/:envId', authenticate, projectController.deleteProjectEnvVariable);
 
+/**
+ * @swagger
+ * /api/projects/{id}/env-variables/sync-to-vercel:
+ *   post:
+ *     summary: Bulk sync all Vercel-enabled env variables to the linked Vercel project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Sync results with count of synced and failed variables
+ */
+router.post('/:id/env-variables/sync-to-vercel', authenticate, projectController.bulkSyncEnvVariablesToVercel);
+
 // ============================================================================
 // PROJECT AI RECAP
 // ============================================================================

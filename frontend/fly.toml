@@ -1,24 +1,19 @@
-# ==============================================================================
-# CodeLive Frontend - Fly.io Configuration
-# ==============================================================================
-# Deploy with: fly deploy --config frontend/fly.toml
-# ==============================================================================
-
-app = 'dispotree-web'
+app = 'dispotree-v2-web'
 primary_region = 'dfw'
 
 [build]
   dockerfile = "Dockerfile"
   [build.args]
-    NEXT_PUBLIC_API_URL = "https://dispotree-api.fly.dev"
-    NEXT_PUBLIC_SUPABASE_URL = "https://gnfviibtswjbcvdlptuu.supabase.co"
-    NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduZnZpaWJ0c3dqYmN2ZGxwdHV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDY5MTgsImV4cCI6MjA4MTQ4MjkxOH0.Lz5yZFlhk3fF55JkcGw18JwdFLYgM3mDl54lXpGcJuo"
-    NEXT_PUBLIC_GOOGLE_MAPS_KEY = "AIzaSyDMKB_K78nD0BY0OcxlZmF4obCu1WI1Jvc"
+    NEXT_PUBLIC_API_URL = "https://dispotree-v2-api.fly.dev"
+    NEXT_PUBLIC_SUPABASE_URL = "https://wshaxnwawznohzggpplh.supabase.co"
+    NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzaGF4bndhd3pub2h6Z2dwcGxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMjIxMjQsImV4cCI6MjA4NTY5ODEyNH0.-ONchNV9jXJx5x7edUwzSa1ilgyyqfRIwG0-RsLRQZk"
 
 [env]
   NODE_ENV = "production"
   PORT = "3000"
-  HOSTNAME = "0.0.0.0"
+  NEXT_PUBLIC_API_URL = "https://dispotree-v2-api.fly.dev"
+  NEXT_PUBLIC_SUPABASE_URL = "https://wshaxnwawznohzggpplh.supabase.co"
+  NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzaGF4bndhd3pub2h6Z2dwcGxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxMjIxMjQsImV4cCI6MjA4NTY5ODEyNH0.-ONchNV9jXJx5x7edUwzSa1ilgyyqfRIwG0-RsLRQZk"
 
 [http_service]
   internal_port = 3000
@@ -34,16 +29,16 @@ primary_region = 'dfw'
     soft_limit = 200
 
 [[vm]]
-  memory = '512mb'
+  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
 
 [checks]
   [checks.health]
-    grace_period = "30s"
+    grace_period = "60s"
     interval = "30s"
     method = "GET"
-    path = "/login"
+    path = "/"
     port = 3000
     timeout = "10s"
     type = "http"

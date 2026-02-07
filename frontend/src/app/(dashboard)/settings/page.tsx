@@ -38,6 +38,7 @@ import {
   Tv,
   FileSignature,
   ExternalLink,
+  Triangle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAppStore } from '@/stores/app-store';
@@ -49,6 +50,7 @@ import TeamManagement from '@/components/settings/TeamManagement';
 import { SpriteSettings } from '@/components/settings/SpriteSettings';
 import TVDisplaySettings from '@/components/settings/TVDisplaySettings';
 import DocuSealSettings from '@/components/settings/DocuSealSettings';
+import { useVercelStatus } from '@/hooks/use-vercel';
 import { cn } from '@/lib/utils';
 
 // Settings sections configuration
@@ -58,6 +60,7 @@ const settingsSections = [
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'tv', label: 'TV Display', icon: Tv },
   { id: 'docuseal', label: 'DocuSeal', icon: FileSignature },
+  { id: 'vercel', label: 'Vercel', icon: Triangle },
   { id: 'email', label: 'Email', icon: Mail },
   { id: 'team', label: 'Team', icon: Users },
   { id: 'agents', label: 'AI Agents', icon: Bot },
@@ -75,6 +78,67 @@ const connections = [
   { name: 'Zillow API', connected: false, lastChecked: '5 min ago' },
   { name: 'Email Server (IMAP)', connected: false, lastChecked: 'Never' },
 ];
+
+function VercelSettingsSection() {
+  const { data: status, isLoading } = useVercelStatus();
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Triangle className="h-5 w-5" />
+          Vercel
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Vercel project creation and deployment management.{' '}
+          <a
+            href="https://vercel.com/account/tokens"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline inline-flex items-center gap-1"
+          >
+            Get API token <ExternalLink className="h-3 w-3" />
+          </a>
+        </p>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Connection Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Checking connection...</p>
+          ) : status?.configured ? (
+            <div className="flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-sm font-medium">Connected</p>
+                {status.user && (
+                  <p className="text-xs text-muted-foreground">
+                    Authenticated as <span className="font-medium">{status.user.username}</span>
+                    {status.user.email && ` (${status.user.email})`}
+                    {status.teamId && ` · Team: ${status.teamId}`}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <XCircle className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="text-sm font-medium">Not Configured</p>
+                <p className="text-xs text-muted-foreground">
+                  Set <code className="bg-muted px-1 py-0.5 rounded">VERCEL_TOKEN</code> environment variable on the backend.
+                  Optionally set <code className="bg-muted px-1 py-0.5 rounded">VERCEL_TEAM_ID</code> for team accounts.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -268,6 +332,9 @@ export default function SettingsPage() {
             <DocuSealSettings />
           </div>
         );
+
+      case 'vercel':
+        return <VercelSettingsSection />;
 
       case 'email':
         return (

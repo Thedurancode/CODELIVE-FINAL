@@ -1,35 +1,153 @@
 /**
- * Better Auth Client
+ * Supabase Auth Client
  *
- * Client-side authentication using Better Auth.
- * Provides hooks and functions for sign in, sign up, sign out, and session management.
+ * Client-side authentication using Supabase Auth.
+ * Provides functions for sign in, sign up, sign out, and session management.
  */
 
-import { createAuthClient } from 'better-auth/react';
-import { adminClient } from 'better-auth/client/plugins';
+import { createBrowserClient } from '@supabase/ssr';
+import type { Session, User, AuthError } from '@supabase/supabase-js';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+// Create Supabase client
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createBrowserClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 /**
- * Better Auth client instance
+ * Sign in with email and password
  */
-export const authClient = createAuthClient({
-  baseURL: API_URL,
-  plugins: [adminClient()],
-});
+export async function signIn(email: string, password: string): Promise<{
+  data: { user: User | null; session: Session | null } | null;
+  error: AuthError | null;
+}> {
+  if (!supabase) {
+    return {
+      data: null,
+      error: { message: 'Supabase not configured', name: 'ConfigError' } as AuthError,
+    };
+  }
+
+  return supabase.auth.signInWithPassword({ email, password });
+}
 
 /**
- * Export commonly used auth functions and hooks
+ * Sign up with email, password, and name
  */
-export const {
-  useSession,
-  signIn,
-  signOut,
-  signUp,
-} = authClient;
+export async function signUp(email: string, password: string, name: string): Promise<{
+  data: { user: User | null; session: Session | null } | null;
+  error: AuthError | null;
+}> {
+  if (!supabase) {
+    return {
+      data: null,
+      error: { message: 'Supabase not configured', name: 'ConfigError' } as AuthError,
+    };
+  }
+
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        name,
+        full_name: name,
+      },
+    },
+  });
+}
 
 /**
- * Type exports
+ * Sign out the current user
  */
-export type Session = typeof authClient.$Infer.Session;
-export type User = Session['user'];
+export async function signOut(): Promise<{ error: AuthError | null }> {
+  if (!supabase) {
+    return { error: null };
+  }
+
+  return supabase.auth.signOut();
+}
+
+/**
+ * Get the current session
+ */
+export async function getSession(): Promise<{
+  data: { session: Session | null };
+  error: AuthError | null;
+}> {
+  if (!supabase) {
+    return {
+      data: { session: null },
+      error: null,
+    };
+  }
+
+  return supabase.auth.getSession();
+}
+
+/**
+ * Get the current user
+ */
+export async function getUser(): Promise<{
+  data: { user: User | null };
+  error: AuthError | null;
+}> {
+  if (!supabase) {
+    return {
+      data: { user: null },
+      error: null,
+    };
+  }
+
+  return supabase.auth.getUser();
+}
+
+/**
+ * Subscribe to auth state changes
+ */
+export function onAuthStateChange(
+  callback: (event: string, session: Session | null) => void
+) {
+  if (!supabase) {
+    return { data: { subscription: { unsubscribe: () => {} } } };
+  }
+
+  return supabase.auth.onAuthStateChange(callback);
+}
+
+/**
+ * Get access token from current session
+ */
+export async function getAccessToken(): Promise<string | null> {
+  if (!supabase) {
+    return null;
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
+}
+
+/**
+ * Refresh the current session
+ */
+export async function refreshSession(): Promise<{
+  data: { session: Session | null };
+  error: AuthError | null;
+}> {
+  if (!supabase) {
+    return {
+      data: { session: null },
+      error: null,
+    };
+  }
+
+  return supabase.auth.refreshSession();
+}
+
+// Export the supabase client for direct access if needed
+export { supabase };
+
+// Type exports
+export type { Session, User, AuthError };

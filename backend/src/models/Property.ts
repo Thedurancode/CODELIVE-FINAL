@@ -243,7 +243,7 @@ Property.init(
     propertyId: {
       type: DataTypes.STRING,
       allowNull: true, // Allow null for manual property entries
-      unique: true,
+      // unique: true, // Commented out temporarily - causing Sequelize sync issues
     },
     liveOnHubzu: {
       type: DataTypes.BOOLEAN,

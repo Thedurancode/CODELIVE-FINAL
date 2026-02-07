@@ -21,12 +21,19 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for Better Auth session cookie
-  // Better Auth uses 'codelive.session_token' based on our cookiePrefix config
-  const sessionToken = request.cookies.get('codelive.session_token')?.value;
+  // Check for Supabase auth cookies
+  // Supabase uses various cookie names depending on configuration:
+  // - sb-<project-ref>-auth-token (main session token)
+  // - sb-access-token (access token)
+  // We check for any cookie that indicates a Supabase session
+  const cookies = request.cookies;
+  const hasSupabaseSession = Array.from(cookies.getAll()).some(cookie =>
+    (cookie.name.includes('sb-') && cookie.name.includes('-auth-token')) ||
+    cookie.name === 'sb-access-token'
+  );
 
   // If no session and trying to access protected route, redirect to login
-  if (!sessionToken && !pathname.startsWith('/login')) {
+  if (!hasSupabaseSession && !pathname.startsWith('/login')) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }

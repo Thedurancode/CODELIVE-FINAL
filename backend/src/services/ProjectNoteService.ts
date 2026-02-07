@@ -31,6 +31,7 @@ interface ProjectNoteWithAuthor extends ProjectNote {
     id: string;
     name?: string;
     email?: string;
+    avatar?: string;
   };
 }
 
@@ -92,7 +93,7 @@ class ProjectNoteService {
         {
           model: MarketplaceUser,
           as: 'author',
-          attributes: ['id', 'name', 'email'],
+          attributes: ['id', 'name', 'email', 'avatar'],
           required: false,
         },
       ],
@@ -115,7 +116,7 @@ class ProjectNoteService {
         {
           model: MarketplaceUser,
           as: 'author',
-          attributes: ['id', 'name', 'email'],
+          attributes: ['id', 'name', 'email', 'avatar'],
           required: false,
         },
       ],
@@ -232,7 +233,7 @@ class ProjectNoteService {
         {
           model: MarketplaceUser,
           as: 'author',
-          attributes: ['id', 'name', 'email'],
+          attributes: ['id', 'name', 'email', 'avatar'],
           required: false,
         },
       ],

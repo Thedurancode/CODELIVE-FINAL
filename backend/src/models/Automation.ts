@@ -149,7 +149,7 @@ Automation.init(
     indexes: [
       { fields: ['enabled'] },
       { fields: ['lastExecutedAt'] },
-      { name: 'automations_trigger_type', using: 'gin', fields: [sequelize.literal("(trigger->>'type')")] },
+      { name: 'automations_trigger_type', using: 'btree', fields: [sequelize.literal("(trigger->>'type')")] },
     ],
   }
 );

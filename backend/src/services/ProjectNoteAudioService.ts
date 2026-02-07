@@ -37,6 +37,7 @@ interface ProjectNoteAudioWithAuthor extends ProjectNoteAudio {
     id: string;
     name?: string;
     email?: string;
+    avatar?: string;
   };
   audioUrl?: string; // Signed URL for playback
 }
@@ -289,7 +290,7 @@ class ProjectNoteAudioService {
         {
           model: MarketplaceUser,
           as: 'author',
-          attributes: ['id', 'name', 'email'],
+          attributes: ['id', 'name', 'email', 'avatar'],
           required: false,
         },
       ],
@@ -319,7 +320,7 @@ class ProjectNoteAudioService {
         {
           model: MarketplaceUser,
           as: 'author',
-          attributes: ['id', 'name', 'email'],
+          attributes: ['id', 'name', 'email', 'avatar'],
           required: false,
         },
       ],
@@ -422,7 +423,7 @@ class ProjectNoteAudioService {
         {
           model: MarketplaceUser,
           as: 'author',
-          attributes: ['id', 'name', 'email'],
+          attributes: ['id', 'name', 'email', 'avatar'],
           required: false,
         },
       ],
