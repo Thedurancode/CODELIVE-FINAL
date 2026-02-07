@@ -51,6 +51,9 @@ import { SpriteSettings } from '@/components/settings/SpriteSettings';
 import TVDisplaySettings from '@/components/settings/TVDisplaySettings';
 import DocuSealSettings from '@/components/settings/DocuSealSettings';
 import { useVercelStatus } from '@/hooks/use-vercel';
+import { useFlyStatus } from '@/hooks/use-fly';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 // Settings sections configuration
@@ -61,6 +64,7 @@ const settingsSections = [
   { id: 'tv', label: 'TV Display', icon: Tv },
   { id: 'docuseal', label: 'DocuSeal', icon: FileSignature },
   { id: 'vercel', label: 'Vercel', icon: Triangle },
+  { id: 'fly', label: 'Fly.io', icon: Server },
   { id: 'email', label: 'Email', icon: Mail },
   { id: 'team', label: 'Team', icon: Users },
   { id: 'agents', label: 'AI Agents', icon: Bot },
@@ -71,13 +75,41 @@ const settingsSections = [
   { id: 'danger', label: 'Account', icon: Shield },
 ];
 
-const connections = [
-  { name: 'PostgreSQL Database', connected: true, lastChecked: 'Just now' },
-  { name: 'Pinecone Vector DB', connected: true, lastChecked: 'Just now' },
-  { name: 'OpenAI API', connected: true, lastChecked: 'Just now' },
-  { name: 'Zillow API', connected: false, lastChecked: '5 min ago' },
-  { name: 'Email Server (IMAP)', connected: false, lastChecked: 'Never' },
-];
+// Health check types
+interface HealthCheckResult {
+  name: string;
+  status: 'healthy' | 'unhealthy' | 'degraded';
+  latency?: number;
+  message?: string;
+  details?: Record<string, unknown>;
+}
+
+interface HealthDetailedResponse {
+  status: 'ok' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  version: string;
+  uptime: number;
+  checks?: Record<string, HealthCheckResult>;
+}
+
+const SERVICE_DISPLAY_NAMES: Record<string, string> = {
+  database: 'PostgreSQL Database',
+  redis: 'Redis Cache',
+  memory: 'Server Memory',
+  vercel: 'Vercel',
+  fly: 'Fly.io',
+  openai: 'AI / LLM',
+  pinecone: 'Pinecone Vector DB',
+};
+
+function useHealthCheck() {
+  return useQuery({
+    queryKey: ['health', 'detailed'],
+    queryFn: () => api.get<HealthDetailedResponse>('/api/health/detailed'),
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // auto-refresh every minute
+  });
+}
 
 function VercelSettingsSection() {
   const { data: status, isLoading } = useVercelStatus();
@@ -140,11 +172,70 @@ function VercelSettingsSection() {
   );
 }
 
+function FlySettingsSection() {
+  const { data: status, isLoading } = useFlyStatus();
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Server className="h-5 w-5" />
+          Fly.io
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Fly.io app and machine management.{' '}
+          <a
+            href="https://fly.io/docs/flyctl/tokens-create/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline inline-flex items-center gap-1"
+          >
+            Generate API token <ExternalLink className="h-3 w-3" />
+          </a>
+        </p>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Connection Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Checking connection...</p>
+          ) : status?.configured ? (
+            <div className="flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-sm font-medium">Connected</p>
+                <p className="text-xs text-muted-foreground">
+                  Fly.io API token is configured and valid.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <XCircle className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="text-sm font-medium">Not Configured</p>
+                <p className="text-xs text-muted-foreground">
+                  Set <code className="bg-muted px-1 py-0.5 rounded">FLY_API_TOKEN</code> environment variable on the backend.
+                  Generate one with <code className="bg-muted px-1 py-0.5 rounded">fly tokens create</code>.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme } = useAppStore();
   const [activeSection, setActiveSection] = useState('connections');
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+  const queryClient = useQueryClient();
+  const { data: healthData, isLoading: healthLoading, dataUpdatedAt: healthUpdatedAt } = useHealthCheck();
 
   const toggleSecret = (key: string) => {
     setShowSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -163,56 +254,94 @@ export default function SettingsPage() {
 
   const renderSectionContent = () => {
     switch (activeSection) {
-      case 'connections':
+      case 'connections': {
+        const checks = healthData?.checks ? Object.values(healthData.checks) : [];
+        const lastCheckedStr = healthUpdatedAt
+          ? `${Math.round((Date.now() - healthUpdatedAt) / 1000)}s ago`
+          : 'Never';
+
         return (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold">Connection Status</h2>
-                <p className="text-sm text-muted-foreground">Monitor your service connections</p>
+                <p className="text-sm text-muted-foreground">
+                  Live service health &middot; auto-refreshes every 60s
+                  {healthData?.uptime != null && (
+                    <span> &middot; Uptime: {Math.floor(healthData.uptime / 3600)}h {Math.floor((healthData.uptime % 3600) / 60)}m</span>
+                  )}
+                </p>
               </div>
-              <Button variant="outline" size="sm">
-                <RefreshCw className="mr-2 h-4 w-4" />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['health', 'detailed'] })}
+                disabled={healthLoading}
+              >
+                <RefreshCw className={cn('mr-2 h-4 w-4', healthLoading && 'animate-spin')} />
                 Refresh All
               </Button>
             </div>
-            <div className="grid gap-3">
-              {connections.map((conn) => (
-                <div
-                  key={conn.name}
-                  className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border/50"
-                >
-                  <div className="flex items-center gap-3">
-                    {conn.connected ? (
-                      <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                        <CheckCircle className="h-5 w-5 text-green-500" />
+
+            {healthLoading && checks.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {checks.map((check) => {
+                  const isHealthy = check.status === 'healthy';
+                  const isDegraded = check.status === 'degraded';
+                  const displayName = SERVICE_DISPLAY_NAMES[check.name] || check.name;
+
+                  return (
+                    <div
+                      key={check.name}
+                      className="flex items-center justify-between p-4 rounded-xl bg-muted/50 border border-border/50"
+                    >
+                      <div className="flex items-center gap-3">
+                        {isHealthy ? (
+                          <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          </div>
+                        ) : isDegraded ? (
+                          <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                            <XCircle className="h-5 w-5 text-red-500" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-medium">{displayName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {check.message || check.status}
+                            {check.latency != null && <span> &middot; {check.latency}ms</span>}
+                          </p>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                        <XCircle className="h-5 w-5 text-red-500" />
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-medium">{conn.name}</p>
-                      <p className="text-xs text-muted-foreground">Last checked: {conn.lastChecked}</p>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'px-3 py-1',
+                          isHealthy
+                            ? 'border-green-500/50 text-green-500 bg-green-500/10'
+                            : isDegraded
+                            ? 'border-yellow-500/50 text-yellow-500 bg-yellow-500/10'
+                            : 'border-red-500/50 text-red-500 bg-red-500/10'
+                        )}
+                      >
+                        {isHealthy ? 'Connected' : isDegraded ? 'Not Configured' : 'Disconnected'}
+                      </Badge>
                     </div>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'px-3 py-1',
-                      conn.connected
-                        ? 'border-green-500/50 text-green-500 bg-green-500/10'
-                        : 'border-red-500/50 text-red-500 bg-red-500/10'
-                    )}
-                  >
-                    {conn.connected ? 'Connected' : 'Disconnected'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
+      }
 
       case 'appearance':
         return (
@@ -335,6 +464,9 @@ export default function SettingsPage() {
 
       case 'vercel':
         return <VercelSettingsSection />;
+
+      case 'fly':
+        return <FlySettingsSection />;
 
       case 'email':
         return (

@@ -131,13 +131,17 @@ router.get('/detailed', async (_req: Request, res: Response) => {
   const checks: HealthCheck[] = [];
 
   // Run all checks in parallel
-  const [dbCheck, redisCheck, memoryCheck] = await Promise.all([
+  const [dbCheck, redisCheck, memoryCheck, vercelCheck, flyCheck, openaiCheck, pineconeCheck] = await Promise.all([
     checkDatabase(),
     checkRedis(),
     checkMemory(),
+    checkVercel(),
+    checkFly(),
+    checkOpenAI(),
+    checkPinecone(),
   ]);
 
-  checks.push(dbCheck, redisCheck, memoryCheck);
+  checks.push(dbCheck, redisCheck, memoryCheck, vercelCheck, flyCheck, openaiCheck, pineconeCheck);
 
   // Determine overall status
   const hasUnhealthy = checks.some(c => c.status === 'unhealthy');
@@ -258,6 +262,168 @@ async function checkMemory(): Promise<HealthCheck> {
       external: Math.round(memoryUsage.external / 1024 / 1024),
     },
   };
+}
+
+async function checkVercel(): Promise<HealthCheck> {
+  const start = Date.now();
+  try {
+    const { vercelService } = await import('../services/VercelService');
+    if (!vercelService.isConfigured()) {
+      return {
+        name: 'vercel',
+        status: 'degraded',
+        latency: Date.now() - start,
+        message: 'Not configured (no VERCEL_TOKEN)',
+      };
+    }
+    const status = await vercelService.getStatus();
+    const latency = Date.now() - start;
+    return {
+      name: 'vercel',
+      status: 'healthy',
+      latency,
+      message: `Connected${status.user ? ` as ${status.user.username}` : ''}`,
+      details: { configured: true, user: status.user?.username, teamId: status.teamId },
+    };
+  } catch (error) {
+    return {
+      name: 'vercel',
+      status: 'unhealthy',
+      latency: Date.now() - start,
+      message: error instanceof Error ? error.message : 'Vercel check failed',
+    };
+  }
+}
+
+async function checkFly(): Promise<HealthCheck> {
+  const start = Date.now();
+  try {
+    const { flyService } = await import('../services/FlyService');
+    if (!flyService.isConfigured()) {
+      return {
+        name: 'fly',
+        status: 'degraded',
+        latency: Date.now() - start,
+        message: 'Not configured (no FLY_API_TOKEN)',
+      };
+    }
+    const status = await flyService.getStatus();
+    const latency = Date.now() - start;
+    return {
+      name: 'fly',
+      status: status.configured ? 'healthy' : 'unhealthy',
+      latency,
+      message: status.configured ? 'Connected' : 'Token invalid',
+      details: { configured: status.configured },
+    };
+  } catch (error) {
+    return {
+      name: 'fly',
+      status: 'unhealthy',
+      latency: Date.now() - start,
+      message: error instanceof Error ? error.message : 'Fly.io check failed',
+    };
+  }
+}
+
+async function checkOpenAI(): Promise<HealthCheck> {
+  const start = Date.now();
+  const key = process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (!key) {
+    return {
+      name: 'openai',
+      status: 'degraded',
+      latency: Date.now() - start,
+      message: 'Not configured (no OPENAI_API_KEY or OPENROUTER_API_KEY)',
+    };
+  }
+
+  try {
+    // Quick models list to verify API key works
+    const isOpenRouter = !process.env.OPENAI_API_KEY && !!process.env.OPENROUTER_API_KEY;
+    const baseUrl = isOpenRouter ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1';
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(`${baseUrl}/models`, {
+      headers: { 'Authorization': `Bearer ${key}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const latency = Date.now() - start;
+
+    if (res.ok) {
+      return {
+        name: 'openai',
+        status: 'healthy',
+        latency,
+        message: `Connected via ${isOpenRouter ? 'OpenRouter' : 'OpenAI'}`,
+        details: { provider: isOpenRouter ? 'openrouter' : 'openai' },
+      };
+    }
+    return {
+      name: 'openai',
+      status: 'unhealthy',
+      latency,
+      message: `API returned ${res.status}`,
+    };
+  } catch (error) {
+    return {
+      name: 'openai',
+      status: 'unhealthy',
+      latency: Date.now() - start,
+      message: error instanceof Error ? error.message : 'OpenAI check failed',
+    };
+  }
+}
+
+async function checkPinecone(): Promise<HealthCheck> {
+  const start = Date.now();
+  const key = process.env.PINECONE_API_KEY;
+  if (!key) {
+    return {
+      name: 'pinecone',
+      status: 'degraded',
+      latency: Date.now() - start,
+      message: 'Not configured (no PINECONE_API_KEY)',
+    };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch('https://api.pinecone.io/indexes', {
+      headers: { 'Api-Key': key },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const latency = Date.now() - start;
+
+    if (res.ok) {
+      const data = await res.json();
+      const indexCount = Array.isArray(data.indexes) ? data.indexes.length : 0;
+      return {
+        name: 'pinecone',
+        status: 'healthy',
+        latency,
+        message: `Connected (${indexCount} index${indexCount !== 1 ? 'es' : ''})`,
+        details: { indexCount },
+      };
+    }
+    return {
+      name: 'pinecone',
+      status: 'unhealthy',
+      latency,
+      message: `API returned ${res.status}`,
+    };
+  } catch (error) {
+    return {
+      name: 'pinecone',
+      status: 'unhealthy',
+      latency: Date.now() - start,
+      message: error instanceof Error ? error.message : 'Pinecone check failed',
+    };
+  }
 }
 
 export default router;
