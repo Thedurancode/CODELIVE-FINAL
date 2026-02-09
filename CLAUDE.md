@@ -1,18 +1,21 @@
-# CLAUDE.md - AI Assistant Guidelines for Dispotree
+# CLAUDE.md - AI Assistant Guidelines for CodeLive
 
-This document provides guidance for AI assistants working with the Dispotree codebase.
+This document provides guidance for AI assistants working with the CodeLive codebase.
 
 ## Project Overview
 
-Dispotree is a **B2B real estate wholesale deal management platform** that connects wholesalers with institutional buyers (hedge funds). It features AI-powered deal analysis, ML-based buyer matching, automated distribution workflows, and comprehensive compliance systems.
+CodeLive is an **AI-powered development platform** for software teams. It combines project management, AI coding agents (Sprites), GitHub integration, real-time collaboration, and TV display dashboards into a unified developer operating system.
 
 ### Core Capabilities
-- **Deal Processing Pipeline**: Multi-source ingestion (API, email, webhook, CSV, PDF), normalization, scoring, and distribution
-- **AI Agent System**: 65+ tools for compliance analysis, buy box matching, content moderation, deal underwriting, and automated workflows
-- **ML Prediction Engine**: TensorFlow.js-based scoring that learns from outcomes
-- **Swipe-Based Marketplace**: Personalized deal feeds with like/pass/offer workflows
-- **Automation Engine**: Event-driven workflows with DocuSeal e-signature integration
-- **Compliance System**: Fraud detection, sanctions screening, property/title verification, state rule enforcement, and SOC 2 audit logging
+- **Project Management**: Full lifecycle tracking with GitHub bidirectional sync, Vercel/Fly.io deployment integration, brand assets, and client portals
+- **Sprite System**: Claude Code agents running in isolated containers with terminal access, file browsers, task queues, and MCP server integration
+- **AI Agent Chat**: 65+ tools for project analysis, code tasks, knowledge search, and workflow automation
+- **Real-time Collaboration**: Team chat, email client, calendar, meetings with video rooms, audio notes with Whisper transcription
+- **TV Display Ecosystem**: Native Roku and Fire TV apps plus web-based TV displays for office dashboards showing project status, AI activity, and news feeds
+- **Client Portal**: External-facing portal for clients to view project progress, issues, PRs, and commits
+- **Document & Contract Management**: DocuSeal e-signatures, signature capture, unified document system
+
+> **Note**: This codebase evolved from "Dispotree" (a real estate wholesale platform). Some legacy models, routes, and services from that era remain in the codebase but are not the primary focus of active development.
 
 ## Tech Stack
 
@@ -20,86 +23,114 @@ Dispotree is a **B2B real estate wholesale deal management platform** that conne
 |-------|------------|
 | Backend | Node.js, Express, TypeScript |
 | Database | PostgreSQL with Sequelize ORM |
+| Auth | Supabase Auth + JWT |
 | Cache | Redis (with in-memory fallback) |
 | Vector DB | Pinecone (RAG & memory) |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4, shadcn/ui |
 | AI/LLM | OpenRouter, OpenAI, LangChain |
-| ML | TensorFlow.js |
 | State | TanStack React Query 5, Zustand 5 |
 | E-Signature | DocuSeal |
 | Forms | react-hook-form, Zod 4 |
-| Drag & Drop | @hello-pangea/dnd |
+| Real-time | Supabase Realtime, WebSockets |
+| Cloud | Fly.io, Vercel |
+| File Storage | Wasabi (S3-compatible), Supabase Storage |
+| Video | Remotion (video generation) |
+| Terminal | @xterm/xterm |
 
 ## Repository Structure
 
 ```
-Dispotree/
+CodeLive/
 ├── backend/                    # Express.js API server
 │   ├── src/
 │   │   ├── config/            # Database, Swagger, Supabase config
-│   │   ├── controllers/       # API request handlers
-│   │   ├── middleware/        # CORS, upload handling
-│   │   ├── models/            # Sequelize database models (50+)
+│   │   ├── controllers/       # API request handlers (39 files)
+│   │   ├── middleware/        # Auth, CORS, permissions, upload, error handling
+│   │   ├── models/            # Sequelize database models (123 models)
 │   │   ├── plugins/           # Extensible plugin system
 │   │   │   ├── ai/           # AI analysis services
 │   │   │   ├── automation/   # Event-driven automation engine
 │   │   │   ├── browser/      # Playwright browser automation
 │   │   │   ├── ml/           # TensorFlow.js ML services
-│   │   │   ├── registry/     # Plugin registry
-│   │   │   ├── scoring/      # Buy box scoring engine
+│   │   │   ├── scoring/      # Scoring engine
 │   │   │   ├── sources/      # Deal source plugins (CSV, API, Email, etc.)
-│   │   │   ├── types/        # Plugin type definitions
-│   │   │   └── workflow/     # Workflow orchestration
-│   │   ├── routes/            # API route definitions (35+ route files)
-│   │   ├── seeds/             # Database seed scripts
-│   │   ├── services/          # Business logic services (55+)
-│   │   │   └── knowledge/    # RAG knowledge base service
+│   │   │   ├── workflow/     # Workflow orchestration
+│   │   │   └── registry/     # Plugin registry
+│   │   ├── routes/            # API route definitions (80 route files)
+│   │   ├── services/          # Business logic services (149+ files)
+│   │   │   ├── agent/        # Agent-specific services (22 files)
+│   │   │   ├── knowledge/    # RAG knowledge base service
+│   │   │   ├── compliance-spec/ # Compliance specification services
+│   │   │   └── marketplace/  # Marketplace services
 │   │   ├── tests/             # Jest test suites
-│   │   │   ├── unit/         # Unit tests
-│   │   │   └── integration/  # Integration tests
+│   │   │   ├── unit/         # Unit tests (33 files)
+│   │   │   └── integration/  # Integration tests (11 files)
 │   │   ├── types/             # TypeScript type definitions
 │   │   ├── utils/             # Utility functions
 │   │   ├── validation/        # Request validation schemas
-│   │   └── validators/        # Custom validators
+│   │   ├── validators/        # Custom validators
+│   │   └── voice/             # Voice calling module
 │   ├── knowledge/             # Knowledge base documents
-│   │   └── defaults/         # Default knowledge documents
-│   ├── docs/                  # Architecture documentation
 │   └── package.json
 │
 ├── frontend/                   # Next.js 16 application
 │   ├── src/
 │   │   ├── app/               # Next.js App Router pages
-│   │   │   ├── (auth)/       # Auth-related pages
-│   │   │   ├── (dashboard)/  # Dashboard pages (19 sections)
-│   │   │   ├── api/          # API route handlers
-│   │   │   ├── broker-apply/ # Broker application page
-│   │   │   └── fastbuybox/   # Public buy box submission
-│   │   ├── components/        # React components
-│   │   │   ├── ui/           # shadcn/ui components
-│   │   │   ├── layout/       # Layout components
-│   │   │   ├── buybox/       # Buy box form components
-│   │   │   ├── compliance/   # Compliance UI components
-│   │   │   ├── deals/        # Deal management components
-│   │   │   └── settings/     # Settings components
-│   │   ├── hooks/             # Custom React hooks (25+)
-│   │   ├── lib/               # Utility libraries (api.ts)
-│   │   ├── stores/            # Zustand state stores
-│   │   └── types/             # TypeScript types
+│   │   │   ├── (auth)/       # Auth pages (login, magic link)
+│   │   │   ├── (dashboard)/  # Protected dashboard pages
+│   │   │   ├── (client-portal)/ # Client-facing portal
+│   │   │   ├── tv/           # TV display pages
+│   │   │   ├── ipad/         # iPad remote controller
+│   │   │   ├── p/[id]/       # Public project share pages
+│   │   │   ├── setup/        # Organization onboarding
+│   │   │   ├── signature/    # Signature capture
+│   │   │   ├── upload/       # Public file upload
+│   │   │   └── api/          # API route handlers
+│   │   ├── components/        # React components (142 files)
+│   │   │   ├── ui/           # shadcn/ui components (31)
+│   │   │   ├── sprites/      # Sprite system components (36)
+│   │   │   ├── projects/     # Project management components (17)
+│   │   │   ├── chat/         # AI chat components (14)
+│   │   │   ├── settings/     # Settings components (12)
+│   │   │   ├── layout/       # Layout components (dock, header, sidebar)
+│   │   │   ├── meetings/     # Meeting & video components
+│   │   │   ├── tv/           # TV display components
+│   │   │   └── providers/    # Context providers
+│   │   ├── hooks/             # Custom React hooks (66)
+│   │   ├── lib/               # Utility libraries (api.ts, auth, chat parsers)
+│   │   ├── stores/            # Zustand state stores (3)
+│   │   ├── types/             # TypeScript types (11 files)
+│   │   ├── contexts/          # React contexts
+│   │   └── remotion/          # Video composition framework
 │   └── package.json
 │
-├── docs/                       # Project documentation
-│   ├── API-DOCUMENTATION.md
-│   ├── COMPLIANCE_USER_GUIDE.md
-│   ├── BROKER_MEDIATED_COMPLIANCE_IMPLEMENTATION.md
-│   └── WHITEPAPER.md
+├── agentos/                    # Python agent system (Agno framework)
+│   ├── agents/                # Knowledge + MCP agents
+│   ├── app/                   # FastAPI entry point
+│   ├── db/                    # PostgreSQL + pgvector
+│   ├── Dockerfile
+│   └── compose.yaml
+│
+├── roku-app/                   # Native Roku TV app (BrightScript)
+│   ├── source/                # Main app logic
+│   ├── components/            # Slides, controls, tasks
+│   └── manifest
+│
+├── fire-tv-app/                # Fire TV app (Android/Kotlin WebView)
+│   ├── app/src/main/          # MainActivity, BootReceiver
+│   └── build.gradle
+│
+├── docs/                       # Project documentation (14 files)
 ├── ai-agent-knowledgebase/    # AI agent training resources
 ├── contracts/                  # Legal document templates
 ├── data-structure/            # Data schema documentation
 ├── database/                   # Database scripts
-├── docker-compose.yml         # Docker orchestration
-├── db-manage.sh               # Database management script
+├── .github/workflows/         # GitHub Actions (7 workflows)
+├── docker-compose.yaml        # Docker orchestration
+├── docker-compose.prod.yml    # Production Docker config
+├── fly-deploy.sh              # Fly.io deployment script
 ├── start.sh                   # Application startup script
-└── .env.example               # Environment template
+└── start-local.sh             # Local development startup
 ```
 
 ## Development Commands
@@ -120,27 +151,34 @@ npm run seed             # Seed database
 npm run seed:automations # Seed default automations
 npm run docs:generate    # Generate Swagger docs
 npm run docs:serve       # Generate docs + start dev server
+npm run lint             # Run ESLint
+npm run typecheck        # TypeScript type checking
 ```
 
 ### Frontend
 ```bash
 cd frontend
 npm install              # Install dependencies
-npm run dev              # Start dev server (port 3000)
+npm run dev              # Start dev server (port 3000, binds 0.0.0.0)
 npm run build            # Build for production
 npm run lint             # Run ESLint
 npm start                # Start production server
+npm run remotion:studio  # Open Remotion video editor
 ```
 
 ### Docker
 ```bash
-cp .env.example .env     # Copy environment template
 docker-compose up -d     # Start all services
 # Access points:
 # - Frontend: http://localhost:3000
 # - Backend API: http://localhost:3001
 # - API Docs: http://localhost:3001/api-docs
-# - Adminer: http://localhost:8080
+```
+
+### AgentOS
+```bash
+cd agentos
+docker compose up -d     # Start AgentOS + PostgreSQL (port 8000)
 ```
 
 ## Code Conventions
@@ -149,12 +187,10 @@ docker-compose up -d     # Start all services
 
 **Services Architecture**: Business logic lives in `src/services/`. Services are singletons exported as instances.
 ```typescript
-// Service pattern
 class MyService {
   private initialized = false;
 
   async initialize(): Promise<void> {
-    // Initialization logic
     this.initialized = true;
   }
 
@@ -164,12 +200,6 @@ class MyService {
 }
 export const myService = new MyService();
 ```
-
-**Plugin System**: Plugins in `src/plugins/` extend functionality via interfaces.
-- Deal Sources: Extend `BaseDealSourcePlugin` for new ingestion methods
-- Scoring: Add criteria in `ScoringEngine.ts`
-- Automation: Register actions in `AutomationEngine.ts`
-- ML Models: Add models in `plugins/ml/models/`
 
 **Controllers**: Thin controllers that delegate to services.
 ```typescript
@@ -203,7 +233,6 @@ export const myController = {
 
 **React Query Hooks**: Data fetching uses TanStack Query with custom hooks.
 ```typescript
-// hooks/use-something.ts
 export function useSomething(id: string) {
   return useQuery({
     queryKey: ['something', id],
@@ -223,130 +252,276 @@ export function useCreateSomething() {
 }
 ```
 
-**API Client**: Centralized in `lib/api.ts` with automatic token handling.
+**API Client**: Centralized in `lib/api.ts` with Supabase JWT token handling, automatic 401 redirects, file upload support, and SSE streaming for AI chat.
 
 **Components**: Use shadcn/ui components from `components/ui/`. Follow existing patterns:
 - Path aliases: `@/` maps to `src/`
 - Form handling: react-hook-form with zod validation
 - State: Zustand for global state (`stores/`), React Query for server state
+- Styling: Tailwind CSS 4 with CSS variables, dark mode via theme-provider
 
 **App Router**: Next.js 16 App Router with route groups:
-- `(auth)/` - Authentication pages
-- `(dashboard)/` - Protected dashboard pages with 19 sections
+- `(auth)/` — Authentication pages
+- `(dashboard)/` — Protected dashboard pages
+- `(client-portal)/` — Client-facing portal pages
 
 ### TypeScript
 
 **Backend**: Strict mode enabled, ES2022 target
 - Use explicit types for function parameters and returns
-- Sequelize models use decorators
+- Sequelize models use class-based definitions
 
 **Frontend**: Strict mode, bundler module resolution
-- Types in `src/types/index.ts`
+- Types in `src/types/` (11 type files)
 - Interface over type when possible
 
 ## Key API Endpoints
 
+### Project Management
 | Endpoint Group | Base Path | Purpose |
 |----------------|-----------|---------|
-| Auth | `/api/auth` | User authentication (JWT) |
-| Properties | `/api/listings` | Property CRUD |
-| Hedge Funds | `/api/hedgefunds` | Buy box management |
-| AI Agents | `/api/ai` | Compliance, buy box, guardrail agents |
-| Agent Chat | `/api/agent` | Conversational AI with 65+ tools |
-| Marketplace | `/api/marketplace` | Swipe-based marketplace |
-| Fast Buy Box | `/api/fastbuybox` | Public buy box submission (no auth) |
-| Pipeline | `/api/pipeline` | 7-stage deal tracking |
-| Portfolio | `/api/portfolio` | Owned property tracking |
-| Analytics | `/api/analytics` | Win/loss & agent metrics |
-| Knowledge | `/api/knowledge` | RAG document management |
-| Market Data | `/api/market-data` | Zillow enrichment (cached) |
-| ML | `/api/ml` | ML model training & predictions |
-| Compliance | `/api/compliance` | Fraud, sanctions, verification |
-| Broker | `/api/broker` | Broker management |
-| MSA | `/api/msa` | Master Service Agreements |
+| Projects | `/api/projects` | Project CRUD, filtering, statistics |
+| Tasks | `/api/tasks` | Task management & assignment |
+| Coding Tasks | `/api/coding-tasks` | AI coding task management |
+| GitHub | `/api/github` | GitHub repo sync, issues, PRs, commits |
+| GitHub Webhooks | `/api/github/webhook` | GitHub event processing |
+| Deploy Hooks | `/api/deploy-hooks` | Deployment trigger management |
 | Contacts | `/api/contacts` | Contact management |
-| Buyers | `/api/buyers` | Buyer management |
-| Buyer Agent | `/api/buyer` | Buyer-side agent tools |
-| Seller Agent | `/api/seller` | Seller-side agent tools |
-| Inquiries | `/api/inquiries` | Property inquiry management |
-| Contracts | `/api/contracts` | Contract/e-signature integration |
-| Follow-ups | `/api/follow-up` | Follow-up chain management |
-| Dead Letters | `/api/dead-letters` | Failed automation retries |
-| Webhooks | `/api/webhooks` | External webhook handling |
-| Proxy Pics | `/api/proxypics` | Property photo service |
+| Meetings | `/api/meetings` | Meeting rooms, participants, recordings |
+| Calendar | `/api/calendar` | Calendar integration |
+
+### AI & Agents
+| Endpoint Group | Base Path | Purpose |
+|----------------|-----------|---------|
+| Agent Chat | `/api/agent` | Conversational AI with 65+ tools |
+| AI Agents | `/api/ai` | Compliance, buy box, guardrail agents |
+| Sprites | `/api/sprites` | Sprite (Claude Code agent) management |
+| Sprite Tasks | `/api/sprite-tasks` | Sprite task queue management |
+| Sprite Chat | `/api/sprite-chat` | Chat with Sprites |
+| Codelive | `/api/codelive` | Automaker integration |
+| Knowledge | `/api/knowledge` | RAG document management |
+
+### Communication & Collaboration
+| Endpoint Group | Base Path | Purpose |
+|----------------|-----------|---------|
+| Team Chat | `/api/team-chat` | Team messaging & conversations |
+| Email Client | `/api/email-client` | IMAP/SMTP email integration |
+| Public Chat | `/api/public-chat` | Guest chat sessions |
+| Reminders | `/api/reminders` | Reminder scheduling |
+| Activity Feed | `/api/activity-feed` | Platform activity timeline |
+| Push | `/api/push` | Push notification management |
+
+### Authentication & Users
+| Endpoint Group | Base Path | Purpose |
+|----------------|-----------|---------|
+| Auth | `/api/auth` | Supabase authentication |
+| Users | `/api/users` | User management |
+| Setup | `/api/setup` | Organization onboarding |
+| Permissions | `/api/permissions` | Role & permission management |
+| API Keys | `/api/api-keys` | API key management |
+
+### Infrastructure & Deployment
+| Endpoint Group | Base Path | Purpose |
+|----------------|-----------|---------|
+| Vercel | `/api/vercel` | Vercel project/domain management |
+| Fly.io | `/api/fly` | Fly.io machines, domains, secrets |
+| Health | `/api/health` | System health monitoring |
 | Settings | `/api/settings` | System settings |
-| OpenAI-compat | `/v1` | OpenAI-compatible API for external tools |
+| Home Assistant | `/api/home-assistant` | Smart home integration |
+
+### Client Portal
+| Endpoint Group | Base Path | Purpose |
+|----------------|-----------|---------|
+| Client Portal | `/api/client-portal` | Client access to projects |
+| Public API | `/api/public` | Public endpoints (no auth) |
+| Signatures | `/api/signatures` | Signature capture |
+
+### Legacy (Dispotree)
+| Endpoint Group | Base Path | Purpose |
+|----------------|-----------|---------|
+| Properties | `/api/listings` | Property CRUD |
+| Marketplace | `/api/marketplace` | Swipe-based marketplace |
+| Pipeline | `/api/pipeline` | Deal pipeline tracking |
+| Compliance | `/api/compliance` | Compliance system |
+| Hedge Funds | `/api/hedgefunds` | Buy box management |
 
 Interactive API docs: `http://localhost:3001/api-docs`
 
 ## Database Models
 
-### Core Models
-- `Property` - Real estate deals (90+ fields)
-- `MarketplaceUser` - Platform users
-- `UserBuyBox` - User investment criteria
-- `HedgeFundBuyBox` - Institutional fund criteria
-- `Fund` - Hedge fund organizations
-- `Buyer` - Buyer entities
-- `BuyerContact` - Buyer contact information
+### Project Management Models
+- `Project` — Projects with GitHub URL, deployment URL, status tracking, brand settings
+- `ProjectContact` — Project-linked contacts
+- `ProjectNote` — Project notes with rich content
+- `ProjectNoteAttachment` — File attachments on notes
+- `ProjectNoteAudio` — Voice recordings with Whisper transcription
+- `ProjectEnvVariable` — Project environment variables
+- `ProjectBrandAsset` — Logo, colors, mood keywords
+- `ProjectMember` — Team member assignments
+- `ProjectClient` — Client access management
 
-### Transaction Models
-- `DealAction` - Swipe/view/offer events (ML training data)
-- `DealOffer` - Purchase offers
-- `DealPipeline` - Pipeline stage tracking
-- `DealMatch` - Deal-buybox matches
-- `DealCommunication` - Communication history
-- `DealFeeTracking` - Fee tracking
-- `DealBrokerMSA` - Broker MSA assignments
-- `Portfolio` - Owned properties
-- `PropertyInquiry` - Property inquiries
+### Sprite & Coding Models
+- `ProjectSprite` — Claude Code agent instances
+- `SpriteTask` — Tasks assigned to Sprites
+- `SpriteSession` — Active Sprite sessions
+- `SpriteMcpServer` — MCP server configurations
+- `CodingTask` — AI coding task definitions
+- `CodeliveSync` — Task-to-feature sync tracking
 
-### Compliance Models
-- `ComplianceCheck` - Compliance check results
-- `ComplianceEvent` - Compliance event stream
-- `ComplianceAlert` - Active alerts
-- `ComplianceAuditLog` - SOC 2 audit trail
-- `ComplianceRuleVersion` - Rule versioning
-- `ComplianceWebhook` - Webhook configurations
-- `FraudSignal` - Detected fraud indicators
-- `SanctionsScreening` - OFAC/sanctions checks
-- `EscalationPolicy` - Alert escalation rules
-- `StateComplianceRule` - State-specific rules
-- `StateDocumentTemplate` - State document requirements
-- `StateKnowledge` - State-specific knowledge
+### Communication Models
+- `TeamConversation` / `TeamMessage` — Team chat
+- `Meeting` / `MeetingParticipant` / `MeetingRoom` — Video meetings
+- `Email` / `UserEmailConfig` — Email client
+- `Contact` / `ContactActivity` / `ContactNote` — CRM
+- `Conversation` / `ConversationHistory` — AI chat history
+- `GuestSession` — Public chat sessions
 
-### ML Models
-- `FundFeedback` - Outcome feedback for training
-- `MLPrediction` - Prediction logs
-- `ModelVersion` - ML model versioning
-- `TrainingRun` - Training job tracking
-- `AgentMetric` - Agent performance metrics
-- `InvestorAction` - Investor activity tracking
+### User & Auth Models
+- `MarketplaceUser` — Platform users
+- `Organization` — Multi-tenant organizations
+- `UserSession` / `MagicLinkToken` — Authentication
+- `Role` / `Permission` / `UserRole` — RBAC
 
-### Broker Models
-- `BrokerProfile` - Broker information
-- `BrokerAssistant` - Broker assistant relationships
-- `TransactionCoordinator` - Transaction coordination
+### Task & Activity Models
+- `Task` — Task management with priorities and assignments
+- `Reminder` / `ScheduledTask` — Scheduled tasks and reminders
+- `ActivityFeed` — Platform activity timeline
+- `HumanApprovalRequest` — Workflow approval gates
+
+### Integration Models
+- `CalendarConnection` — Calendar integrations
+- `DeployHook` — Deployment trigger configs
+- `Webhook` — Webhook configurations
+- `ApiKey` — API key management
+- `HomeAssistantConfig` — Smart home integration
+
+### Contract & Document Models
+- `DocuSealSubmission` — E-signature tracking
+- `ContractSigner` / `SignatureRequest` — Signature management
+- `Agreement` — Agreement tracking
+- `PropertyDocument` — Document storage
 
 ### System Models
-- `Automation` / `AutomationExecution` - Automation rules & logs
-- `WorkflowExecution` - Workflow state
-- `ConversationHistory` - Chat history
-- `PropertyDocument` - Document storage
-- `PropertyLookup` - Property lookup cache
-- `PropertyContact` - Property contact info
-- `DeadLetterQueue` - Failed automation retries
-- `FollowUpChain` / `FollowUpExecution` - Follow-up management
-- `DocuSealSubmission` - E-signature tracking
-- `Contact` - General contacts
-- `EmailInbox` - Email source configurations
-- `Settings` - System settings
+- `Settings` — System settings
+- `NotificationQueue` / `PushSubscription` / `Outbox` — Notifications
+- `SearchQuery` — Search analytics
+- `DeadLetterQueue` — Failed automation retries
+
+### Legacy Models (from Dispotree)
+- `Property` — Real estate deals (90+ fields)
+- `UserBuyBox` / `HedgeFundBuyBox` — Investment criteria
+- `DealAction` / `DealOffer` / `DealPipeline` / `DealMatch` — Deal workflow
+- `Fund` / `Buyer` / `BuyerContact` — Buyer management
+- `ComplianceCheck` / `ComplianceAlert` / `FraudSignal` / `SanctionsScreening` — Compliance
+- `MLPrediction` / `ModelVersion` / `TrainingRun` — ML system
+- `BrokerProfile` / `BrokerAssistant` / `TransactionCoordinator` — Broker management
+- `Automation` / `AutomationExecution` / `WorkflowExecution` — Automation engine
+
+## Frontend Dashboard Pages
+
+| Section | Route | Description |
+|---------|-------|-------------|
+| Dashboard | `/dashboard` | Main overview with metrics and activity |
+| Projects | `/projects` | Project list and management |
+| Project Detail | `/projects/[id]` | Full project view with notes, tasks, GitHub, deployments |
+| Tasks | `/tasks` | Task management |
+| Chat | `/chat` | AI agent chat interface |
+| Contacts | `/contacts` | Contact management |
+| Contact Detail | `/contacts/[id]` | Contact detail view |
+| Email | `/email` | Full email client |
+| Meetings | `/meetings` | Meeting management |
+| Calendar | `/calendar` | Calendar view |
+| Knowledge | `/knowledge` | RAG knowledge base |
+| Reminders | `/reminders` | Reminder management |
+| Calls | `/calls` | Voice calling interface |
+| Activity Feed | `/activity-feed` | Platform activity timeline |
+| Audit Logs | `/audit-logs` | SOC 2 audit log viewer |
+| Settings | `/settings` | System settings, integrations, theme |
+| Settings/Templates | `/settings/templates` | Template administration |
+| TV Display | `/tv-display` | TV display configuration |
+| Profile | `/profile` | User profile |
+
+### TV Display Pages
+| Route | Description |
+|-------|-------------|
+| `/tv/projects` | Project kanban/slideshow for office TVs |
+| `/tv/activity` | Activity timeline display |
+| `/tv/hackernews` | Hacker News feed |
+| `/tv/twitter` | Twitter/X feed |
+
+### Client Portal Pages
+| Route | Description |
+|-------|-------------|
+| `/client` | Client portal home |
+| `/client/login` | Client authentication |
+| `/client/invite/[token]` | Invite acceptance |
+| `/client/projects/[id]` | Project overview |
+| `/client/projects/[id]/issues` | GitHub issues |
+| `/client/projects/[id]/prs` | Pull requests |
+| `/client/projects/[id]/commits` | Commit history |
+
+### Public Pages
+| Route | Description |
+|-------|-------------|
+| `/p/[id]` | Public project share with ticket submission |
+| `/signature/[token]` | Signature capture |
+| `/upload/[token]` | Public file upload |
+| `/ipad` | iPad remote controller for TV displays |
+| `/setup` | Organization onboarding wizard |
+
+## WebSocket Servers
+
+The backend initializes 6 WebSocket servers:
+
+| Path | Purpose |
+|------|---------|
+| `/ws/voice` | Real-time voice (OpenAI Realtime API) |
+| `/voice/ws/twilio` | Twilio voice bridge |
+| `/ws/notifications` | Push notifications |
+| `/ws/sprites` | Sprite terminal/event proxy |
+| `/ws/tv-remote` | TV remote control (iPad ↔ TV) |
+| `/ws/github-sync` | GitHub sync events |
+
+## Key Services (Active Development)
+
+### Project & Development
+- `ProjectService` — Project CRUD, filtering, statistics
+- `ProjectNoteService` / `ProjectNoteAudioService` — Notes with voice recordings
+- `ProjectContactService` — Project contacts
+- `ProjectRecapService` — AI-powered project recaps
+- `GitHubService` / `GitHubIssueSyncService` — GitHub bidirectional sync
+- `CodingTaskService` / `ClaudeCodingAgentService` — AI coding tasks
+- `CodeliveService` — Automaker integration (features, agent runs)
+- `SpritesService` / `SpriteTaskService` / `SpriteConversationService` — Sprite agents
+- `SpriteMcpService` — MCP server management for Sprites
+
+### Communication
+- `TeamCommunicationService` — Team chat
+- `EmailClientService` — IMAP/SMTP email
+- `MeetingService` / `MeetingTranscriptionService` — Meetings with transcription
+- `NotificationService` / `PushNotificationService` — Notifications
+
+### Infrastructure
+- `FlyService` — Fly.io machine/domain/secret management
+- `VercelService` — Vercel project/domain management
+- `DeployHookService` — Deployment triggers
+- `ScreenshotService` — Live site screenshots
+- `WasabiStorageService` / `SupabaseStorageService` — File storage
+- `HomeAssistantService` — Smart home integration
+- `TVRemoteWebSocketService` — TV remote control
+
+### AI & Knowledge
+- `agentService` — Main AI agent with 65+ tools
+- `MemoryService` — Agent memory (Pinecone)
+- `knowledge/` — RAG knowledge base
+- `ElevenLabsService` — Text-to-speech
+- `RealtimeVoiceService` — Voice chat
 
 ## Testing
 
 ### Jest Configuration
-- Unit tests: `src/tests/unit/**/*.test.ts`
-- Integration tests: `src/tests/integration/**/*.test.ts`
+- Unit tests: `src/tests/unit/**/*.test.ts` (33 files)
+- Integration tests: `src/tests/integration/**/*.test.ts` (11 files)
 - ML tests run separately: `npm run test:ml`
 
 ### Writing Tests
@@ -374,16 +549,21 @@ describe('MyService', () => {
 ### Required
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/dispotree
+DATABASE_URL=postgresql://user:pass@localhost:5432/codelive
 # OR
-DB_USER=dispotree_user
+DB_USER=codelive_user
 DB_PASSWORD=password
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=dispotree_db
+DB_NAME=codelive_db
 
 # Auth
 JWT_SECRET=your_jwt_secret
+
+# Supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
 ### Optional (enable features)
@@ -396,21 +576,33 @@ AGENT_MODEL=gpt-4o                 # Default agent model
 # Cache
 REDIS_URL=redis://localhost:6379   # Falls back to in-memory
 
-# Market Data
-RAPIDAPI_KEY=...                   # Zillow enrichment
-
 # Knowledge Base
 PINECONE_API_KEY=...               # RAG vector storage
 KNOWLEDGE_FOLDER=./knowledge       # Document watch folder
 
+# GitHub Integration
+GITHUB_TOKEN=...                   # GitHub API access
+GITHUB_WEBHOOK_SECRET=...         # Webhook verification
+
 # Integrations
 DOCUSEAL_API_KEY=...               # E-signatures
 DOCUSEAL_API_URL=https://api.docuseal.com
-DOCUSEAL_WEBHOOK_SECRET=...        # Webhook verification
 RESEND_API_KEY=...                 # Email
-TWILIO_SID=...                     # SMS
+TWILIO_SID=...                     # SMS/Voice
 TWILIO_AUTH_TOKEN=...
-TWILIO_FROM_NUMBER=...
+STRIPE_SECRET_KEY=...              # Payments
+ELEVENLABS_API_KEY=...             # Text-to-speech
+WASABI_ACCESS_KEY=...              # File storage
+WASABI_SECRET_KEY=...
+WASABI_BUCKET=...
+
+# Cloud Platforms
+VERCEL_TOKEN=...                   # Vercel integration
+FLY_API_TOKEN=...                  # Fly.io integration
+
+# Codelive/Automaker
+CODELIVE_URL=http://localhost:3008 # Automaker API
+CODELIVE_WS_URL=ws://localhost:3008/api/events # Automaker WebSocket
 ```
 
 ## Common Tasks
@@ -426,22 +618,22 @@ TWILIO_FROM_NUMBER=...
 ### Adding a New Database Model
 
 1. Create model in `backend/src/models/MyModel.ts`
-2. Import and export in `backend/src/models/index.ts`
+2. Import and register in `backend/src/models/index.ts`
 3. Define associations in `models/index.ts`
 4. Add to sync array if needed
-
-### Adding a New Deal Source Plugin
-
-1. Create plugin extending `BaseDealSourcePlugin`
-2. Implement `ingestDeals()` method
-3. Register in `plugins/index.ts`
-4. Add configuration endpoints if needed
 
 ### Adding a New Frontend Page
 
 1. Create page in `frontend/src/app/(dashboard)/page-name/page.tsx`
 2. Create custom hooks in `frontend/src/hooks/` if needed
-3. Add navigation in sidebar component
+3. Add navigation in sidebar/dock component
+
+### Adding a Sprite Feature
+
+1. Backend: Add service methods in `SpritesService.ts` or `SpriteTaskService.ts`
+2. Backend: Add route handler in `spritesRoutes.ts` or `spriteTasksRoutes.ts`
+3. Frontend: Update hooks in `use-sprites.ts` or `use-sprite-tasks.ts`
+4. Frontend: Add/update components in `components/sprites/`
 
 ### Adding Agent Tools
 
@@ -455,324 +647,53 @@ TWILIO_FROM_NUMBER=...
 ### Backend
 - Use try/catch in controllers
 - Return `{ success: false, error: message }` for errors
-- Security: `errorSanitizer` middleware strips stack traces in production
+- `errorHandler.ts` middleware strips stack traces in production
+- Graceful shutdown handler closes all connections on SIGTERM/SIGINT
 
 ### Frontend
 - API errors throw `ApiError` with status code
-- 401 errors auto-redirect to login
+- 401 errors auto-redirect to login via Supabase
 - Use React Query error states for UI feedback
 
-## Security Considerations
+## Middleware Stack
 
-- JWT tokens stored in localStorage
-- Helmet.js for security headers
-- Input validation with Joi/Zod
-- CORS configured in `middleware/cors.ts`
-- Credentials stored in `SecureCredentialStore` (browser automation)
-- Error messages sanitized in production
-- SOC 2 compliant audit logging
-
-## Compliance System
-
-The compliance system provides comprehensive deal verification:
-
-### Fraud Detection
-- Velocity checks (submission frequency limits)
-- Pattern detection (daisy chaining, price manipulation)
-- Entity mismatch detection
-- Known fraud network tracking
-- Risk scoring (0-100)
-
-### Sanctions Screening
-- OFAC SDN List
-- UN/EU/UK sanctions lists
-- Automatic screening of all parties
-- Match scoring and resolution workflow
-
-### Property Verification
-- Ownership verification against public records
-- Property details verification
-- Tax status checking
-- Automated valuation (AVM)
-
-### Title Verification
-- Lien detection (mortgage, tax, judgment)
-- Encumbrance checking
-- Lis pendens detection
-
-### State Compliance
-- State-specific rule enforcement
-- Licensing requirements
-- Documentation requirements
-
-### Status System
-- **GREEN**: All checks passed, deal proceeds
-- **YELLOW**: Minor issues, needs review
-- **RED**: Critical issues, deal blocked
-
-## AI Agent Tools
-
-The AI agent at `/api/agent/chat` has 65+ tools organized by category:
-
-### Property Management
-- search_properties, get_property_details, get_property_count
-- create_property, update_property, delete_property
-- get_recent_deals, find_similar_properties, compare_deals
-- enrich_property, import_from_url
-
-### Deal Analysis
-- analyze_deal, quick_deal_assessment, quick_deal_score
-- score_deal_against_buyboxes, get_deal_intelligence
-- get_pricing_strategy, find_best_funds, process_new_deal
-- batch_process_deals
-
-### Buy Box Management
-- list_buyboxes, get_buybox_details, create_buybox
-- update_buybox, delete_buybox
-
-### Pipeline & Portfolio
-- add_to_pipeline, update_pipeline_stage, get_my_pipeline
-- close_deal, add_to_portfolio, get_my_portfolio
-- get_portfolio_value, update_property_value
-
-### Market Data
-- lookup_market_data, get_market_stats, skip_trace_property
-- get_rental_market_trends, get_recent_market_lookups
-
-### Offers
-- create_offer, list_offers
-
-### Contracts & E-Signatures
-- list_contract_templates, send_contract
-- get_contract_status, resend_contract_reminder
-
-### Knowledge & Memory
-- search_knowledge, get_knowledge_stats
-- remember_preference, recall_memories
-- get_memory_stats, clear_memories
-
-### Automations
-- list_automations, get_automation, toggle_automation
-- create_automation, delete_automation, get_automation_history
-
-### Settings
-- get_settings, update_setting, reset_setting
-
-### Analytics
-- get_win_loss_stats, get_agent_accuracy
-
-### Browser Automation
-- scrape_website, map_website, list_auction_sites
-- submit_property_to_site, send_deal_to_fund
-
-## Frontend Dashboard Pages
-
-The dashboard includes these main sections:
-- `dashboard/` - Main dashboard overview
-- `deals/` - Deal management
-- `pipeline/` - Deal pipeline view
-- `marketplace/` - Swipe marketplace
-- `buyboxes/` - Buy box management
-- `buyers/` - Buyer management
-- `buyer-chat/` - Buyer chat interface
-- `chat/` - AI agent chat
-- `compliance/` - Compliance dashboard
-- `contacts/` - Contact management
-- `inquiries/` - Property inquiries
-- `import/` - Data import
-- `knowledge/` - Knowledge base
-- `ml-training/` - ML model training
-- `newdeal/` - New deal entry
-- `profile/` - User profile
-- `scoring/` - Deal scoring
-- `settings/` - System settings
-- `broker/` - Broker management
-
-## Performance Notes
-
-| Operation | Typical Latency |
-|-----------|-----------------|
-| Deal ingestion | <100ms |
-| Buy box scoring | <50ms |
-| ML prediction | <20ms |
-| Full enrichment | 2-5s |
-| Browser automation | 30-120s |
-| Compliance check | 1-3s |
-| Sanctions screening | 500ms-2s |
-
-## Troubleshooting
-
-### Database Connection Failed
-- Check `DATABASE_URL` or individual `DB_*` vars
-- Server continues running without DB (limited functionality)
-
-### Redis Not Available
-- Falls back to in-memory cache automatically
-- Check `REDIS_URL` for connection issues
-
-### AI Agent Not Working
-- Verify `OPENAI_API_KEY` or `OPENROUTER_API_KEY`
-- Agent initializes with warning if keys missing
-
-### Knowledge Base Issues
-- Verify `PINECONE_API_KEY` for vector storage
-- Check `KNOWLEDGE_FOLDER` path exists
-
-### Compliance System Issues
-- Check external verification service availability
-- Review dead letter queue for failed actions
-- Check audit logs for error patterns
-
-## Quick Reference
-
-### Pipeline Stages
-`new` → `analyzing` → `due_diligence` → `offered` → `negotiating` → `under_contract` → `closed`
-
-### Match Types
-- `strong`: 75%+ score
-- `moderate`: 50-75% score
-- `weak`: 25-50% score
-- `no_match`: <25% or failed hard requirements
-
-### Property Status
-`new` → `enriched` → `scored` → `submitted` → `accepted` | `rejected`
-
-### Compliance Status
-- `GREEN` (pass): All clear, proceed
-- `YELLOW` (warning): Minor issues, review needed
-- `RED` (fail): Critical issues, blocked
-
-### Risk Levels
-| Level | Score Range |
-|-------|-------------|
-| Low | 0-39 |
-| Medium | 40-59 |
-| High | 60-79 |
-| Critical | 80-100 |
-
-### Investment Strategies
-- Fix & Flip
-- Buy & Hold (Long-term Rental)
-- Short-term Rental
-- Wholesale
-- Novation
-- Subject-To
-
-## Documentation
-
-Additional documentation is available in the `docs/` folder:
-- `API-DOCUMENTATION.md` - API reference
-- `COMPLIANCE_USER_GUIDE.md` - Complete compliance system guide
-- `BROKER_MEDIATED_COMPLIANCE_IMPLEMENTATION.md` - Broker compliance implementation
-- `WHITEPAPER.md` - Platform whitepaper
+| Middleware | Purpose |
+|-----------|---------|
+| `auth.ts` | JWT authentication |
+| `supabaseAuth.ts` | Supabase token verification |
+| `apiKeyAuth.ts` | API key authentication |
+| `permissions.ts` | Permission checking |
+| `cors.ts` | CORS configuration |
+| `upload.ts` | Multer file upload |
+| `validation.ts` | Request validation |
+| `errorHandler.ts` | Global error handler + 404 |
 
 ## GitHub Actions Integration
 
 ### Claude Autonomous Agent
+This repository uses **Anthropic's official Claude Code action** for automated development:
 
-This repository uses **Anthropic's official Claude Code action** to automatically work on GitHub issues and create pull requests. When you're triggered via GitHub Actions, follow these guidelines:
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `claude-autonomous-agent.yml` | `@claude work on this`, issue assignment | Writes code, creates PRs |
+| `claude-pr-review.yml` | PR opened/updated | Automated code review |
+| `claude-issue-triage.yml` | Issue opened | Categorization and labeling |
+| `claude-deploy.yml` | `@claude deploy` | Manual deployment |
+| `claude-test.yml` | `@claude test` | Test suite runner |
+| `claude-build.yml` | `@claude build` | Build workflow |
 
-#### When Working on Issues
+### When Working on Issues
 
-1. **Understand the Issue Completely**
-   - Read the full issue description and all comments
-   - Identify the type: bug fix, feature request, refactoring, documentation
-   - Look for related issues or PRs mentioned
-   - Check acceptance criteria if provided
+1. Read the full issue description and all comments
+2. Use Grep/Glob to find relevant files
+3. Read existing implementations to understand patterns
+4. Plan changes considering backward compatibility
+5. Follow existing code style and patterns
+6. Add proper TypeScript types
+7. Create quality PRs with clear descriptions referencing the issue
 
-2. **Analyze the Codebase**
-   - Use Grep/Glob to find relevant files
-   - Read existing implementations to understand patterns
-   - Check for similar features or fixes in the codebase
-   - Review related tests
+## Commit Message Format
 
-3. **Plan Your Changes**
-   - Identify all files that need modification
-   - Consider backward compatibility
-   - Plan test coverage
-   - Think about edge cases
-
-4. **Implement Changes**
-   - Follow existing code style and patterns
-   - Add proper TypeScript types
-   - Include comprehensive error handling
-   - Add JSDoc comments for complex logic
-   - Update related documentation
-
-5. **Testing Requirements**
-   - Add or update unit tests for backend changes
-   - Test API endpoints if modified
-   - Verify frontend components render correctly
-   - Check database migrations if models changed
-   - Run existing tests to ensure no regressions
-
-6. **Create Quality PRs**
-   - Write clear, descriptive PR titles
-   - Include detailed description of changes
-   - Reference the original issue number
-   - Add "Fixes #123" to auto-close issues
-   - List testing steps performed
-   - Note any breaking changes
-
-#### Code Review Guidelines
-
-When reviewing PRs:
-- Check TypeScript type safety
-- Verify error handling
-- Review security implications
-- Check for SQL injection, XSS, auth bypasses
-- Validate input sanitization
-- Assess performance impact
-- Suggest optimizations for database queries
-- Review code readability and maintainability
-
-#### Common Patterns to Follow
-
-**Backend Services**:
-```typescript
-// Services are singletons with initialize()
-class MyService {
-  private initialized = false;
-
-  async initialize(): Promise<void> {
-    // Setup logic
-    this.initialized = true;
-  }
-}
-export const myService = new MyService();
-```
-
-**API Responses**:
-```typescript
-// Always return consistent format
-{ success: true, data: result }
-{ success: false, error: "message" }
-```
-
-**Frontend Hooks**:
-```typescript
-// Use React Query for data fetching
-export function useMyData(id: string) {
-  return useQuery({
-    queryKey: ['mydata', id],
-    queryFn: () => api.get(`/api/mydata/${id}`),
-  });
-}
-```
-
-#### Issue Triage
-
-When triaging issues, provide:
-- **Category**: bug | feature | docs | question
-- **Priority**: low | medium | high | critical
-- **Complexity**: simple | medium | complex
-- **Affected Components**: List relevant services/components
-- **Suggested Labels**: Appropriate GitHub labels
-- **Questions**: Any clarifications needed
-
-#### Commit Message Format
-
-Follow this format:
 ```
 <type>: <short description>
 
@@ -789,22 +710,48 @@ Co-Authored-By: Happy <yesreply@happy.engineering>
 
 Types: feat, fix, docs, refactor, test, chore
 
-#### Environment Awareness
+## Deployment
 
-- Backend runs on port 3001
-- Frontend runs on port 3000
-- Database is PostgreSQL
-- Redis is optional (falls back to in-memory)
-- Check `.env.example` for required variables
+### Fly.io
+```bash
+./fly-deploy.sh          # Automated deployment
+# See FLY_DEPLOYMENT.md for details
+```
 
-#### When Stuck
+### Docker
+```bash
+docker-compose -f docker-compose.prod.yml up -d  # Production
+docker-compose up -d                              # Development
+```
 
-If you encounter issues:
-1. Leave detailed comments in the PR
-2. Add TODO comments in code for unresolved items
-3. Request clarification in the issue
-4. Suggest alternative approaches
-5. Document assumptions made
+## Troubleshooting
+
+### Database Connection Failed
+- Check `DATABASE_URL` or individual `DB_*` vars
+- Production requires valid database config (fails on startup if missing)
+- SSL required in production, optional in development
+
+### Redis Not Available
+- Falls back to in-memory cache automatically
+- Check `REDIS_URL` for connection issues
+
+### AI Agent Not Working
+- Verify `OPENAI_API_KEY` or `OPENROUTER_API_KEY`
+- Agent initializes with warning if keys missing
+
+### Sprites Not Connecting
+- Verify Sprite container is running
+- Check WebSocket connection at `/ws/sprites`
+- Verify MCP server configurations
+
+### GitHub Sync Issues
+- Verify `GITHUB_TOKEN` has correct permissions
+- Check webhook secret matches `GITHUB_WEBHOOK_SECRET`
+- Monitor `/ws/github-sync` WebSocket for events
+
+### Codelive/Automaker Not Working
+- Verify `CODELIVE_URL` points to running Automaker instance
+- Check WebSocket at `CODELIVE_WS_URL`
 
 ---
 *Last Updated: February 2026*
