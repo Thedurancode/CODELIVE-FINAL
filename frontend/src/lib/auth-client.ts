@@ -3,6 +3,7 @@
  *
  * Client-side authentication using Supabase Auth.
  * Provides functions for sign in, sign up, sign out, and session management.
+ * All functions lazy-initialize the Supabase client to avoid SSR issues.
  */
 
 import { createBrowserClient } from '@supabase/ssr';
@@ -11,10 +12,17 @@ import type { Session, User, AuthError } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Create Supabase client
-const supabase = supabaseUrl && supabaseAnonKey
-  ? createBrowserClient(supabaseUrl, supabaseAnonKey)
-  : null;
+// Lazy-initialized Supabase client to avoid SSR crashes
+let _supabase: ReturnType<typeof createBrowserClient> | null = null;
+
+function getClient() {
+  if (typeof window === 'undefined') return null;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  if (!_supabase) {
+    _supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  }
+  return _supabase;
+}
 
 /**
  * Sign in with email and password
@@ -23,6 +31,7 @@ export async function signIn(email: string, password: string): Promise<{
   data: { user: User | null; session: Session | null } | null;
   error: AuthError | null;
 }> {
+  const supabase = getClient();
   if (!supabase) {
     return {
       data: null,
@@ -40,6 +49,7 @@ export async function signUp(email: string, password: string, name: string): Pro
   data: { user: User | null; session: Session | null } | null;
   error: AuthError | null;
 }> {
+  const supabase = getClient();
   if (!supabase) {
     return {
       data: null,
@@ -63,6 +73,7 @@ export async function signUp(email: string, password: string, name: string): Pro
  * Sign out the current user
  */
 export async function signOut(): Promise<{ error: AuthError | null }> {
+  const supabase = getClient();
   if (!supabase) {
     return { error: null };
   }
@@ -77,6 +88,7 @@ export async function getSession(): Promise<{
   data: { session: Session | null };
   error: AuthError | null;
 }> {
+  const supabase = getClient();
   if (!supabase) {
     return {
       data: { session: null },
@@ -94,6 +106,7 @@ export async function getUser(): Promise<{
   data: { user: User | null };
   error: AuthError | null;
 }> {
+  const supabase = getClient();
   if (!supabase) {
     return {
       data: { user: null },
@@ -110,6 +123,7 @@ export async function getUser(): Promise<{
 export function onAuthStateChange(
   callback: (event: string, session: Session | null) => void
 ) {
+  const supabase = getClient();
   if (!supabase) {
     return { data: { subscription: { unsubscribe: () => {} } } };
   }
@@ -121,6 +135,7 @@ export function onAuthStateChange(
  * Get access token from current session
  */
 export async function getAccessToken(): Promise<string | null> {
+  const supabase = getClient();
   if (!supabase) {
     return null;
   }
@@ -136,6 +151,7 @@ export async function refreshSession(): Promise<{
   data: { session: Session | null };
   error: AuthError | null;
 }> {
+  const supabase = getClient();
   if (!supabase) {
     return {
       data: { session: null },
@@ -146,8 +162,8 @@ export async function refreshSession(): Promise<{
   return supabase.auth.refreshSession();
 }
 
-// Export the supabase client for direct access if needed
-export { supabase };
+// Export the getter for direct access if needed
+export { getClient as getSupabaseAuth };
 
 // Type exports
 export type { Session, User, AuthError };
