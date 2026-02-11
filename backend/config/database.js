@@ -21,7 +21,13 @@ const getDbConfig = () => {
           require: true,
           rejectUnauthorized: false,
         },
+        connectTimeout: 30000,
       } : undefined,
+      retry: {
+        max: 3,
+        backoffBase: 3000,
+        backoffExponent: 1.5,
+      },
     };
   }
 
