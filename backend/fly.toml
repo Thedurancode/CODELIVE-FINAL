@@ -16,9 +16,6 @@ primary_region = 'dfw'
   NODE_ENV = "production"
   PORT = "3001"
 
-[deploy]
-  release_command = "sh -c 'sleep 5 && npx sequelize-cli db:migrate'"
-
 [http_service]
   internal_port = 3001
   force_https = true

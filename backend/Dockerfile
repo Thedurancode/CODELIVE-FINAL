@@ -105,5 +105,5 @@ EXPOSE 3001
 
 # Railway handles health checks via railway.toml, no Docker HEALTHCHECK needed
 
-# Start the application
-CMD ["node", "dist/index.js"]
+# Run migrations then start the application
+CMD ["sh", "-c", "npx sequelize-cli db:migrate && node dist/index.js"]
