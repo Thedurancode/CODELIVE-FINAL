@@ -1,33 +1,21 @@
 require('dotenv').config();
 
 // Build connection parameters from environment
+// Matches src/config/database.ts as closely as possible
 const getDbConfig = () => {
   const isProduction = process.env.NODE_ENV === 'production';
 
-  // If DATABASE_URL is provided, parse it
+  // If DATABASE_URL is provided, pass it as a connection string (preserves query params like sslmode)
   if (process.env.DATABASE_URL) {
-    const url = new URL(process.env.DATABASE_URL);
-    // Supabase pooler requires SSL
-    const isSupabase = url.hostname.includes('supabase');
     return {
-      username: decodeURIComponent(url.username),
-      password: decodeURIComponent(url.password),
-      database: url.pathname.slice(1),
-      host: url.hostname,
-      port: url.port || 5432,
+      use_env_variable: 'DATABASE_URL',
       dialect: 'postgres',
-      dialectOptions: (isProduction || isSupabase) ? {
+      dialectOptions: isProduction ? {
         ssl: {
           require: true,
-          rejectUnauthorized: false,
+          rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
         },
-        connectTimeout: 30000,
       } : undefined,
-      retry: {
-        max: 3,
-        backoffBase: 3000,
-        backoffExponent: 1.5,
-      },
     };
   }
 
