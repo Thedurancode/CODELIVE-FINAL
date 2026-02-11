@@ -9,7 +9,7 @@ class NotificationManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.notificationPermission = Notification?.permission || 'default';
+      this.notificationPermission = ('Notification' in window) ? Notification.permission : 'default';
       this.loadPreferences();
     }
   }
@@ -117,7 +117,7 @@ class NotificationManager {
     tag?: string;
     onClick?: () => void;
   }) {
-    if (!this.notificationsEnabled || typeof window === 'undefined') return;
+    if (!this.notificationsEnabled || typeof window === 'undefined' || !('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
 
     // Don't show if tab is focused
