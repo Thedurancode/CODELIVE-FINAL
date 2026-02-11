@@ -11,8 +11,6 @@ dotenv.config();
 import { marketDataService } from '../services/MarketDataService';
 import { photoPersistenceService } from '../services/PhotoPersistenceService';
 import PropertyLookup from '../models/PropertyLookup';
-import { syncDatabase } from '../models';
-
 interface PropertyPhoto {
   jpegUrl: string;
   webpUrl?: string;
@@ -31,9 +29,6 @@ async function testPropertyPhotoPersistence(address: string): Promise<void> {
   console.log('  Address:', address);
   console.log('='.repeat(70));
   console.log('');
-
-  // Sync database
-  await syncDatabase({ alter: false });
 
   // Step 1: Look up property with images
   console.log('STEP 1: Looking up property from Zillow API...');

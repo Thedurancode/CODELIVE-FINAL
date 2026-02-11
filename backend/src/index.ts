@@ -58,7 +58,7 @@ import meetingRoutes from './routes/meetingRoutes';
 import codeliveRoutes from './routes/codeliveRoutes';
 // Voice calling module (Twilio + OpenAI Realtime)
 import { twilioRoutes as voiceTwilioRoutes, callRoutes as voiceCallRoutes, handleTwilioConnection, closeAllSessions as closeVoiceSessions } from './voice';
-import { syncDatabase, sequelize } from './models';
+import { sequelize } from './models';
 import { stripeService } from './services/StripeService';
 import { notificationService } from './services/NotificationService';
 import { supabaseRealtimeService } from './services/SupabaseRealtimeService';
@@ -311,27 +311,13 @@ const startServer = async () => {
     // Error handling middleware (SECURITY: sanitizes error messages in production)
     app.use(errorHandler);
 
-    // Try to connect to database (associations are loaded when models are imported)
+    // Connect to database (schema changes are handled by sequelize-cli migrations)
     try {
       await sequelize.authenticate();
       logger.info('Database connection established');
-
-      // Skip sync in production for faster startup (tables already exist)
-      // Use SKIP_DB_SYNC=true to skip, SKIP_DB_SYNC=false to force sync
-      // In production, defaults to skip unless SKIP_DB_SYNC=false
-      const forceSync = process.env.SKIP_DB_SYNC === 'false';
-      const skipSync = process.env.SKIP_DB_SYNC === 'true' || (!forceSync && process.env.NODE_ENV === 'production');
-
-      if (skipSync) {
-        logger.info('Skipping database sync (production mode)');
-      } else {
-        logger.info('Syncing database models (this may take a moment)...');
-        await sequelize.sync({ alter: false }); // Changed from alter: true to avoid Sequelize sync issues
-        logger.info('Database models synchronized');
-      }
-
     } catch (dbError) {
-      logger.warn('Database connection failed, server running without database', {}, dbError);
+      logger.error('Database connection failed', {}, dbError);
+      process.exit(1);
     }
 
     // Initialize Redis cache

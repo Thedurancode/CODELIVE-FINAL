@@ -84,6 +84,11 @@ COPY --from=builder --chown=dispotree:nodejs /app/dist ./dist
 COPY --from=builder --chown=dispotree:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=dispotree:nodejs /app/package*.json ./
 
+# Copy migration infrastructure (sequelize-cli runs migrations on deploy)
+COPY --from=builder --chown=dispotree:nodejs /app/migrations ./migrations
+COPY --from=builder --chown=dispotree:nodejs /app/config ./config
+COPY --from=builder --chown=dispotree:nodejs /app/.sequelizerc ./.sequelizerc
+
 # Create directories for runtime data
 RUN mkdir -p uploads knowledge logs \
     && chown -R dispotree:nodejs uploads knowledge logs
