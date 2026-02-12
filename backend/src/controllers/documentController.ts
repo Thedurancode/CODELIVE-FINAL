@@ -10,7 +10,6 @@ import Property from '../models/Property';
 import storageService, { UploadedFile } from '../services/StorageService';
 import { safeParseInt } from '../utils/security';
 import { Op } from 'sequelize';
-import { complianceTriggerService } from '../services/ComplianceTriggerService';
 import { documentClassificationService } from '../services/DocumentClassificationService';
 import { activityFeedService } from '../services/ActivityFeedService';
 
@@ -133,13 +132,6 @@ export const uploadDocuments = async (req: Request, res: Response) => {
         }
 
         documents.push(document);
-
-        // Fire compliance trigger for document upload (non-blocking)
-        complianceTriggerService.handlePropertyEvent('document.uploaded', propertyId, {
-          documentId: document.id,
-          documentType,
-          fileName: file.originalname,
-        }).catch(err => console.warn('Compliance trigger failed:', err.message));
 
         // Log activity feed event (non-blocking, fire and forget)
         try {
@@ -935,20 +927,6 @@ async function classifyDocumentAsync(
     };
     document.status = 'ready';
     await document.save();
-
-    // Fire classification event for workflow routing
-    if (classificationResult.success) {
-      complianceTriggerService
-        .handlePropertyEvent('document.classified', document.propertyId, {
-          documentId: document.id,
-          classifiedType: classificationResult.documentType,
-          confidence: classificationResult.confidence,
-          suggestedWorkflow: classificationResult.suggestedWorkflow,
-          wasAutoApplied: classificationMeta.wasAutoApplied,
-          extractedFields: classificationResult.extractedFields,
-        })
-        .catch((err) => console.warn('Classification trigger failed:', err.message));
-    }
 
     console.log(
       `[DocumentController] Classified "${document.originalName}" as ${classificationResult.documentType} ` +

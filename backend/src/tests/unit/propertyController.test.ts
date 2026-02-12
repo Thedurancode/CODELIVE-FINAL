@@ -55,12 +55,6 @@ jest.mock('../../services/DealProcessingQueue', () => ({
   },
 }));
 
-jest.mock('../../services/ComplianceService', () => ({
-  complianceService: {
-    checkProperty: jest.fn().mockResolvedValue({ issues: [] }),
-  },
-}));
-
 jest.mock('../../services/DealApprovalService', () => ({
   dealApprovalService: {
     queueForApproval: jest.fn().mockResolvedValue(undefined),

@@ -14,7 +14,7 @@
 import { PipelineStage } from '../models/DealPipeline';
 import { Property } from '../models';
 import { phaseContractService } from './PhaseContractService';
-import { TriggerOn } from '../models/StateDocumentTemplate';
+import { TriggerOn } from './PhaseContractService';
 
 // ============================================================================
 // STAGE TO PHASE MAPPING
@@ -24,7 +24,7 @@ import { TriggerOn } from '../models/StateDocumentTemplate';
  * Maps pipeline stages to compliance phases.
  * Each stage can trigger contracts for a specific phase.
  *
- * Phase definitions (from StateDocumentTemplate):
+ * Phase definitions:
  * 0 - Account Setup (initial onboarding docs)
  * 1 - Property Submission (initial deal docs)
  * 2 - Compliance Review (due diligence docs)

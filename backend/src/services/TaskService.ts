@@ -12,7 +12,6 @@ import { Op, Transaction } from 'sequelize';
 import Task, { TaskStatus, TaskPriority, TaskLinkType } from '../models/Task';
 import Property from '../models/Property';
 import Buyer from '../models/Buyer';
-import ComplianceCheck from '../models/ComplianceCheck';
 import MarketplaceUser from '../models/MarketplaceUser';
 import sequelize from '../config/database';
 import { activityFeedService } from './ActivityFeedService';
@@ -275,11 +274,6 @@ class TaskService {
         {
           model: Buyer,
           as: 'buyer',
-          required: false,
-        },
-        {
-          model: ComplianceCheck,
-          as: 'complianceCheck',
           required: false,
         },
       ],
@@ -735,6 +729,7 @@ class TaskService {
       deal: 0,
       buyer: 0,
       compliance: 0,
+      project: 0,
       none: 0,
     };
     linkTypeCounts.forEach((l: any) => {

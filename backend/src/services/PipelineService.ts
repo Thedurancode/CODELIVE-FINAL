@@ -19,7 +19,6 @@ import DealPipeline, {
 import Portfolio from '../models/Portfolio';
 import { Property } from '../models';
 import { notificationService } from './NotificationService';
-import { complianceTriggerService } from './ComplianceTriggerService';
 import { activityFeedService } from './ActivityFeedService';
 import { pipelineContractService } from './PipelineContractService';
 
@@ -125,18 +124,8 @@ class PipelineService {
       notes,
     });
 
-    // Fire compliance trigger for new pipeline entry at critical stages
+    // Trigger automatic contract sending for initial stage (non-blocking)
     if (propertyId && ['due_diligence', 'offered', 'under_contract'].includes(stage)) {
-      complianceTriggerService
-        .handlePropertyEvent('pipeline.stage_changed', propertyId, {
-          pipelineId: pipeline.id,
-          previousStage: 'new',
-          stage,
-          triggeredBy,
-        })
-        .catch(err => console.warn('Pipeline created trigger failed:', err.message));
-
-      // Trigger automatic contract sending for initial stage (non-blocking)
       pipelineContractService.handleStageChange(
         propertyId,
         'new',
@@ -252,27 +241,8 @@ class PipelineService {
       },
     }).catch(err => console.warn('Activity logging failed:', err.message));
 
-    // Fire compliance trigger for pipeline stage changes (non-blocking)
+    // Trigger automatic contract sending for stage transitions (non-blocking)
     if (pipeline.propertyId) {
-      const previousStage = history[history.length - 2]?.stage || 'new';
-      complianceTriggerService.handlePropertyEvent('pipeline.stage_changed', pipeline.propertyId, {
-        pipelineId: pipeline.id,
-        previousStage,
-        stage: newStage,
-        triggeredBy,
-      }).catch(err => console.warn('Compliance trigger failed:', err.message));
-
-      // Fire deal.closed trigger for final compliance snapshot
-      if (newStage === 'closed_won' || newStage === 'closed_lost') {
-        complianceTriggerService.handlePropertyEvent('deal.closed', pipeline.propertyId, {
-          pipelineId: pipeline.id,
-          outcome: newStage === 'closed_won' ? 'won' : 'lost',
-          closedAt: new Date().toISOString(),
-          triggeredBy,
-        }).catch(err => console.warn('Deal closed trigger failed:', err.message));
-      }
-
-      // Trigger automatic contract sending for stage transitions (non-blocking)
       pipelineContractService.handleStageChange(
         pipeline.propertyId,
         previousStage as PipelineStage,
@@ -372,18 +342,6 @@ class PipelineService {
         reason,
       },
     }).catch(err => console.warn('Activity logging failed:', err.message));
-
-    // Fire deal.closed trigger for final compliance snapshot
-    if (pipeline.propertyId) {
-      complianceTriggerService.handlePropertyEvent('deal.closed', pipeline.propertyId, {
-        pipelineId: pipeline.id,
-        outcome,
-        closePrice,
-        reason,
-        closedAt: new Date().toISOString(),
-        triggeredBy: 'user',
-      }).catch(err => console.warn('Deal closed trigger failed:', err.message));
-    }
 
     return pipeline;
   }

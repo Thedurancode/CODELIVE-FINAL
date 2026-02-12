@@ -33,7 +33,6 @@ import Property from '../../models/Property';
 import { propertyService } from '../../services/propertyService';
 import { scoringEngine } from '../scoring/ScoringEngine';
 import { marketDataService } from '../../services/MarketDataService';
-import { complianceService } from '../../services/ComplianceService';
 import { validateUrl, createLimitedMap } from '../../utils/security';
 import { activityFeedService } from '../../services/ActivityFeedService';
 import { Resend } from 'resend';
@@ -1162,75 +1161,6 @@ export class AutomationEngine {
       },
     });
 
-    // Run Compliance Check Action (uses state-specific rules from ComplianceService)
-    this.registerActionHandler({
-      type: 'run_compliance_check',
-      execute: async (action, context) => {
-        const startTime = Date.now();
-        try {
-          const deal = context.deal;
-          const dealId = context.event.metadata.dealId || deal?.externalId;
-
-          if (!dealId) {
-            throw new Error('No deal ID in context');
-          }
-
-          // Find property (by id or externalId)
-          const property = await this.findPropertyByIdOrExternalId(dealId);
-
-          if (!property) {
-            throw new Error(`Property not found: ${dealId}`);
-          }
-
-          // Run state-specific compliance checks using ComplianceService
-          const complianceResult = await complianceService.checkProperty(property);
-
-          // Update property with compliance results
-          await property.update({
-            status: complianceResult.status,
-            complianceNotes: complianceResult.issues.map(i => `[${i.severity.toUpperCase()}] ${i.message}`),
-          });
-
-          console.log(`✅ Compliance check for ${dealId} (${complianceResult.state}): ${complianceResult.status} (${complianceResult.failedRules} issues, ${complianceResult.passedRules} passed)`);
-
-          // Store in context for use in subsequent actions
-          context.variables.complianceResult = {
-            status: complianceResult.status,
-            state: complianceResult.state,
-            issues: complianceResult.issues,
-            passedChecks: complianceResult.passedChecks,
-            totalRules: complianceResult.totalRules,
-            passedRules: complianceResult.passedRules,
-            failedRules: complianceResult.failedRules,
-          };
-
-          return {
-            actionId: action.id,
-            actionType: action.type,
-            success: true,
-            result: {
-              dealId,
-              state: complianceResult.state,
-              status: complianceResult.status,
-              issues: complianceResult.issues,
-              passedChecks: complianceResult.passedChecks,
-              summary: `${complianceResult.passedRules}/${complianceResult.totalRules} rules passed`,
-            },
-            durationMs: Date.now() - startTime,
-          };
-        } catch (error) {
-          console.error(`✅ Compliance check failed:`, error);
-          return {
-            actionId: action.id,
-            actionType: action.type,
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-            durationMs: Date.now() - startTime,
-          };
-        }
-      },
-    });
-
     // Enrich Deal Action (uses propertyService)
     this.registerActionHandler({
       type: 'enrich_deal',
@@ -1806,18 +1736,6 @@ export class AutomationEngine {
             automationId: context.automation.id,
           };
 
-          // Store follow-up in property notes or a dedicated field
-          if (dealId) {
-            const property = await this.findPropertyByIdOrExternalId(dealId);
-
-            if (property) {
-              const currentNotes = property.complianceNotes || [];
-              await property.update({
-                complianceNotes: [...currentNotes, `📅 Follow-up: ${followUp.title} - Due: ${new Date(followUp.dueDate).toLocaleDateString()}`],
-              });
-            }
-          }
-
           console.log(`📅 Follow-up created: "${followUp.title}" due ${followUp.dueDate}`);
 
           // Store in context for potential email/notification actions
@@ -2275,7 +2193,7 @@ export class AutomationEngine {
     // STATE-SPECIFIC DOCUMENT AUTOMATION
     // =========================================================================
 
-    // Send Document Action (auto-sends state-specific compliance documents)
+    // Send Document Action (auto-sends state-specific documents)
     this.registerActionHandler({
       type: 'send_document' as AutomationActionType,
       execute: async (action, context) => {
@@ -2309,81 +2227,9 @@ export class AutomationEngine {
             throw new Error('Property state required to determine document template');
           }
 
-          // Import StateDocumentTemplate model
-          const { default: StateDocumentTemplate } = await import('../../models/StateDocumentTemplate');
-
-          // Find the appropriate template
-          let template: any = null;
-          if (templateId) {
-            template = await StateDocumentTemplate.findByPk(templateId);
-          } else if (category && state) {
-            template = await StateDocumentTemplate.findOne({
-              where: {
-                state,
-                category,
-                enabled: true,
-              },
-            });
-          }
-
-          if (!template) {
-            throw new Error(`No template found for state ${state}, category ${category}`);
-          }
-
-          // Build field values from property data
-          const fieldValues = this.buildDocumentFields(property, template.fieldMappings, additionalFields);
-
-          // Determine signer
-          const recipientEmail = signerEmail || property?.wholesalerEmail || property?.llcOwnerEmail || deal?.wholesalerEmail;
-          const recipientName = signerName || property?.wholesalerLlcName || property?.llcOwnerName || deal?.wholesalerName || 'Signer';
-
-          if (!recipientEmail) {
-            throw new Error('No signer email found');
-          }
-
-          // Create DocuSeal submission
-          const submission = await docuSealService.createSubmission({
-            templateId: template.docusealTemplateId,
-            submitters: [
-              {
-                email: recipientEmail,
-                name: recipientName,
-                role: 'Signer',
-                fields: fieldValues,
-              },
-            ],
-            sendEmail: true,
-          });
-
-          console.log(`📄 Document sent: ${template.name} to ${recipientEmail} (submission: ${submission.id})`);
-
-          // Update property documentStatus
-          if (property) {
-            const currentStatus = property.documentStatus || {};
-            currentStatus[category || template.category] = {
-              status: 'sent',
-              submissionId: submission.id,
-              sentAt: new Date().toISOString(),
-              templateId: template.id,
-              templateName: template.name,
-              signers: [{
-                email: recipientEmail,
-                status: 'pending',
-              }],
-            };
-
-            await property.update({ documentStatus: currentStatus });
-          }
-
-          // Store in context
-          context.variables.documentSubmission = {
-            submissionId: submission.id,
-            templateId: template.id,
-            templateName: template.name,
-            category: template.category,
-            recipientEmail,
-            state,
-          };
+          // StateDocumentTemplate model has been removed as part of compliance code cleanup.
+          // The send_document automation action is no longer functional.
+          throw new Error('StateDocumentTemplate model has been removed. send_document automation action is no longer available.');
 
           return {
             actionId: action.id,
@@ -2722,15 +2568,6 @@ export class AutomationEngine {
         <p><strong>Property:</strong> ${variables.offerLetter?.propertyAddress || 'N/A'}</p>
         <p><strong>Offer Amount:</strong> $${variables.offerLetter?.offerAmount?.toLocaleString() || 'N/A'}</p>
         <p><strong>Expires:</strong> ${variables.offerLetter?.expiresAt ? new Date(variables.offerLetter.expiresAt).toLocaleDateString() : 'N/A'}</p>
-        <hr>
-        <p>Sent by Dispotree Automation</p>
-      `,
-      'compliance_alert': `
-        <h2>Compliance Check Results</h2>
-        <p><strong>Property:</strong> ${deal?.address?.street || 'N/A'}, ${deal?.city || 'N/A'}, ${deal?.state || 'N/A'}</p>
-        <p><strong>Status:</strong> ${variables.complianceResult?.status || 'N/A'}</p>
-        <p><strong>Issues:</strong></p>
-        <ul>${(variables.complianceResult?.issues || []).map((i: string) => `<li>${i}</li>`).join('')}</ul>
         <hr>
         <p>Sent by Dispotree Automation</p>
       `,
@@ -3195,9 +3032,6 @@ export class AutomationEngine {
       'deal.approved': 'pipeline_stage_changed',
       'deal.rejected': 'pipeline_stage_changed',
       'deal.blocked': 'pipeline_stage_changed',
-      'deal.compliance_completed': 'compliance_checked',
-      'compliance.started': 'compliance_checked',
-      'compliance.completed': 'compliance_checked',
       'source.synced': 'deal_received',
       'source.error': 'deal_received',
       'automation.triggered': 'manual',

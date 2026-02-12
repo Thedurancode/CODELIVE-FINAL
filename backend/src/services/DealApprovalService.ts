@@ -2,16 +2,13 @@
  * Deal Approval Service
  *
  * Handles the broker approval workflow for deals.
- * Integrates with ComplianceService for auto-queuing
- * and BrokerService for broker assignment.
+ * Integrates with BrokerService for broker assignment.
  */
 
 import Property from '../models/Property';
 import BrokerProfile from '../models/BrokerProfile';
 import MarketplaceUser from '../models/MarketplaceUser';
 import { brokerService } from './BrokerService';
-import { complianceEventStream } from './ComplianceEventStream';
-import { complianceTriggerService } from './ComplianceTriggerService';
 import { activityFeedService } from './ActivityFeedService';
 import { Op } from 'sequelize';
 
@@ -46,7 +43,7 @@ class DealApprovalService {
 
   /**
    * Queue a deal for broker approval
-   * Called automatically when compliance passes (Green)
+   * Called to submit a deal for broker review
    */
   async queueForApproval(propertyId: number): Promise<Property> {
     const property = await Property.findByPk(propertyId);
@@ -84,23 +81,6 @@ class DealApprovalService {
     });
 
     console.log(`✓ Property ${propertyId} queued for broker approval (broker: ${brokerResult.brokerName})`);
-
-    // Fire compliance triggers for broker assignment and status change
-    complianceTriggerService
-      .handlePropertyEvent('property.broker_assigned', propertyId, {
-        brokerId: brokerResult.brokerId,
-        brokerName: brokerResult.brokerName,
-        state: property.state,
-      })
-      .catch(err => console.warn('Broker assigned trigger failed:', err.message));
-
-    complianceTriggerService
-      .handlePropertyEvent('property.status_changed', propertyId, {
-        previousStatus: 'draft',
-        newStatus: 'pending_broker_approval',
-        state: property.state,
-      })
-      .catch(err => console.warn('Status changed trigger failed:', err.message));
 
     return property;
   }
@@ -174,37 +154,6 @@ class DealApprovalService {
 
     console.log(`✓ Property ${propertyId} approved by broker ${brokerId} and is now LIVE`);
 
-    // Emit compliance event
-    complianceEventStream.publish(
-      'compliance.broker.approved',
-      'property',
-      propertyId,
-      {
-        brokerId,
-        brokerNotes: notes || null,
-        approvedAt: new Date().toISOString(),
-        propertyAddress: property.address,
-        propertyState: property.state,
-      },
-      {
-        source: 'broker',
-        metadata: {
-          action: 'approved',
-          assignedBrokerId: brokerId,
-        },
-      }
-    );
-
-    // Fire compliance trigger for status change
-    complianceTriggerService
-      .handlePropertyEvent('property.status_changed', propertyId, {
-        previousStatus: 'pending_broker_approval',
-        newStatus: 'live',
-        approvedBy: brokerId,
-        state: property.state,
-      })
-      .catch(err => console.warn('Status changed trigger failed:', err.message));
-
     // Log activity
     BrokerProfile.findByPk(brokerId, {
       include: [{ model: MarketplaceUser, as: 'user', attributes: ['name', 'email'] }],
@@ -272,39 +221,6 @@ class DealApprovalService {
 
     console.log(`✗ Property ${propertyId} rejected by broker ${brokerId}: ${reason}`);
 
-    // Emit compliance event
-    complianceEventStream.publish(
-      'compliance.broker.rejected',
-      'property',
-      propertyId,
-      {
-        brokerId,
-        rejectionReason: reason,
-        rejectedAt: new Date().toISOString(),
-        propertyAddress: property.address,
-        propertyState: property.state,
-      },
-      {
-        source: 'broker',
-        metadata: {
-          action: 'rejected',
-          assignedBrokerId: brokerId,
-          severity: 'warning',
-        },
-      }
-    );
-
-    // Fire compliance trigger for status change
-    complianceTriggerService
-      .handlePropertyEvent('property.status_changed', propertyId, {
-        previousStatus: 'pending_broker_approval',
-        newStatus: 'rejected',
-        rejectedBy: brokerId,
-        rejectionReason: reason,
-        state: property.state,
-      })
-      .catch(err => console.warn('Status changed trigger failed:', err.message));
-
     // Log activity
     BrokerProfile.findByPk(brokerId, {
       include: [{ model: MarketplaceUser, as: 'user', attributes: ['name', 'email'] }],
@@ -368,39 +284,6 @@ class DealApprovalService {
     });
 
     console.log(`⚠ Property ${propertyId} needs changes: ${changes}`);
-
-    // Emit compliance event
-    complianceEventStream.publish(
-      'compliance.broker.changes_requested',
-      'property',
-      propertyId,
-      {
-        brokerId,
-        changesRequested: changes,
-        requestedAt: new Date().toISOString(),
-        propertyAddress: property.address,
-        propertyState: property.state,
-      },
-      {
-        source: 'broker',
-        metadata: {
-          action: 'changes_requested',
-          assignedBrokerId: brokerId,
-          severity: 'info',
-        },
-      }
-    );
-
-    // Fire compliance trigger for status change (back to draft)
-    complianceTriggerService
-      .handlePropertyEvent('property.status_changed', propertyId, {
-        previousStatus: 'pending_broker_approval',
-        newStatus: 'draft',
-        changesRequestedBy: brokerId,
-        changesRequested: changes,
-        state: property.state,
-      })
-      .catch(err => console.warn('Status changed trigger failed:', err.message));
 
     return property;
   }

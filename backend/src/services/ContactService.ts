@@ -9,7 +9,6 @@ import { Op } from 'sequelize';
 import Contact from '../models/Contact';
 import MarketplaceUser from '../models/MarketplaceUser';
 import PropertyContact from '../models/PropertyContact';
-import { complianceTriggerService } from './ComplianceTriggerService';
 import { entitySearchService } from './EntitySearchService';
 import { activityFeedService } from './ActivityFeedService';
 import type { ContactType, ContactStatus } from '../models/Contact';
@@ -289,32 +288,8 @@ class ContactService {
     contact: Contact,
     changes: { previousName?: string | null; previousCompany?: string | null; newName?: string; newCompany?: string }
   ): Promise<void> {
-    // Get all properties this contact is linked to
-    const propertyLinks = await PropertyContact.findAll({
-      where: { contactId: contact.id },
-      attributes: ['propertyId', 'role'],
-    });
-
-    if (propertyLinks.length === 0) {
-      return;
-    }
-
-    console.log(`🔍 Triggering sanctions re-screening for ${propertyLinks.length} properties due to contact change`);
-
-    // Fire trigger for each linked property
-    for (const link of propertyLinks) {
-      complianceTriggerService
-        .handlePropertyEvent('property.seller_changed', link.propertyId, {
-          contactId: contact.id,
-          contactRole: link.role,
-          previousName: changes.previousName,
-          newName: changes.newName,
-          previousCompany: changes.previousCompany,
-          newCompany: changes.newCompany,
-          source: 'contact_update',
-        })
-        .catch(err => console.warn(`Sanctions trigger failed for property ${link.propertyId}:`, err.message));
-    }
+    // Compliance trigger service has been removed - this is a no-op now
+    console.log(`[ContactService] Contact ${contact.id} name/company changed, compliance triggers removed`);
   }
 
   /**

@@ -12,7 +12,6 @@ import { NormalizedDeal } from '../plugins/types';
 import { v4 as uuidv4 } from 'uuid';
 import { MarketDataService } from './MarketDataService';
 import sequelize from '../config/database';
-import { complianceTriggerService } from './ComplianceTriggerService';
 
 export interface SavePropertyResult {
   success: boolean;
@@ -331,15 +330,6 @@ class PropertyService {
 
         await transaction.commit();
 
-        // Fire compliance triggers for property update (non-blocking)
-        if (ownerChanged && previousOwner) {
-          complianceTriggerService.handlePropertyEvent('property.seller_changed', existingProperty.id, {
-            previousSeller: previousOwner,
-            newSeller: newOwner,
-            source: deal.sourceName || 'external',
-          }).catch(err => console.warn('Compliance trigger failed:', err.message));
-        }
-
         // Enrich with market data if requested (outside transaction)
         let enrichmentResult;
         if (enrichWithMarketData) {
@@ -371,13 +361,6 @@ class PropertyService {
       await transaction.commit();
 
       console.log(`✅ New property created: ${propertyId} - ${deal.address.street}, ${deal.address.city}`);
-
-      // Fire compliance trigger for property creation (non-blocking)
-      complianceTriggerService.handlePropertyEvent('property.created', newProperty.id, {
-        state: newProperty.state,
-        propertyType: newProperty.propertyType,
-        source: deal.sourceName || 'external',
-      }).catch(err => console.warn('Compliance trigger failed:', err.message));
 
       // Enrich with market data if requested (outside transaction)
       let enrichmentResult;

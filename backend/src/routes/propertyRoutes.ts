@@ -27,7 +27,6 @@ import {
 import { authenticate } from '../middleware/auth';
 import { propertyContactService } from '../services/PropertyContactService';
 import { dealApprovalService } from '../services/DealApprovalService';
-import { propertyFieldQualityService } from '../services/PropertyFieldQualityService';
 import type { ContactRole } from '../models/PropertyContact';
 import { upload } from '../middleware/upload';
 import Property from '../models/Property';
@@ -619,125 +618,6 @@ router.post('/:id/view', recordPropertyView);
  *         description: List of viewers
  */
 router.get('/:id/viewers', getPropertyViewers);
-
-// ============================================================================
-// PROPERTY FIELD QUALITY
-// ============================================================================
-
-const fieldQualityPattern = /^[a-zA-Z_][a-zA-Z0-9_.]*$/;
-const fieldQualityStatuses = new Set(['known', 'unknown', 'inferred']);
-
-/**
- * @swagger
- * /api/listings/{id}/field-quality:
- *   get:
- *     summary: Get field quality metadata for a property
- *     tags: [Properties]
- */
-router.get('/:id/field-quality', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const property = await Property.findByPk(id);
-
-    if (!property) {
-      return res.status(404).json({
-        success: false,
-        error: 'Property not found',
-      });
-    }
-
-    const records = await propertyFieldQualityService.list(property.id);
-
-    res.json({
-      success: true,
-      data: records,
-      count: records.length,
-    });
-  } catch (error) {
-    console.error('Error fetching field quality:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-});
-
-/**
- * @swagger
- * /api/listings/{id}/field-quality:
- *   post:
- *     summary: Upsert field quality metadata for a property
- *     tags: [Properties]
- */
-router.post('/:id/field-quality', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const property = await Property.findByPk(id);
-
-    if (!property) {
-      return res.status(404).json({
-        success: false,
-        error: 'Property not found',
-      });
-    }
-
-    const records = Array.isArray(req.body?.records)
-      ? req.body.records
-      : req.body?.record
-        ? [req.body.record]
-        : [];
-
-    if (records.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'records array is required',
-      });
-    }
-
-    const errors: string[] = [];
-    const normalized = records.map((record: any, index: number) => {
-      const field = String(record.field || '');
-      const status = String(record.status || '');
-      const source = record.source ?? null;
-      const confidence = record.confidence ?? null;
-      const notes = record.notes ?? null;
-
-      if (!field || !fieldQualityPattern.test(field)) {
-        errors.push(`records[${index}].field must be alphanumeric with dots`);
-      }
-      if (!fieldQualityStatuses.has(status)) {
-        errors.push(`records[${index}].status must be one of: known, unknown, inferred`);
-      }
-      if (confidence !== null && (typeof confidence !== 'number' || confidence < 0 || confidence > 1)) {
-        errors.push(`records[${index}].confidence must be between 0 and 1`);
-      }
-
-      return { field, status, source, confidence, notes };
-    });
-
-    if (errors.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Validation failed',
-        details: errors,
-      });
-    }
-
-    const updated = await propertyFieldQualityService.upsert(property.id, normalized);
-
-    res.json({
-      success: true,
-      data: updated,
-      count: updated.length,
-    });
-  } catch (error) {
-    console.error('Error updating field quality:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-});
 
 // ============================================================================
 // PROPERTY CONTACTS

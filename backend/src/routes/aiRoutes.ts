@@ -10,11 +10,6 @@ import rateLimit from 'express-rate-limit';
 
 // Import AI agent controllers
 import {
-  analyzeCompliance,
-  getComplianceHistory
-} from '../controllers/aiComplianceController';
-
-import {
   matchPropertyToBuyBoxes,
   getAllBuyBoxes,
   createBuyBox,
@@ -50,91 +45,6 @@ router.use(aiLimiter);
 // AI Agent Routes
 // Base path: /api/ai
 // =====================================================
-
-// -----------------------------------------------------
-// Compliance Agent Routes
-// -----------------------------------------------------
-
-/**
- * @swagger
- * /api/ai/compliance/analyze:
- *   post:
- *     summary: Analyze contract for compliance
- *     description: AI-powered contract analysis checking for assignment clauses, marketing authorization, state-specific rules, and more
- *     tags: [AI - Compliance Agent]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - propertyId
- *               - contractText
- *             properties:
- *               propertyId:
- *                 type: string
- *                 example: prop-123
- *               contractText:
- *                 type: string
- *                 example: "This purchase agreement between Seller John Doe and Buyer ABC LLC is assignable..."
- *     responses:
- *       200:
- *         description: Compliance analysis results
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     status:
- *                       type: string
- *                       enum: [Green, Yellow, Red]
- *                     issues:
- *                       type: array
- *                       items:
- *                         type: object
- *                     extractedData:
- *                       type: object
- *                       properties:
- *                         assignable:
- *                           type: boolean
- *                         marketingClauseFound:
- *                           type: boolean
- *                     recommendations:
- *                       type: array
- *                       items:
- *                         type: string
- *                     confidenceScore:
- *                       type: number
- *                     needsHumanReview:
- *                       type: boolean
- */
-router.post('/compliance/analyze', analyzeCompliance);
-
-/**
- * @swagger
- * /api/ai/compliance/history/{propertyId}:
- *   get:
- *     summary: Get compliance check history
- *     description: Returns all compliance checks performed on a property
- *     tags: [AI - Compliance Agent]
- *     parameters:
- *       - in: path
- *         name: propertyId
- *         required: true
- *         schema:
- *           type: string
- *         description: The property ID
- *     responses:
- *       200:
- *         description: Compliance history
- */
-router.get('/compliance/history/:propertyId', getComplianceHistory);
 
 // -----------------------------------------------------
 // Buy Box Matching Agent Routes
@@ -696,13 +606,6 @@ router.get('/', (req, res) => {
     message: 'Dispotree AI Agent System API',
     version: '1.0.0',
     agents: {
-      compliance: {
-        description: 'Contract compliance analysis and verification',
-        endpoints: {
-          analyze: 'POST /api/ai/compliance/analyze',
-          history: 'GET /api/ai/compliance/history/:propertyId'
-        }
-      },
       buybox: {
         description: 'Intelligent property-to-fund matching with behavior-based learning',
         endpoints: {
@@ -727,7 +630,7 @@ router.get('/', (req, res) => {
         }
       },
       guardrail: {
-        description: 'Real-time compliance and content moderation',
+        description: 'Real-time content moderation',
         endpoints: {
           check: 'POST /api/ai/guardrail/check',
           flagged: 'GET /api/ai/guardrail/flagged'

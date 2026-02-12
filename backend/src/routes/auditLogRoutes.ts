@@ -12,7 +12,6 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticate, authorize } from '../middleware/auth';
 import { soc2AuditLogger } from '../services/SOC2AuditLogger';
-import { ComplianceAuditLog } from '../models/ComplianceAuditLog';
 
 const router = Router();
 
@@ -254,7 +253,12 @@ router.get('/:id', authenticate, queryLimiter, async (req: Request, res: Respons
   try {
     const { id } = req.params;
 
-    const log = await ComplianceAuditLog.findByPk(id);
+    if (!soc2AuditLogger.isReady()) {
+      await soc2AuditLogger.initialize();
+    }
+
+    const result = await soc2AuditLogger.query({ limit: 1, offset: parseInt(id as string) - 1 });
+    const log = result.logs[0];
 
     if (!log) {
       return res.status(404).json({
@@ -304,11 +308,20 @@ router.get('/resource/:resourceType/:resourceId', authenticate, queryLimiter, as
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
 
-    const logs = await ComplianceAuditLog.getResourceHistory(resourceType, resourceId, { limit, offset });
+    if (!soc2AuditLogger.isReady()) {
+      await soc2AuditLogger.initialize();
+    }
+
+    const result = await soc2AuditLogger.query({
+      resourceTypes: [resourceType],
+      resourceId,
+      limit,
+      offset,
+    });
 
     res.json({
       success: true,
-      data: logs,
+      data: result.logs,
     });
   } catch (error: any) {
     console.error('Resource history error:', error);
@@ -541,41 +554,19 @@ router.get('/retention/info', authenticate, async (req: Request, res: Response) 
   try {
     const retentionYears = parseInt(process.env.AUDIT_RETENTION_YEARS || '7');
 
-    // Get counts by retention date ranges
-    const { Op, fn, col } = await import('sequelize');
+    if (!soc2AuditLogger.isReady()) {
+      await soc2AuditLogger.initialize();
+    }
 
-    const now = new Date();
-    const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
-
-    const [totalCount, expiringWithinYear, oldest, newest] = await Promise.all([
-      ComplianceAuditLog.count(),
-      ComplianceAuditLog.count({
-        where: {
-          retentionDate: {
-            [Op.lte]: oneYearFromNow,
-          },
-        },
-      }),
-      ComplianceAuditLog.findOne({
-        order: [['timestamp', 'ASC']],
-        attributes: ['timestamp', 'retentionDate'],
-      }),
-      ComplianceAuditLog.findOne({
-        order: [['timestamp', 'DESC']],
-        attributes: ['timestamp', 'retentionDate'],
-      }),
-    ]);
+    const statistics = await soc2AuditLogger.getStatistics(365);
 
     res.json({
       success: true,
       data: {
         retentionYears,
-        totalEntries: totalCount,
-        expiringWithinYear,
-        oldestEntry: oldest?.timestamp,
-        newestEntry: newest?.timestamp,
-        oldestRetentionDate: oldest?.retentionDate,
-        newestRetentionDate: newest?.retentionDate,
+        totalEntries: statistics.totalEntries,
+        oldestEntry: statistics.oldestEntry,
+        newestEntry: statistics.newestEntry,
       },
     });
   } catch (error: any) {
@@ -602,38 +593,13 @@ router.get('/retention/info', authenticate, async (req: Request, res: Response) 
  */
 router.get('/filter-options', authenticate, async (req: Request, res: Response) => {
   try {
-    const { fn, col } = await import('sequelize');
-
-    const [eventTypes, resourceTypes, actorIds] = await Promise.all([
-      ComplianceAuditLog.findAll({
-        attributes: [[fn('DISTINCT', col('eventType')), 'eventType']],
-        raw: true,
-      }),
-      ComplianceAuditLog.findAll({
-        attributes: [[fn('DISTINCT', col('resourceType')), 'resourceType']],
-        raw: true,
-      }),
-      ComplianceAuditLog.findAll({
-        attributes: [[fn('DISTINCT', col('actorId')), 'actorId']],
-        where: {
-          actorId: {
-            [require('sequelize').Op.ne]: null,
-          },
-        },
-        raw: true,
-      }),
-    ]);
-
     res.json({
       success: true,
       data: {
-        eventTypes: eventTypes.map((e: any) => e.eventType).filter(Boolean).sort(),
         eventCategories: ['access', 'modification', 'verification', 'decision', 'system', 'security'],
         severities: ['debug', 'info', 'warning', 'error', 'critical'],
         actorTypes: ['user', 'system', 'api', 'automation', 'external'],
         outcomes: ['success', 'failure', 'partial', 'pending'],
-        resourceTypes: resourceTypes.map((r: any) => r.resourceType).filter(Boolean).sort(),
-        actorIds: actorIds.map((a: any) => a.actorId).filter(Boolean).sort(),
       },
     });
   } catch (error: any) {

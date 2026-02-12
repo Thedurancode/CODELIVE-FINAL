@@ -1,4 +1,6 @@
-import type { FieldMappingValue } from '../models/StateDocumentTemplate';
+// FieldMappingValue type was previously imported from StateDocumentTemplate (now removed).
+// Inline the type definition for backward compatibility.
+type FieldMappingValue = string | { source: string; field: string; transform?: string };
 
 /**
  * Apply a transform to a value

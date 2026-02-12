@@ -21,7 +21,6 @@ import sequelize from '../config/database';
 import { PropertyAttributes } from '../types';
 import { NormalizedDeal } from '../plugins/types';
 import { DealProcessingState } from '../types/dealProcessing';
-import { complianceTriggerService } from './ComplianceTriggerService';
 import { automationEngine } from '../plugins';
 import { dealProcessingQueue } from './DealProcessingQueue';
 import { webhookService } from './WebhookService';
@@ -173,18 +172,6 @@ class PropertyCreationService {
       // === POST-COMMIT SIDE EFFECTS ===
       // Create a callback for firing side effects (deferred for external transactions)
       const firePostCommitEffects = () => {
-        // Fire compliance trigger
-        if (fireComplianceTriggers) {
-          complianceTriggerService
-            .handlePropertyEvent('property.created', property.id, {
-              state: property.state,
-              propertyType: property.propertyType,
-              source: sourceId,
-              createdBy,
-            })
-            .catch(err => console.warn('Compliance trigger failed:', err.message));
-        }
-
         // Emit automation event
         if (emitAutomationEvents && !enqueueForProcessing) {
           // Only emit directly if not using processing queue (queue handles it)

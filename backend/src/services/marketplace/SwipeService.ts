@@ -22,7 +22,6 @@ import {
 import { feedService, NormalizedDeal } from './FeedService';
 import { OFFER_EXPIRY_DAYS, TOP_PASS_REASONS_COUNT } from './constants';
 import { automationEngine } from '../../plugins/automation/AutomationEngine';
-import { complianceTriggerService } from '../ComplianceTriggerService';
 import { pipelineService } from '../PipelineService';
 import { webhookService } from '../WebhookService';
 import { activityFeedService } from '../ActivityFeedService';
@@ -258,33 +257,6 @@ class SwipeService {
 
     // Emit offer.created event for seller notification
     await this.emitOfferEvent('offer.created', offer, request.userId);
-
-    // Fire compliance trigger for offer created (sanctions screen buyer)
-    // Get property ID from deal
-    const property = await Property.findOne({ where: { propertyId: request.dealId } });
-    if (property) {
-      complianceTriggerService
-        .handlePropertyEvent('offer.created', property.id, {
-          offerId: offer.id,
-          buyerId: request.userId,
-          buyerName: buyer.name,
-          buyerEmail: buyer.email,
-          offerAmount: request.offerAmount,
-          financeType: request.financeType,
-        })
-        .catch(err => console.warn('Offer created trigger failed:', err.message));
-
-      // Also fire buyer.added trigger for sanctions screening
-      complianceTriggerService
-        .handlePropertyEvent('buyer.added', property.id, {
-          buyerId: request.userId,
-          buyerName: buyer.name,
-          buyerEmail: buyer.email,
-          buyerCompany: buyer.company,
-          source: 'offer',
-        })
-        .catch(err => console.warn('Buyer added trigger failed:', err.message));
-    }
 
     // Log activity feed event for offer
     const deal = await this.getDealById(request.dealId);

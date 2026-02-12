@@ -9,7 +9,6 @@
  */
 
 import sequelize from '../config/database';
-import { stateComplianceEngine } from './StateComplianceEngine';
 import { phaseContractService, ContractSendResult } from './PhaseContractService';
 
 export interface AgreementRequirement {
@@ -36,8 +35,6 @@ class AgreementTriggerService {
     dealId: number,
     state: string
   ): Promise<AgreementRequirement[]> {
-    await stateComplianceEngine.initialize();
-
     // Get compliance record to check distribution channels
     const [results] = await sequelize.query(
       `SELECT state_specific_data FROM state_deal_compliance
@@ -209,28 +206,8 @@ class AgreementTriggerService {
         return { success: true, error: 'ASA already triggered' };
       }
 
-      // Get ASA template specifically (look for category = 'asa')
-      const StateDocumentTemplate = require('../models/StateDocumentTemplate').default;
-      const asaTemplate = await StateDocumentTemplate.getPrimaryTemplate(state, 'asa');
-
-      if (asaTemplate) {
-        // Send ASA via PhaseContractService
-        const result = await phaseContractService.sendPhaseContract(
-          dealId,
-          state,
-          7, // Phase 7: Distribution Agreements
-          asaTemplate.id
-        );
-
-        if (result.success) {
-          await this.logAgreementTrigger(dealId, 'ASA', 'sent');
-          return { success: true, submissionId: result.submissionId };
-        }
-
-        console.warn('DocuSeal send failed for ASA:', result.error);
-      }
-
-      // Fallback: Create placeholder if DocuSeal fails or no template
+      // StateDocumentTemplate model has been removed. Skip template-based sending.
+      // Fallback: Create placeholder document record
       const [fallbackResult] = await sequelize.query(
         `INSERT INTO property_documents
          (property_id, category, document_type, display_name, status, created_at, updated_at)

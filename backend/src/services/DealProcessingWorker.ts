@@ -2,11 +2,10 @@
  * Deal Processing Worker
  *
  * Background worker that processes deals through the pipeline:
- * 1. Compliance check (required, blocking)
- * 2. Enrichment (optional)
- * 3. Scoring (required)
- * 4. Queue for approval
- * 5. Emit ready event for automations
+ * 1. Enrichment (optional)
+ * 2. Scoring (required)
+ * 3. Queue for approval
+ * 4. Emit ready event for automations
  *
  * Uses the outbox pattern for guaranteed delivery and processing order.
  */
@@ -14,7 +13,6 @@
 import Property from '../models/Property';
 import Outbox from '../models/Outbox';
 import { dealProcessingQueue } from './DealProcessingQueue';
-import { complianceService } from './ComplianceService';
 import { scoringEngine } from '../plugins';
 import { automationEngine } from '../plugins';
 import { dealApprovalService } from './DealApprovalService';
@@ -137,7 +135,6 @@ class DealProcessingWorker {
           await this.processDealCreated(event);
           break;
         case 'deal.processing_started':
-        case 'deal.compliance_completed':
         case 'deal.scoring_completed':
         case 'deal.ready':
         case 'deal.approved':
@@ -173,43 +170,7 @@ class DealProcessingWorker {
 
     console.log(`🔄 Processing deal: Property ${propertyId}`);
 
-    // Step 1: Transition to COMPLIANCE_PENDING
-    await dealProcessingQueue.transitionState(propertyId, DealProcessingState.COMPLIANCE_PENDING, {
-      reason: 'Starting compliance check',
-    });
-
-    // Step 2: Run compliance check
-    const complianceResult = await this.runComplianceCheck(property);
-    steps.push(complianceResult);
-
-    if (!complianceResult.success) {
-      // Compliance failed - block the deal
-      await dealProcessingQueue.transitionState(propertyId, DealProcessingState.COMPLIANCE_FAILED, {
-        reason: complianceResult.error || 'Compliance check failed',
-        metadata: complianceResult.data,
-      });
-
-      await dealProcessingQueue.transitionState(propertyId, DealProcessingState.BLOCKED, {
-        reason: 'Blocked due to compliance failure',
-      });
-
-      return {
-        propertyId,
-        success: false,
-        finalState: DealProcessingState.BLOCKED,
-        steps,
-        totalDuration: Date.now() - startTime,
-        error: 'Compliance check failed',
-      };
-    }
-
-    // Step 3: Transition to COMPLIANCE_PASSED
-    await dealProcessingQueue.transitionState(propertyId, DealProcessingState.COMPLIANCE_PASSED, {
-      reason: 'Compliance check passed',
-      metadata: complianceResult.data,
-    });
-
-    // Step 4: Run enrichment (optional, non-blocking)
+    // Step 1: Run enrichment (optional, non-blocking)
     // Get enrichment options from event metadata
     const enrichmentOptions = event.metadata?.enrichmentOptions as {
       enabled?: boolean;
@@ -274,49 +235,6 @@ class DealProcessingWorker {
       steps,
       totalDuration,
     };
-  }
-
-  /**
-   * Run compliance check
-   */
-  private async runComplianceCheck(property: Property): Promise<ProcessingStepResult> {
-    const startTime = Date.now();
-
-    try {
-      const result = await complianceService.checkProperty(property);
-
-      // Determine compliance status
-      const hasBlockers = result.issues?.some((i: any) => i.severity === 'critical');
-      const hasWarnings = result.issues?.some((i: any) => i.severity === 'warning');
-      const complianceStatus = hasBlockers ? 'Red' : hasWarnings ? 'Yellow' : 'Green';
-
-      // Update property with compliance results
-      await property.update({
-        complianceNotes: JSON.stringify(result.issues || []),
-        status: complianceStatus,
-      } as any);
-
-      const success = complianceStatus !== 'Red';
-
-      return {
-        success,
-        step: 'compliance',
-        duration: Date.now() - startTime,
-        data: {
-          status: complianceStatus,
-          issueCount: result.issues?.length || 0,
-          issues: result.issues,
-        },
-        error: success ? undefined : 'Critical compliance issues found',
-      };
-    } catch (error) {
-      return {
-        success: false,
-        step: 'compliance',
-        duration: Date.now() - startTime,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
   }
 
   /**

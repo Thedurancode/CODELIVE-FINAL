@@ -18,9 +18,7 @@
  */
 
 import * as crypto from 'crypto';
-import ComplianceAlert from '../models/ComplianceAlert';
 import { soc2AuditLogger } from './SOC2AuditLogger';
-import { complianceEventStream } from './ComplianceEventStream';
 
 export interface PropertyVerificationRequest {
   propertyAddress: string;
@@ -175,24 +173,7 @@ class PropertyVerificationService {
    * Create alert when API keys are not configured
    */
   private async createConfigurationAlert(): Promise<void> {
-    try {
-      await ComplianceAlert.upsertAlert({
-        alertKey: 'property-verification-api-keys-missing',
-        type: 'configuration',
-        severity: 'critical',
-        title: 'Property Verification APIs Not Configured',
-        message: 'Neither ATTOM_API_KEY nor CORELOGIC_API_KEY is configured. Property verification will use mock data which is NOT suitable for production.',
-        resourceType: 'system',
-        resourceId: 'property-verification-service',
-        metadata: {
-          service: 'PropertyVerificationService',
-          failSafeMode: this.failSafeMode,
-          timestamp: new Date().toISOString(),
-        },
-      });
-    } catch (error) {
-      console.error('[PropertyVerification] Failed to create configuration alert:', error);
-    }
+    console.error('[PropertyVerification] Neither ATTOM_API_KEY nor CORELOGIC_API_KEY is configured. Property verification will use mock data which is NOT suitable for production.');
   }
 
   /**
@@ -207,24 +188,6 @@ class PropertyVerificationService {
     this.lastFailureAlert = new Date();
 
     try {
-      await ComplianceAlert.upsertAlert({
-        alertKey: `property-verification-api-failure-${provider}`,
-        type: 'api_failure',
-        severity: this.consecutiveFailures >= 5 ? 'critical' : 'high',
-        title: 'Property Verification API Failure',
-        message: `${provider} API is failing. ${this.consecutiveFailures} consecutive failures. ${this.failSafeMode ? 'Deals require manual verification.' : 'Using mock data (UNSAFE).'}`,
-        resourceType: 'property',
-        resourceId: `${request.propertyAddress}, ${request.city}, ${request.state}`,
-        metadata: {
-          error: error.message,
-          provider,
-          consecutiveFailures: this.consecutiveFailures,
-          failSafeMode: this.failSafeMode,
-          address: request.propertyAddress,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
       // Log to SOC 2 audit
       soc2AuditLogger.log({
         eventType: 'property_verification.api_failure',
@@ -242,22 +205,7 @@ class PropertyVerificationService {
         },
       });
 
-      // Emit event for monitoring
-      complianceEventStream.publish(
-        'compliance.verification.api_failure',
-        'system',
-        provider,
-        {
-          error: error.message,
-          address: request.propertyAddress,
-          consecutiveFailures: this.consecutiveFailures,
-          failSafeMode: this.failSafeMode,
-        },
-        {
-          source: 'system',
-          metadata: { severity: 'critical' },
-        }
-      );
+      console.error(`[PropertyVerification] ${provider} API failure: ${error.message}. ${this.consecutiveFailures} consecutive failures.`);
     } catch (alertError) {
       console.error('[PropertyVerification] Failed to create API failure alert:', alertError);
     }

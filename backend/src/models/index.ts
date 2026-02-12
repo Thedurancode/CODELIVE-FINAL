@@ -57,26 +57,6 @@ import DeadLetterQueue from './DeadLetterQueue';
 import FollowUpChain from './FollowUpChain';
 import FollowUpExecution from './FollowUpExecution';
 
-// Compliance Models
-import StateComplianceRule from './StateComplianceRule';
-import StateKnowledge from './StateKnowledge';
-import StateDocumentTemplate from './StateDocumentTemplate';
-import ComplianceCheck from './ComplianceCheck';
-import ComplianceIssueReview from './ComplianceIssueReview';
-import ComplianceAuditLog from './ComplianceAuditLog';
-import ComplianceAlert from './ComplianceAlert';
-import { ComplianceWebhook, WebhookDeliveryLog } from './ComplianceWebhook';
-import ComplianceRuleVersion from './ComplianceRuleVersion';
-import ComplianceEvent from './ComplianceEvent';
-import SanctionsScreening from './SanctionsScreening';
-import EscalationPolicy, { EscalationExecution } from './EscalationPolicy';
-import FraudSignal from './FraudSignal';
-import PropertyFieldQuality from './PropertyFieldQuality';
-import ComplianceExtractionProfile from './ComplianceExtractionProfile';
-import ComplianceReport from './ComplianceReport';
-import ComplianceReportSchedule from './ComplianceReportSchedule';
-import ComplianceWorkflow, { ComplianceWorkflowExecution } from './ComplianceWorkflow';
-
 // Contract Models
 import DocuSealSubmission from './DocuSealSubmission';
 import ContractSigner from './ContractSigner';
@@ -206,14 +186,6 @@ import ApiKey from './ApiKey';
 
 // Home Assistant Models
 import HomeAssistantConfig from './HomeAssistantConfig';
-
-// State Compliance Workflow Models
-import StateDealCompliance, { initStateDealCompliance } from './StateDealCompliance';
-import StateWorkflowState, { initStateWorkflowState } from './StateWorkflowState';
-
-// Initialize state compliance models
-initStateDealCompliance(sequelize);
-initStateWorkflowState(sequelize);
 
 // ============================================================================
 // DEFINE ASSOCIATIONS
@@ -432,28 +404,6 @@ PropertyDocument.belongsTo(Property, {
   as: 'property',
 });
 
-// Property -> ComplianceCheck (one-to-many)
-Property.hasMany(ComplianceCheck, {
-  foreignKey: 'propertyId',
-  as: 'complianceChecks',
-  onDelete: 'CASCADE',
-});
-ComplianceCheck.belongsTo(Property, {
-  foreignKey: 'propertyId',
-  as: 'property',
-});
-
-// Property -> PropertyFieldQuality (one-to-many)
-Property.hasMany(PropertyFieldQuality, {
-  foreignKey: 'propertyId',
-  as: 'fieldQuality',
-  onDelete: 'CASCADE',
-});
-PropertyFieldQuality.belongsTo(Property, {
-  foreignKey: 'propertyId',
-  as: 'property',
-});
-
 // Property -> PublicDealLink (one-to-many)
 Property.hasMany(PublicDealLink, {
   foreignKey: 'propertyId',
@@ -474,28 +424,6 @@ MarketplaceUser.hasMany(PublicDealLink, {
 PublicDealLink.belongsTo(MarketplaceUser, {
   foreignKey: 'createdBy',
   as: 'creator',
-});
-
-// ComplianceCheck -> ComplianceIssueReview (one-to-many)
-ComplianceCheck.hasMany(ComplianceIssueReview, {
-  foreignKey: 'checkId',
-  as: 'issueReviews',
-  onDelete: 'CASCADE',
-});
-ComplianceIssueReview.belongsTo(ComplianceCheck, {
-  foreignKey: 'checkId',
-  as: 'check',
-});
-
-// Property -> ComplianceIssueReview (one-to-many)
-Property.hasMany(ComplianceIssueReview, {
-  foreignKey: 'propertyId',
-  as: 'complianceIssueReviews',
-  onDelete: 'CASCADE',
-});
-ComplianceIssueReview.belongsTo(Property, {
-  foreignKey: 'propertyId',
-  as: 'property',
 });
 
 // ============================================================================
@@ -856,35 +784,6 @@ GuestSession.belongsTo(MarketplaceUser, {
 });
 
 // ============================================================================
-// STATE COMPLIANCE WORKFLOW ASSOCIATIONS
-// ============================================================================
-
-// Property -> StateDealCompliance (one-to-many)
-Property.hasMany(StateDealCompliance, {
-  foreignKey: 'dealId',
-  as: 'stateCompliance',
-  onDelete: 'CASCADE',
-});
-StateDealCompliance.belongsTo(Property, {
-  foreignKey: 'dealId',
-  as: 'property',
-});
-
-// Property -> StateWorkflowState (one-to-many)
-Property.hasMany(StateWorkflowState, {
-  foreignKey: 'dealId',
-  as: 'workflowStates',
-  onDelete: 'CASCADE',
-});
-StateWorkflowState.belongsTo(Property, {
-  foreignKey: 'dealId',
-  as: 'property',
-});
-
-// StateDealCompliance -> StateWorkflowState (one-to-one per state)
-// Note: Both share dealId + state as the linking key
-
-// ============================================================================
 // PERMISSION SYSTEM ASSOCIATIONS
 // ============================================================================
 
@@ -989,17 +888,6 @@ Buyer.hasMany(Task, {
 Task.belongsTo(Buyer, {
   foreignKey: 'buyerId',
   as: 'buyer',
-});
-
-// ComplianceCheck -> Task (one-to-many for compliance tasks)
-ComplianceCheck.hasMany(Task, {
-  foreignKey: 'complianceCheckId',
-  as: 'tasks',
-  onDelete: 'CASCADE',
-});
-Task.belongsTo(ComplianceCheck, {
-  foreignKey: 'complianceCheckId',
-  as: 'complianceCheck',
 });
 
 // Organization -> Task (one-to-many for team tasks)
@@ -1936,27 +1824,6 @@ export {
   DealAssignment,
   // Forward Tracking Models
   DealForward,
-  // Compliance Models
-  StateComplianceRule,
-  StateKnowledge,
-  StateDocumentTemplate,
-  ComplianceCheck,
-  ComplianceIssueReview,
-  ComplianceAuditLog,
-  ComplianceAlert,
-  ComplianceWebhook,
-  WebhookDeliveryLog,
-  ComplianceRuleVersion,
-  ComplianceEvent,
-  SanctionsScreening,
-  EscalationPolicy,
-  EscalationExecution,
-  FraudSignal,
-  PropertyFieldQuality,
-  ComplianceReport,
-  ComplianceReportSchedule,
-  ComplianceWorkflow,
-  ComplianceWorkflowExecution,
   // Contract Models
   DocuSealSubmission,
   ContractSigner,
@@ -2001,9 +1868,6 @@ export {
   GuestSession,
   // Public Deal Link Models
   PublicDealLink,
-  // State Compliance Workflow Models
-  StateDealCompliance,
-  StateWorkflowState,
   // Permission System Models
   Permission,
   Role,
@@ -2096,26 +1960,6 @@ export default {
   DealAssignment,
   // Forward Tracking Models
   DealForward,
-  // Compliance Models
-  StateComplianceRule,
-  StateKnowledge,
-  StateDocumentTemplate,
-  ComplianceCheck,
-  ComplianceIssueReview,
-  ComplianceAuditLog,
-  ComplianceAlert,
-  ComplianceWebhook,
-  WebhookDeliveryLog,
-  ComplianceRuleVersion,
-  ComplianceEvent,
-  SanctionsScreening,
-  EscalationPolicy,
-  EscalationExecution,
-  FraudSignal,
-  PropertyFieldQuality,
-  ComplianceExtractionProfile,
-  ComplianceReport,
-  ComplianceReportSchedule,
   // Contract Models
   DocuSealSubmission,
   ContractSigner,
@@ -2160,9 +2004,6 @@ export default {
   GuestSession,
   // Public Deal Link Models
   PublicDealLink,
-  // State Compliance Workflow Models
-  StateDealCompliance,
-  StateWorkflowState,
   // Permission System Models
   Permission,
   Role,

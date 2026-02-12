@@ -10,10 +10,12 @@
  * - Configurable retention periods (default 7 years)
  * - Export capabilities for auditors
  * - Real-time chain integrity monitoring
+ *
+ * Note: Uses in-memory storage. For production persistence,
+ * integrate with a database table.
  */
 
 import * as crypto from 'crypto';
-import { ComplianceAuditLog, ComplianceAuditLogAttributes } from '../models/ComplianceAuditLog';
 
 export interface AuditLogEntry {
   eventType: string;
@@ -70,6 +72,38 @@ export interface ChainVerificationResult {
   verifiedAt: Date;
 }
 
+/** Internal stored log record */
+interface StoredAuditLog {
+  id: number;
+  sequenceNumber: number;
+  previousHash: string;
+  currentHash: string;
+  signature?: string;
+  timestamp: Date;
+  eventType: string;
+  eventCategory: string;
+  severity: string;
+  actorType: string;
+  actorId?: string;
+  actorName?: string;
+  actorIp?: string;
+  actorUserAgent?: string;
+  resourceType: string;
+  resourceId?: string;
+  resourceName?: string;
+  action: string;
+  outcome: string;
+  details: Record<string, any>;
+  changes?: {
+    before?: Record<string, any>;
+    after?: Record<string, any>;
+    diff?: string[];
+  };
+  complianceContext?: AuditLogEntry['complianceContext'];
+  verified: boolean;
+  retentionDate: Date;
+}
+
 class SOC2AuditLogger {
   private initialized = false;
   private sequenceCounter: number = 0;
@@ -80,19 +114,18 @@ class SOC2AuditLogger {
   private flushInterval: NodeJS.Timeout | null = null;
   private isWriting = false;
 
+  /** In-memory audit log store */
+  private store: StoredAuditLog[] = [];
+  private nextId: number = 1;
+
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    // Get the last log entry to continue the chain
-    try {
-      const lastEntry = await ComplianceAuditLog.getLatest();
-      if (lastEntry) {
-        this.sequenceCounter = lastEntry.sequenceNumber;
-        this.lastHash = lastEntry.currentHash;
-      }
-    } catch (error) {
-      // Table may not exist yet
-      console.log('[SOC2Audit] Starting fresh chain (table may not exist yet)');
+    // Restore chain state from in-memory store
+    if (this.store.length > 0) {
+      const lastEntry = this.store[this.store.length - 1];
+      this.sequenceCounter = lastEntry.sequenceNumber;
+      this.lastHash = lastEntry.currentHash;
     }
 
     this.signingKey = process.env.AUDIT_SIGNING_KEY;
@@ -134,7 +167,7 @@ class SOC2AuditLogger {
   /**
    * Log an audit event (blocking, immediate write)
    */
-  async logSync(entry: AuditLogEntry): Promise<ComplianceAuditLog> {
+  async logSync(entry: AuditLogEntry): Promise<StoredAuditLog> {
     if (!this.initialized) {
       await this.initialize();
     }
@@ -218,7 +251,7 @@ class SOC2AuditLogger {
       eventType: `system.${eventType}`,
       eventCategory: 'system',
       severity: outcome === 'failure' ? 'error' : 'info',
-      actor: { type: 'system', name: 'Dispotree' },
+      actor: { type: 'system', name: 'CodeLive' },
       resource: { type: 'system' },
       action,
       outcome,
@@ -252,13 +285,13 @@ class SOC2AuditLogger {
   /**
    * Write a single entry with hash chaining
    */
-  private async writeEntry(entry: AuditLogEntry): Promise<ComplianceAuditLog> {
+  private async writeEntry(entry: AuditLogEntry): Promise<StoredAuditLog> {
     // Increment sequence
     this.sequenceCounter++;
     const sequenceNumber = this.sequenceCounter;
 
     // Calculate diff if changes provided
-    let changes: ComplianceAuditLogAttributes['changes'];
+    let changes: StoredAuditLog['changes'];
     if (entry.changes) {
       changes = {
         before: entry.changes.before,
@@ -272,7 +305,7 @@ class SOC2AuditLogger {
     const retentionDate = new Date();
     retentionDate.setFullYear(retentionDate.getFullYear() + this.retentionYears);
 
-    const logData: Partial<ComplianceAuditLogAttributes> = {
+    const logData: Omit<StoredAuditLog, 'id' | 'currentHash' | 'signature'> & { currentHash?: string; signature?: string } = {
       sequenceNumber,
       previousHash: this.lastHash,
       timestamp,
@@ -305,19 +338,25 @@ class SOC2AuditLogger {
       logData.signature = this.sign(currentHash);
     }
 
-    // Create log entry
-    const log = await ComplianceAuditLog.create(logData as any);
+    // Store log entry in memory
+    const storedLog: StoredAuditLog = {
+      id: this.nextId++,
+      ...logData,
+      currentHash,
+    } as StoredAuditLog;
+
+    this.store.push(storedLog);
 
     // Update chain state
     this.lastHash = currentHash;
 
-    return log;
+    return storedLog;
   }
 
   /**
    * Compute SHA-256 hash for an entry
    */
-  private computeHash(data: Partial<ComplianceAuditLogAttributes>): string {
+  private computeHash(data: Record<string, any>): string {
     const hashData = JSON.stringify({
       sequenceNumber: data.sequenceNumber,
       previousHash: data.previousHash,
@@ -378,68 +417,59 @@ class SOC2AuditLogger {
   }
 
   /**
-   * Query audit logs
+   * Query audit logs from in-memory store
    */
   async query(options: AuditQueryOptions): Promise<{
-    logs: ComplianceAuditLog[];
+    logs: StoredAuditLog[];
     total: number;
     hasMore: boolean;
   }> {
-    const { Op } = await import('sequelize');
-    const where: any = {};
+    let filtered = [...this.store];
 
-    if (options.startDate || options.endDate) {
-      where.timestamp = {};
-      if (options.startDate) where.timestamp[Op.gte] = options.startDate;
-      if (options.endDate) where.timestamp[Op.lte] = options.endDate;
+    if (options.startDate) {
+      filtered = filtered.filter(l => l.timestamp >= options.startDate!);
     }
-
+    if (options.endDate) {
+      filtered = filtered.filter(l => l.timestamp <= options.endDate!);
+    }
     if (options.eventTypes?.length) {
-      where.eventType = { [Op.in]: options.eventTypes };
+      filtered = filtered.filter(l => options.eventTypes!.includes(l.eventType));
     }
-
     if (options.eventCategories?.length) {
-      where.eventCategory = { [Op.in]: options.eventCategories };
+      filtered = filtered.filter(l => options.eventCategories!.includes(l.eventCategory as any));
     }
-
     if (options.severities?.length) {
-      where.severity = { [Op.in]: options.severities };
+      filtered = filtered.filter(l => options.severities!.includes(l.severity as any));
     }
-
     if (options.actorTypes?.length) {
-      where.actorType = { [Op.in]: options.actorTypes };
+      filtered = filtered.filter(l => options.actorTypes!.includes(l.actorType as any));
     }
-
     if (options.actorId) {
-      where.actorId = options.actorId;
+      filtered = filtered.filter(l => l.actorId === options.actorId);
     }
-
     if (options.resourceTypes?.length) {
-      where.resourceType = { [Op.in]: options.resourceTypes };
+      filtered = filtered.filter(l => options.resourceTypes!.includes(l.resourceType));
     }
-
     if (options.resourceId) {
-      where.resourceId = options.resourceId;
+      filtered = filtered.filter(l => l.resourceId === options.resourceId);
     }
-
     if (options.outcomes?.length) {
-      where.outcome = { [Op.in]: options.outcomes };
+      filtered = filtered.filter(l => options.outcomes!.includes(l.outcome as any));
     }
 
+    // Sort by sequence number descending
+    filtered.sort((a, b) => b.sequenceNumber - a.sequenceNumber);
+
+    const total = filtered.length;
     const limit = options.limit || 100;
     const offset = options.offset || 0;
 
-    const { count, rows } = await ComplianceAuditLog.findAndCountAll({
-      where,
-      order: [['sequenceNumber', 'DESC']],
-      limit,
-      offset,
-    });
+    const paged = filtered.slice(offset, offset + limit);
 
     return {
-      logs: rows,
-      total: count,
-      hasMore: offset + rows.length < count,
+      logs: paged,
+      total,
+      hasMore: offset + paged.length < total,
     };
   }
 
@@ -447,9 +477,44 @@ class SOC2AuditLogger {
    * Verify the integrity of the audit chain
    */
   async verifyChain(fromSequence?: number): Promise<ChainVerificationResult> {
-    const result = await ComplianceAuditLog.verifyChain(fromSequence);
+    const errors: string[] = [];
+    let startIdx = 0;
+
+    if (fromSequence) {
+      startIdx = this.store.findIndex(l => l.sequenceNumber >= fromSequence);
+      if (startIdx === -1) startIdx = this.store.length;
+    }
+
+    const entriesToCheck = this.store.slice(startIdx);
+    let entriesChecked = 0;
+    let firstInvalid: number | undefined;
+
+    for (let i = 0; i < entriesToCheck.length; i++) {
+      entriesChecked++;
+      const entry = entriesToCheck[i];
+
+      // Verify hash chain
+      if (i > 0) {
+        const prevEntry = entriesToCheck[i - 1];
+        if (entry.previousHash !== prevEntry.currentHash) {
+          if (!firstInvalid) firstInvalid = entry.sequenceNumber;
+          errors.push(`Chain break at sequence ${entry.sequenceNumber}: previousHash mismatch`);
+        }
+      }
+
+      // Verify hash integrity
+      const recomputedHash = this.computeHash(entry);
+      if (recomputedHash !== entry.currentHash) {
+        if (!firstInvalid) firstInvalid = entry.sequenceNumber;
+        errors.push(`Hash mismatch at sequence ${entry.sequenceNumber}: entry may have been tampered`);
+      }
+    }
+
     return {
-      ...result,
+      valid: errors.length === 0,
+      entriesChecked,
+      firstInvalid,
+      errors,
       verifiedAt: new Date(),
     };
   }
@@ -469,16 +534,31 @@ class SOC2AuditLogger {
     chainValid: boolean;
     exportedAt: Date;
   }> {
-    const result = await ComplianceAuditLog.exportForAudit(startDate, endDate, {
-      eventTypes: options?.eventTypes,
-      resourceTypes: options?.resourceTypes,
-      includeDetails: options?.includeDetails,
-    });
+    let filtered = this.store.filter(l =>
+      l.timestamp >= startDate && l.timestamp <= endDate
+    );
 
-    let data: any = result.logs;
+    if (options?.eventTypes?.length) {
+      filtered = filtered.filter(l => options.eventTypes!.includes(l.eventType));
+    }
+    if (options?.resourceTypes?.length) {
+      filtered = filtered.filter(l => options.resourceTypes!.includes(l.resourceType));
+    }
 
+    const logs = options?.includeDetails !== false
+      ? filtered
+      : filtered.map(({ details, changes, ...rest }) => rest);
+
+    // Verify chain integrity for the exported range
+    const chainVerification = await this.verifyChain(
+      filtered.length > 0 ? filtered[0].sequenceNumber : undefined
+    );
+
+    const exportId = `export-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+    let data: any = logs;
     if (options?.format === 'csv') {
-      data = this.convertToCSV(result.logs);
+      data = this.convertToCSV(logs as any);
     }
 
     // Log the export event
@@ -487,30 +567,30 @@ class SOC2AuditLogger {
       eventCategory: 'system',
       severity: 'info',
       actor: { type: 'system', name: 'SOC2AuditLogger' },
-      resource: { type: 'audit_log', id: result.exportId },
+      resource: { type: 'audit_log', id: exportId },
       action: 'export',
       outcome: 'success',
       details: {
         startDate,
         endDate,
-        count: result.count,
+        count: logs.length,
         format: options?.format || 'json',
       },
     });
 
     return {
-      exportId: result.exportId,
-      count: result.count,
+      exportId,
+      count: logs.length,
       data,
-      chainValid: result.chainValid,
-      exportedAt: result.exportedAt,
+      chainValid: chainVerification.valid,
+      exportedAt: new Date(),
     };
   }
 
   /**
    * Convert logs to CSV format
    */
-  private convertToCSV(logs: Partial<ComplianceAuditLogAttributes>[]): string {
+  private convertToCSV(logs: Partial<StoredAuditLog>[]): string {
     const headers = [
       'sequenceNumber',
       'timestamp',
@@ -552,53 +632,32 @@ class SOC2AuditLogger {
     oldestEntry?: Date;
     newestEntry?: Date;
   }> {
-    const { Op, fn, col } = await import('sequelize');
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const [total, byCategory, bySeverity, byOutcome, oldest, newest] = await Promise.all([
-      ComplianceAuditLog.count({
-        where: { timestamp: { [Op.gte]: startDate } },
-      }),
-      ComplianceAuditLog.findAll({
-        attributes: ['eventCategory', [fn('COUNT', '*'), 'count']],
-        where: { timestamp: { [Op.gte]: startDate } },
-        group: ['eventCategory'],
-        raw: true,
-      }),
-      ComplianceAuditLog.findAll({
-        attributes: ['severity', [fn('COUNT', '*'), 'count']],
-        where: { timestamp: { [Op.gte]: startDate } },
-        group: ['severity'],
-        raw: true,
-      }),
-      ComplianceAuditLog.findAll({
-        attributes: ['outcome', [fn('COUNT', '*'), 'count']],
-        where: { timestamp: { [Op.gte]: startDate } },
-        group: ['outcome'],
-        raw: true,
-      }),
-      ComplianceAuditLog.findOne({
-        order: [['timestamp', 'ASC']],
-        attributes: ['timestamp'],
-      }),
-      ComplianceAuditLog.findOne({
-        order: [['timestamp', 'DESC']],
-        attributes: ['timestamp'],
-      }),
-    ]);
+    const filtered = this.store.filter(l => l.timestamp >= startDate);
+
+    const byCategory: Record<string, number> = {};
+    const bySeverity: Record<string, number> = {};
+    const byOutcome: Record<string, number> = {};
+
+    for (const log of filtered) {
+      byCategory[log.eventCategory] = (byCategory[log.eventCategory] || 0) + 1;
+      bySeverity[log.severity] = (bySeverity[log.severity] || 0) + 1;
+      byOutcome[log.outcome] = (byOutcome[log.outcome] || 0) + 1;
+    }
 
     // Quick chain verification (check last 100 entries)
     const chainCheck = await this.verifyChain(Math.max(1, this.sequenceCounter - 100));
 
     return {
-      totalEntries: total,
-      byCategory: Object.fromEntries((byCategory as any[]).map(r => [r.eventCategory, parseInt(r.count)])),
-      bySeverity: Object.fromEntries((bySeverity as any[]).map(r => [r.severity, parseInt(r.count)])),
-      byOutcome: Object.fromEntries((byOutcome as any[]).map(r => [r.outcome, parseInt(r.count)])),
+      totalEntries: filtered.length,
+      byCategory,
+      bySeverity,
+      byOutcome,
       chainIntegrity: chainCheck.valid,
-      oldestEntry: oldest?.timestamp,
-      newestEntry: newest?.timestamp,
+      oldestEntry: this.store.length > 0 ? this.store[0].timestamp : undefined,
+      newestEntry: this.store.length > 0 ? this.store[this.store.length - 1].timestamp : undefined,
     };
   }
 
@@ -606,13 +665,10 @@ class SOC2AuditLogger {
    * Cleanup old entries past retention date
    */
   async cleanupExpired(): Promise<number> {
-    const { Op } = await import('sequelize');
-
-    const deleted = await ComplianceAuditLog.destroy({
-      where: {
-        retentionDate: { [Op.lt]: new Date() },
-      },
-    });
+    const now = new Date();
+    const before = this.store.length;
+    this.store = this.store.filter(l => l.retentionDate >= now);
+    const deleted = before - this.store.length;
 
     if (deleted > 0) {
       this.log({

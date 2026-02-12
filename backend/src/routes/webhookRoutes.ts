@@ -20,7 +20,6 @@ import { pipelineService } from '../services/PipelineService';
 import DocuSealSubmission from '../models/DocuSealSubmission';
 import { phaseContractService } from '../services/PhaseContractService';
 import { signedDocumentService } from '../services/SignedDocumentService';
-import { complianceTriggerService } from '../services/ComplianceTriggerService';
 import { activityFeedService } from '../services/ActivityFeedService';
 import sequelize from '../config/database';
 
@@ -520,21 +519,6 @@ router.post('/docuseal', verifyDocuSealSignature, async (req: Request, res: Resp
             signers: localSubmission?.submitters?.map(s => s.email) || [],
           },
         }).catch(err => console.warn('Activity logging failed:', err.message));
-
-        // Fire compliance trigger for contract signed
-        if (dealId) {
-          const dealIdNum = parseInt(dealId, 10);
-          if (!isNaN(dealIdNum)) {
-            complianceTriggerService
-              .handlePropertyEvent('contract.signed', dealIdNum, {
-                submissionId: payload.data.id,
-                documentType: localSubmission?.documentCategory,
-                templateName: localSubmission?.templateName,
-                signers: localSubmission?.submitters?.map(s => s.email) || [],
-              })
-              .catch(err => console.warn('Contract signed trigger failed:', err.message));
-          }
-        }
 
         // Download the signed document, store it, run OCR extraction, and update compliance
         try {

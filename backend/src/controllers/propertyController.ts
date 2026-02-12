@@ -16,45 +16,12 @@ import {
   validateBulkScore,
 } from '../validators/propertyValidator';
 import { parsePagination, paginatedResponse, sequelizePagination } from '../utils/pagination';
-import { complianceService } from '../services/ComplianceService';
 import { dealApprovalService } from '../services/DealApprovalService';
 import { dealProcessingQueue } from '../services/DealProcessingQueue';
 import { DealProcessingState } from '../types/dealProcessing';
 import propertyService from '../services/propertyService';
-import { complianceTriggerService } from '../services/ComplianceTriggerService';
 import { propertyCreationService } from '../services/PropertyCreationService';
 import { activityFeedService } from '../services/ActivityFeedService';
-
-// Auto-run compliance check on property (fire and forget, non-blocking)
-// If compliance passes (Green), auto-queue for broker approval
-async function autoRunComplianceCheck(property: Property): Promise<void> {
-  try {
-    const result = await complianceService.checkProperty(property);
-
-    // Determine compliance status
-    const hasBlockers = result.issues.some((i: any) => i.severity === 'critical');
-    const hasWarnings = result.issues.some((i: any) => i.severity === 'warning');
-    const complianceStatus = hasBlockers ? 'Red' : hasWarnings ? 'Yellow' : 'Green';
-
-    await property.update({
-      complianceNotes: JSON.stringify(result.issues),
-      status: complianceStatus,
-    } as any);
-
-    console.log(`✓ Auto-compliance check: Property ${property.id} - ${result.issues.length} issues found (${complianceStatus})`);
-
-    // If compliance passes (Green), queue for broker approval
-    if (complianceStatus === 'Green' && property.approvalStatus === 'draft') {
-      try {
-        await dealApprovalService.queueForApproval(property.id);
-      } catch (approvalError) {
-        console.warn(`⚠ Could not queue property ${property.id} for broker approval:`, approvalError);
-      }
-    }
-  } catch (error) {
-    console.warn(`⚠ Auto-compliance check failed for property ${property.id}:`, error);
-  }
-}
 
 // Get all properties
 /**
@@ -566,42 +533,11 @@ export const updateProperty = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Property not found' });
     }
 
-    const previousOwner = property.ownerName;
     await property.update(updates);
 
-    // Auto-run compliance check if compliance-relevant fields changed (fire and forget)
-    const complianceFields = ['state', 'assignable', 'marketingClauseFound', 'brokerOnFile',
-      'agentLicenseNumber', 'brokerLicenseNumber', 'wholesalerLlcName', 'purchaseContractExpiration'];
-    const hasComplianceUpdate = complianceFields.some(field => field in updates);
-    if (hasComplianceUpdate) {
-      autoRunComplianceCheck(property);
-    }
-
-    // Fire compliance trigger events based on what changed (non-blocking)
-    if ('status' in updates) {
-      complianceTriggerService.handlePropertyEvent('property.status_changed', property.id, {
-        previousStatus: property.previous('status'),
-        newStatus: updates.status,
-      }).catch(err => console.warn('Compliance trigger failed:', err.message));
-    }
-
-    if ('ownerName' in updates && updates.ownerName !== previousOwner) {
-      complianceTriggerService.handlePropertyEvent('property.seller_changed', property.id, {
-        previousSeller: previousOwner,
-        newSeller: updates.ownerName,
-      }).catch(err => console.warn('Compliance trigger failed:', err.message));
-    }
-
-    if ('brokerOnFile' in updates || 'brokerId' in updates) {
-      complianceTriggerService.handlePropertyEvent('property.broker_assigned', property.id, {
-        brokerOnFile: property.brokerOnFile,
-        brokerId: (property as any).brokerId,
-      }).catch(err => console.warn('Compliance trigger failed:', err.message));
-    }
-
-    // Price change detection (for fraud detection)
-    const priceFields = ['mlsListingPrice', 'reservePrice', 'purchaseContractPrice', 'arv', 'buyItNowPrice'];
+    // Log activity (non-blocking)
     const priceChanges: Record<string, { previous: number; new: number }> = {};
+    const priceFields = ['mlsListingPrice', 'reservePrice', 'purchaseContractPrice', 'arv', 'buyItNowPrice'];
     for (const field of priceFields) {
       if (field in updates) {
         const previousValue = (property as any).previous(field);
@@ -611,14 +547,6 @@ export const updateProperty = async (req: Request, res: Response) => {
         }
       }
     }
-    if (Object.keys(priceChanges).length > 0) {
-      complianceTriggerService.handlePropertyEvent('property.price_changed', property.id, {
-        priceChanges,
-        state: property.state,
-      }).catch(err => console.warn('Price changed trigger failed:', err.message));
-    }
-
-    // Log activity (non-blocking)
     const dealName = property.address
       ? `${property.address.houseNumber || ''} ${property.address.street || ''}, ${property.city || ''}`
       : `Property ${property.propertyId}`;
@@ -730,9 +658,6 @@ export const deleteProperty = async (req: Request, res: Response) => {
       state: property.state,
     };
 
-    // Cleanup orphaned compliance data before deletion
-    await cleanupPropertyComplianceData(property.id);
-
     await property.destroy();
 
     // Log activity (non-blocking)
@@ -755,39 +680,6 @@ export const deleteProperty = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
-
-/**
- * Cleanup orphaned compliance data when a property is deleted
- */
-async function cleanupPropertyComplianceData(propertyId: number): Promise<void> {
-  try {
-    // Import models to avoid circular dependencies
-    const ComplianceCheck = (await import('../models/ComplianceCheck')).default;
-    const ComplianceAlert = (await import('../models/ComplianceAlert')).default;
-    const ComplianceEvent = (await import('../models/ComplianceEvent')).default;
-    const FraudSignal = (await import('../models/FraudSignal')).default;
-    const SanctionsScreening = (await import('../models/SanctionsScreening')).default;
-    const PropertyContact = (await import('../models/PropertyContact')).default;
-
-    // Delete in order (respecting potential foreign keys)
-    const deleteCounts = await Promise.all([
-      ComplianceCheck.destroy({ where: { propertyId } }),
-      ComplianceAlert.destroy({ where: { resourceType: 'property', resourceId: String(propertyId) } }),
-      ComplianceEvent.destroy({ where: { propertyId } }),
-      FraudSignal.destroy({ where: { propertyId } }),
-      SanctionsScreening.destroy({ where: { propertyId } }),
-      PropertyContact.destroy({ where: { propertyId } }),
-    ]);
-
-    const totalDeleted = deleteCounts.reduce((sum, count) => sum + count, 0);
-    if (totalDeleted > 0) {
-      console.log(`🧹 Cleaned up ${totalDeleted} orphaned compliance records for property ${propertyId}`);
-    }
-  } catch (error) {
-    // Don't fail the deletion if cleanup fails - log and continue
-    console.warn(`⚠️ Compliance cleanup failed for property ${propertyId}:`, error);
-  }
-}
 
 // ============================================================================
 // BULK OPERATIONS
@@ -882,7 +774,6 @@ export const bulkCreateProperties = async (req: Request, res: Response) => {
       skipDuplicateCheck: !options.skipDuplicates, // Note: inverted logic
       enqueueForProcessing: false, // Bulk imports don't queue by default
       emitAutomationEvents: options.emitEvents ?? true,
-      fireComplianceTriggers: true, // Always fire compliance triggers
       useTransaction: options.useTransaction ?? false,
     });
 
@@ -1111,9 +1002,6 @@ export const bulkDeleteProperties = async (req: Request, res: Response) => {
             notFound.push(id);
             continue;
           }
-
-          // Cleanup orphaned compliance data before deletion
-          await cleanupPropertyComplianceData(property.id);
 
           await property.destroy({ transaction });
           deleted.push(id);

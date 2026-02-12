@@ -7,8 +7,6 @@ import DealAction from '../models/DealAction';
 import DealOffer from '../models/DealOffer';
 import Contact from '../models/Contact';
 import PropertyContact from '../models/PropertyContact';
-import ComplianceCheck from '../models/ComplianceCheck';
-
 /**
  * Get public deal by ID and token
  */
@@ -129,15 +127,6 @@ export const getPublicDeal = async (req: Request, res: Response) => {
       responseData.property.marketingClause = property.marketingClause;
       responseData.property.brokerOnFile = property.brokerOnFile;
       responseData.property.financeable = property.financeable;
-
-      // Get latest compliance check
-      const complianceCheck = await ComplianceCheck.findOne({
-        where: { propertyId: property.id },
-        order: [['createdAt', 'DESC']],
-      });
-      if (complianceCheck) {
-        responseData.property.complianceStatus = complianceCheck.status;
-      }
     }
 
     if (link.settings.showDocuments) {

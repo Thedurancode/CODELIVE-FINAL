@@ -6,15 +6,12 @@
  */
 
 import { Request, Response } from 'express';
-import DocuSealSubmission, { SubmitterRecord, SubmissionStatus } from '../models/DocuSealSubmission';
+import DocuSealSubmission, { SubmissionStatus } from '../models/DocuSealSubmission';
 import ContractSigner from '../models/ContractSigner';
 import Property from '../models/Property';
 import Contact from '../models/Contact';
-import StateDocumentTemplate from '../models/StateDocumentTemplate';
 import { docuSealService } from '../services/DocuSealService';
 import { contractReminderScheduler } from '../services/ContractReminderScheduler';
-import { signatureService } from '../services/SignatureService';
-import { buildPropertyFields } from '../utils/documentFields';
 import { activityFeedService } from '../services/ActivityFeedService';
 import { Op } from 'sequelize';
 
@@ -180,7 +177,7 @@ export async function getSubmission(req: Request, res: Response) {
  *             properties:
  *               templateId:
  *                 type: integer
- *                 description: StateDocumentTemplate ID (not DocuSeal template ID)
+ *                 description: Template ID (deprecated - endpoint no longer functional)
  *               propertyId:
  *                 type: integer
  *               signers:
@@ -207,272 +204,12 @@ export async function getSubmission(req: Request, res: Response) {
  *         description: Submission created
  */
 export async function createSubmission(req: Request, res: Response) {
-  try {
-    const {
-      templateId,
-      propertyId,
-      pipelineId,
-      signers,
-      expireInDays = 7,
-      sendEmail = true,
-      additionalFields,
-    } = req.body;
-
-    if (!templateId || !propertyId) {
-      return res.status(400).json({
-        success: false,
-        error: 'templateId and propertyId are required',
-      });
-    }
-
-    // Get template mapping
-    const template = await StateDocumentTemplate.findByPk(templateId);
-    if (!template) {
-      return res.status(404).json({
-        success: false,
-        error: 'Template not found',
-      });
-    }
-
-    // Get property data
-    const property = await Property.findByPk(propertyId);
-    if (!property) {
-      return res.status(404).json({
-        success: false,
-        error: 'Property not found',
-      });
-    }
-
-    if (!docuSealService.isReady()) {
-      return res.status(503).json({
-        success: false,
-        error: 'DocuSeal service not configured',
-      });
-    }
-
-    // Build fields from property
-    const fields = buildPropertyFields(property, template.fieldMappings, additionalFields);
-
-    // Helper function to get signature base64 for a signer by email
-    const getSignatureForSigner = async (email: string): Promise<string | null> => {
-      try {
-        // Look up contact by email
-        const contact = await Contact.findOne({
-          where: { email: { [Op.iLike]: email } },
-        });
-
-        if (!contact || !contact.signatureStorageKey) {
-          return null;
-        }
-
-        // Get the signature as base64
-        const { base64, error } = await signatureService.getSignatureBase64(contact.id);
-        if (error || !base64) {
-          console.log(`[Contract] No signature found for ${email}: ${error || 'No base64'}`);
-          return null;
-        }
-
-        console.log(`[Contract] Found signature for ${email}, will prefill`);
-        return base64;
-      } catch (err) {
-        console.warn(`[Contract] Error getting signature for ${email}:`, err);
-        return null;
-      }
-    };
-
-    // Determine signers
-    const sellerEmail = signers?.[0]?.email || property.llcOwnerEmail || '';
-    const sellerName = signers?.[0]?.name || property.wholesalerLlcName || 'Seller';
-
-    if (!sellerEmail) {
-      return res.status(400).json({
-        success: false,
-        error: 'Seller email is required. Provide in signers array or ensure property has llcOwnerEmail.',
-      });
-    }
-
-    const expireAt = new Date(Date.now() + expireInDays * 24 * 60 * 60 * 1000);
-
-    // Build primary signer (seller) fields with signature prefill
-    const primarySignerFields = Object.entries(fields).map(([name, value]) => ({
-      name,
-      default_value: String(value ?? ''),
-    }));
-
-    // Get signature for primary signer if available
-    const primarySignature = await getSignatureForSigner(sellerEmail);
-    if (primarySignature) {
-      // Add signature to fields - DocuSeal uses 'Signature' as the default field name
-      primarySignerFields.push({
-        name: 'Signature',
-        default_value: primarySignature,
-      });
-    }
-
-    // Build additional signers with their signatures
-    const additionalSubmitters = await Promise.all(
-      (signers?.slice(1) || []).map(async (s: any) => {
-        const signerFields: { name: string; default_value: string }[] = [];
-
-        // Get signature for this signer
-        const signature = await getSignatureForSigner(s.email);
-        if (signature) {
-          signerFields.push({
-            name: 'Signature',
-            default_value: signature,
-          });
-        }
-
-        return {
-          email: s.email,
-          name: s.name,
-          role: s.role || 'Signer',
-          send_email: sendEmail,
-          ...(signerFields.length > 0 ? { fields: signerFields } : {}),
-        };
-      })
-    );
-
-    // Create DocuSeal submission
-    const docuSealSubmission = await docuSealService.createSubmission({
-      templateId: template.docuSealTemplateId,
-      submitters: [
-        {
-          email: sellerEmail,
-          name: sellerName,
-          role: signers?.[0]?.role || 'Seller',
-          send_email: sendEmail,
-          fields: primarySignerFields,
-        },
-        ...additionalSubmitters,
-      ],
-      sendEmail,
-      expireAt,
-      metadata: {
-        propertyId: property.id,
-        pipelineId,
-        templateId: template.id,
-        state: property.state,
-        category: template.category,
-        signaturesPrefilled: [
-          primarySignature ? sellerEmail : null,
-          ...additionalSubmitters
-            .filter((s: any) => s.fields?.some((f: any) => f.name === 'Signature'))
-            .map((s: any) => s.email),
-        ].filter(Boolean),
-      },
-    });
-
-    // Create local submission record
-    const submitters: SubmitterRecord[] = docuSealSubmission.submitters.map(s => ({
-      id: s.id,
-      email: s.email,
-      name: s.name,
-      role: s.role,
-      status: 'sent',
-      sentAt: new Date().toISOString(),
-      embedUrl: s.embed_src,
-    }));
-
-    // Calculate next reminder time (default: 24 hours or half of time to expiry)
-    const timeToExpiry = expireAt.getTime() - Date.now();
-    const nextReminderIn = Math.min(24 * 60 * 60 * 1000, timeToExpiry / 2);
-    const nextReminderAt = new Date(Date.now() + nextReminderIn);
-
-    const submission = await DocuSealSubmission.create({
-      docuSealSubmissionId: docuSealSubmission.id,
-      templateId: template.docuSealTemplateId,
-      templateName: template.name,
-      propertyId: property.id,
-      pipelineId,
-      userId: req.user?.id ? Number(req.user.id) : undefined,
-      status: 'sent',
-      submitters,
-      documentCategory: template.category,
-      state: property.state,
-      metadata: {
-        propertyAddress: `${property.address?.houseNumber || ''} ${property.address?.street || ''}, ${property.city}, ${property.state}`.trim(),
-        fieldsFilled: Object.keys(fields).length,
-      },
-      sentAt: new Date(),
-      expireAt,
-      reminderCount: 0,
-      nextReminderAt,
-      auditLogUrl: docuSealSubmission.audit_log_url,
-    });
-
-    // Update property documentStatus
-    const documentStatus = (property as any).documentStatus || {};
-    documentStatus[template.category] = {
-      status: 'sent',
-      submissionId: docuSealSubmission.id,
-      localSubmissionId: submission.id,
-      sentAt: new Date().toISOString(),
-      templateId: template.id,
-      templateName: template.name,
-    };
-    await property.update({ documentStatus } as any);
-
-    console.log(`📄 Contract created: ${template.name} for property ${property.id}, submission: ${docuSealSubmission.id}`);
-
-    // Log activity feed event for contract sent (non-blocking)
-    try {
-      activityFeedService.createActivity({
-        eventType: 'deal_updated',
-        actor: {
-          type: 'user',
-          id: req.user?.id ? String(req.user.id) : undefined,
-          name: req.user?.name || 'User',
-        },
-        resource: {
-          type: 'deal',
-          id: String(property.id),
-          name: template.name,
-        },
-        action: 'sent contract',
-        summary: `Contract sent: ${template.name}`,
-        importance: 'normal',
-      }).catch(() => {});
-    } catch {
-      // Activity logging is non-critical
-    }
-
-    // Get list of emails with prefilled signatures
-    const signaturesPrefilled = [
-      primarySignature ? sellerEmail : null,
-      ...additionalSubmitters
-        .filter((s: any) => s.fields?.some((f: any) => f.name === 'Signature'))
-        .map((s: any) => s.email),
-    ].filter(Boolean) as string[];
-
-    res.status(201).json({
-      success: true,
-      data: {
-        id: submission.id,
-        docuSealSubmissionId: docuSealSubmission.id,
-        status: submission.status,
-        category: template.category,
-        templateName: template.name,
-        fieldsFilled: Object.keys(fields).length,
-        signaturesPrefilled,
-        expireAt,
-        submitters: submitters.map(s => ({
-          email: s.email,
-          name: s.name,
-          role: s.role,
-          status: s.status,
-          signUrl: s.embedUrl,
-          signaturePrefilled: signaturesPrefilled.includes(s.email),
-        })),
-      },
-    });
-  } catch (error) {
-    console.error('Error creating contract submission:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create submission',
-    });
-  }
+  // StateDocumentTemplate model has been removed as part of compliance code cleanup.
+  // Contract creation via state document templates is no longer supported.
+  return res.status(410).json({
+    success: false,
+    error: 'State document template-based contract creation has been removed. Use DocuSeal direct integration instead.',
+  });
 }
 
 /**

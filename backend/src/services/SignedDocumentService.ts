@@ -21,14 +21,6 @@ import PropertyDocument from '../models/PropertyDocument';
 import DocuSealSubmission from '../models/DocuSealSubmission';
 import sequelize from '../config/database';
 
-// Try to import OCR service (optional)
-let complianceOCRService: any = null;
-try {
-  complianceOCRService = require('./ComplianceOCRService').complianceOCRService;
-} catch (e) {
-  console.warn('[SignedDocumentService] ComplianceOCRService not available for extraction');
-}
-
 export interface SaveSignedDocumentResult {
   success: boolean;
   propertyDocumentId?: number;
@@ -457,37 +449,6 @@ class SignedDocumentService {
           console.log(`[SignedDocumentService] Extracted ${Object.keys(extractedData).length} fields from DocuSeal API`);
         } catch (extractError) {
           console.warn('[SignedDocumentService] DocuSeal field extraction failed, falling back to OCR:', extractError);
-        }
-      }
-
-      // FALLBACK: Use OCR only if DocuSeal API failed
-      if (!extractedData && runOCR && pdfBuffer && complianceOCRService) {
-        try {
-          console.log(`[SignedDocumentService] Falling back to OCR extraction (slower, less accurate)...`);
-
-          const state = await this.getDealState(propertyId);
-          const extractionResult = await complianceOCRService.extractContractFields(
-            pdfBuffer,
-            'application/pdf',
-            state || undefined,
-            undefined,
-            documentType
-          );
-
-          if (extractionResult.success && extractionResult.extractedFields) {
-            const ocrData = extractionResult.extractedFields;
-            ocrData.hasSignatures = true;
-            ocrData.signaturesVerifiedBy = 'docuseal';
-            ocrData.docuSealSubmissionId = docuSealSubmissionId;
-            ocrData.signatures = this.inferSignaturesFromDocumentType(documentType);
-            ocrData.ocrConfidence = extractionResult.confidence;
-            extractedData = ocrData;
-            extractionSource = 'ocr';
-
-            console.log(`[SignedDocumentService] OCR extraction complete. Confidence: ${extractionResult.confidence}%`);
-          }
-        } catch (ocrError) {
-          console.warn('[SignedDocumentService] OCR extraction also failed:', ocrError);
         }
       }
 

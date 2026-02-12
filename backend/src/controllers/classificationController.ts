@@ -9,7 +9,6 @@ import PropertyDocument, { DocumentType } from '../models/PropertyDocument';
 import storageService from '../services/StorageService';
 import { documentClassificationService, ClassificationResult } from '../services/DocumentClassificationService';
 import { safeParseInt } from '../utils/security';
-import { complianceTriggerService } from '../services/ComplianceTriggerService';
 
 /**
  * @swagger
@@ -127,20 +126,6 @@ export const classifyDocument = async (req: Request, res: Response) => {
     // Update status back to ready
     document.status = 'ready';
     await document.save();
-
-    // Fire classification event for workflow routing (non-blocking)
-    if (classificationResult.success) {
-      complianceTriggerService
-        .handlePropertyEvent('document.classified', document.propertyId, {
-          documentId: document.id,
-          classifiedType: classificationResult.documentType,
-          confidence: classificationResult.confidence,
-          suggestedWorkflow: classificationResult.suggestedWorkflow,
-          wasAutoApplied: classificationMeta.wasAutoApplied,
-          extractedFields: classificationResult.extractedFields,
-        })
-        .catch((err) => console.warn('Classification trigger failed:', err.message));
-    }
 
     res.json({
       success: true,
@@ -318,16 +303,6 @@ export const overrideClassification = async (req: Request, res: Response) => {
     };
 
     await document.save();
-
-    // Fire override event for workflow routing (non-blocking)
-    complianceTriggerService
-      .handlePropertyEvent('document.classification.overridden', document.propertyId, {
-        documentId: document.id,
-        previousType,
-        newType: documentType,
-        overriddenBy: (req as any).user?.id,
-      })
-      .catch((err) => console.warn('Override trigger failed:', err.message));
 
     res.json({
       success: true,
